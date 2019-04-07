@@ -1,0 +1,94 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<Project DefaultTargets="Build" ToolsVersion="15.0" xmlns="http://schemas.microsoft.com/developer/msbuild/2003">
+  <ItemGroup Label="ProjectConfigurations">
+    <ProjectConfiguration Include="Debug|x86">
+      <Configuration>Debug</Configuration>
+      <Platform>x86</Platform>
+    </ProjectConfiguration>
+    <ProjectConfiguration Include="Release|x86">
+      <Configuration>Release</Configuration>
+      <Platform>x86</Platform>
+    </ProjectConfiguration>
+  </ItemGroup>
+  <PropertyGroup Label="Globals">
+    <ProjectGuid>{EB8C148B-9A85-4B25-B93B-3C37AB036E03}</ProjectGuid>
+    <Keyword>Linux</Keyword>
+    <RootNamespace>cx</RootNamespace>
+    <MinimumVisualStudioVersion>15.0</MinimumVisualStudioVersion>
+    <ApplicationType>Linux</ApplicationType>
+    <ApplicationTypeRevision>1.0</ApplicationTypeRevision>
+    <TargetLinuxPlatform>Generic</TargetLinuxPlatform>
+    <LinuxProjectType>{FC1A4D80-50E9-41DA-9192-61C0DBAA00D2}</LinuxProjectType>
+  </PropertyGroup>
+  <Import Project="$(VCTargetsPath)\Microsoft.Cpp.Default.props" />
+  <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Debug|x86'" Label="Configuration">
+    <UseDebugLibraries>true</UseDebugLibraries>
+    <ConfigurationType>Makefile</ConfigurationType>
+    <RemoteRootDir>/home/utnso/$(SolutionName)</RemoteRootDir>
+  </PropertyGroup>
+  <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Release|x86'" Label="Configuration">
+    <UseDebugLibraries>false</UseDebugLibraries>
+    <ConfigurationType>Makefile</ConfigurationType>
+    <RemoteRootDir>/home/utnso/$(SolutionName)</RemoteRootDir>
+  </PropertyGroup>
+  <Import Project="$(VCTargetsPath)\Microsoft.Cpp.props" />
+  <ImportGroup Label="ExtensionSettings" />
+  <ImportGroup Label="Shared" />
+  <ImportGroup Label="PropertySheets" />
+  <PropertyGroup Label="UserMacros" />
+  <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Debug|x86'">
+    <RemoteBuildCommandLine>make debug NO_COLOR=1</RemoteBuildCommandLine>
+    <RemoteCleanCommandLine>make clean</RemoteCleanCommandLine>
+    <AdditionalOptions>
+    </AdditionalOptions>
+    <NMakeIncludeSearchPath>$(ProjectDir)include\cx\;$(NMakeIncludeSearchPath)</NMakeIncludeSearchPath>
+    <AdditionalSourcesToCopyMapping>
+    </AdditionalSourcesToCopyMapping>
+    <RemoteProjectDir>$(RemoteRootDir)/$(ProjectName)</RemoteProjectDir>
+    <LocalRemoteCopySources>true</LocalRemoteCopySources>
+    <RemoteBuildOutputs>$(RemoteRootDir)/$(ProjectName)/build/$(Configuration.toLower())/lib$(ProjectName).so</RemoteBuildOutputs>
+    <NMakePreprocessorDefinitions>DEBUG</NMakePreprocessorDefinitions>
+    <ProjectPublicIncludePath>$(RemoteRootDir)/$(ProjectName)/include</ProjectPublicIncludePath>
+  </PropertyGroup>
+  <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Release|x86'">
+    <RemoteBuildCommandLine>make NO_COLOR=1</RemoteBuildCommandLine>
+    <RemoteCleanCommandLine>make clean</RemoteCleanCommandLine>
+    <AdditionalOptions>
+    </AdditionalOptions>
+    <NMakeIncludeSearchPath>$(ProjectDir)include\cx\;$(NMakeIncludeSearchPath)</NMakeIncludeSearchPath>
+    <AdditionalSourcesToCopyMapping>
+    </AdditionalSourcesToCopyMapping>
+    <RemoteProjectDir>$(RemoteRootDir)/$(ProjectName)</RemoteProjectDir>
+    <LocalRemoteCopySources>true</LocalRemoteCopySources>
+    <RemoteBuildOutputs>$(RemoteRootDir)/$(ProjectName)/build/$(Configuration.toLower())/lib$(ProjectName).so</RemoteBuildOutputs>
+    <ProjectPublicIncludePath>$(RemoteRootDir)/$(ProjectName)/include</ProjectPublicIncludePath>
+  </PropertyGroup>
+  <ItemGroup>
+    <ClCompile Include="src\binr.c" />
+    <ClCompile Include="src\binw.c" />
+    <ClCompile Include="src\cx.c" />
+    <ClCompile Include="src\file.c" />
+    <ClCompile Include="src\halloc.c" />
+    <ClCompile Include="src\math.c" />
+    <ClCompile Include="src\mem.c" />
+    <ClCompile Include="src\net.c" />
+    <ClCompile Include="src\str.c" />
+  </ItemGroup>
+  <ItemGroup>
+    <None Include="makefile" />
+  </ItemGroup>
+  <ItemGroup>
+    <ClInclude Include="include\cx\binr.h" />
+    <ClInclude Include="include\cx\binw.h" />
+    <ClInclude Include="include\cx\cx.h" />
+    <ClInclude Include="include\cx\file.h" />
+    <ClInclude Include="include\cx\halloc.h" />
+    <ClInclude Include="include\cx\math.h" />
+    <ClInclude Include="include\cx\mem.h" />
+    <ClInclude Include="include\cx\net.h" />
+    <ClInclude Include="include\cx\str.h" />
+  </ItemGroup>
+  <ItemDefinitionGroup />
+  <Import Project="$(VCTargetsPath)\Microsoft.Cpp.targets" />
+  <ImportGroup Label="ExtensionTargets" />
+</Project>

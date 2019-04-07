@@ -1,0 +1,75 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<Project ToolsVersion="4.0" xmlns="http://schemas.microsoft.com/developer/msbuild/2003">
+  <ItemGroup>
+    <Filter Include="src">
+      <UniqueIdentifier>{485cff6d-2dc7-4c6e-8c3a-aeb8c67403ae}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="include">
+      <UniqueIdentifier>{035279c1-3fbd-41cb-b4a0-69934a5c2a05}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="include\cx">
+      <UniqueIdentifier>{057ae359-ee6f-4b9c-a1d2-b5ebb971677d}</UniqueIdentifier>
+    </Filter>
+  </ItemGroup>
+  <ItemGroup>
+    <ClCompile Include="src\cx.c">
+      <Filter>src</Filter>
+    </ClCompile>
+    <ClCompile Include="src\file.c">
+      <Filter>src</Filter>
+    </ClCompile>
+    <ClCompile Include="src\math.c">
+      <Filter>src</Filter>
+    </ClCompile>
+    <ClCompile Include="src\str.c">
+      <Filter>src</Filter>
+    </ClCompile>
+    <ClCompile Include="src\mem.c">
+      <Filter>src</Filter>
+    </ClCompile>
+    <ClCompile Include="src\net.c">
+      <Filter>src</Filter>
+    </ClCompile>
+    <ClCompile Include="src\halloc.c">
+      <Filter>src</Filter>
+    </ClCompile>
+    <ClCompile Include="src\binr.c">
+      <Filter>src</Filter>
+    </ClCompile>
+    <ClCompile Include="src\binw.c">
+      <Filter>src</Filter>
+    </ClCompile>
+  </ItemGroup>
+  <ItemGroup>
+    <None Include="makefile" />
+  </ItemGroup>
+  <ItemGroup>
+    <ClInclude Include="include\cx\cx.h">
+      <Filter>include\cx</Filter>
+    </ClInclude>
+    <ClInclude Include="include\cx\file.h">
+      <Filter>include\cx</Filter>
+    </ClInclude>
+    <ClInclude Include="include\cx\math.h">
+      <Filter>include\cx</Filter>
+    </ClInclude>
+    <ClInclude Include="include\cx\mem.h">
+      <Filter>include\cx</Filter>
+    </ClInclude>
+    <ClInclude Include="include\cx\str.h">
+      <Filter>include\cx</Filter>
+    </ClInclude>
+    <ClInclude Include="include\cx\net.h">
+      <Filter>include\cx</Filter>
+    </ClInclude>
+    <ClInclude Include="include\cx\halloc.h">
+      <Filter>include\cx</Filter>
+    </ClInclude>
+    <ClInclude Include="include\cx\binw.h">
+      <Filter>include\cx</Filter>
+    </ClInclude>
+    <ClInclude Include="include\cx\binr.h">
+      <Filter>include\cx</Filter>
+    </ClInclude>
+  </ItemGroup>
+</Project>
