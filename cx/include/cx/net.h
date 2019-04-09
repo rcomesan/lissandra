@@ -20,9 +20,7 @@ typedef struct cx_net_args_t cx_net_args_t;
 typedef struct sockaddr_in sockaddr_in;
 typedef struct epoll_event epoll_event;
 
-typedef void(*cx_net_onconnect_cb)(const char* _str, void* _passThru);
-typedef void(*cx_net_onconnect_cb)(const char* _str, void* _passThru);
-typedef void(*cx_net_handler_cb)(const cx_net_common_t* _common, void* _passThrou, const char* _data);
+typedef void(*cx_net_handler_cb)(const cx_net_common_t* _common, void* _passThrou, const char* _data, uint16_t _size);
 typedef bool(*cx_net_route_cb)(const cx_net_client_t* _client);
 
 typedef enum
@@ -114,15 +112,15 @@ bool                    cx_net_flush(void* _ctx, uint16_t _clientHandle);
  ***  PRIVATE FUNCTIONS
  ***************************************************************************************/
 
-static bool             cx_net_parse_address(const char* _ipAddress, uint16_t _port, sockaddr_in* _outAddr);
+bool                    cx_net_parse_address(const char* _ipAddress, uint16_t _port, sockaddr_in* _outAddr);
 
-static void             cx_net_poll_events_client(cx_net_ctx_cl_t* _ctx);
+void                    cx_net_poll_events_client(cx_net_ctx_cl_t* _ctx);
 
-static void             cx_net_poll_events_server(cx_net_ctx_sv_t* _ctx);
+void                    cx_net_poll_events_server(cx_net_ctx_sv_t* _ctx);
 
-static void             cx_net_process_stream(const cx_net_common_t* _common, void* _passThru, char* _buffer, uint32_t _bufferSize, uint32_t* _inOutPos);
+void                    cx_net_process_stream(const cx_net_common_t* _common, void* _passThru, char* _buffer, uint32_t _bufferSize, uint32_t* _inOutPos);
 
-static void             cx_net_epoll_mod(int32_t _epollDescriptor, int32_t _sock, bool _in, bool _out);
+void                    cx_net_epoll_mod(int32_t _epollDescriptor, int32_t _sock, bool _in, bool _out);
 
 #endif // CX_NET_H_
 

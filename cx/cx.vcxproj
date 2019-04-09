@@ -69,7 +69,6 @@
     <ClCompile Include="src\cx.c" />
     <ClCompile Include="src\file.c" />
     <ClCompile Include="src\halloc.c" />
-    <ClCompile Include="src\math.c" />
     <ClCompile Include="src\mem.c" />
     <ClCompile Include="src\net.c" />
     <ClCompile Include="src\str.c" />

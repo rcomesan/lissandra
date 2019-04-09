@@ -29,21 +29,21 @@ cx_net_ctx_sv_t* cx_net_listen(cx_net_args_t* _args)
     sockaddr_in address;
     if (cx_net_parse_address(ctx->c.ip, ctx->c.port, &address))
     {
-        CX_INFO("[sv: %s] creating socket...", ctx->c.name);
+        CX_INFO("[%s<--] creating socket...", ctx->c.name);
         ctx->c.sock = socket(AF_INET, SOCK_STREAM, 0);
         if (INVALID_DESCRIPTOR != ctx->c.sock)
         {
-            CX_INFO("[sv: %s] setting socket options...", ctx->c.name);
+            CX_INFO("[%s<--] setting socket options...", ctx->c.name);
             if (-1 != setsockopt(ctx->c.sock, SOL_SOCKET, SO_REUSEADDR, &(int32_t){ 1 }, sizeof(int32_t))
                 && -1 != fcntl(ctx->c.sock, F_SETFL, fcntl(ctx->c.sock, F_GETFL, 0) | O_NONBLOCK))
             {
-                CX_INFO("[sv: %s] binding on port %d...", ctx->c.name, ctx->c.port);
+                CX_INFO("[%s<--] binding on port %d...", ctx->c.name, ctx->c.port);
                 if (-1 != bind(ctx->c.sock, &address, sizeof(address)))
                 {
-                    CX_INFO("[sv: %s] listening on %s:%d...", ctx->c.name, ctx->c.ip, ctx->c.port);
+                    CX_INFO("[%s<--] listening on %s:%d...", ctx->c.name, ctx->c.ip, ctx->c.port);
                     if (-1 != listen(ctx->c.sock, SOMAXCONN))
                     {
-                        CX_INFO("[sv: %s] initializing event pooling...", ctx->c.name);
+                        CX_INFO("[%s<--] initializing event pooling...", ctx->c.name);
                         ctx->c.epollDescriptor = epoll_create(ctx->clientsMax);
                         if (INVALID_DESCRIPTOR != ctx->c.epollDescriptor)
                         {
@@ -63,7 +63,7 @@ cx_net_ctx_sv_t* cx_net_listen(cx_net_args_t* _args)
 
                             ctx->c.state &= (~CX_NET_STATE_ERROR);
                             ctx->c.state |= CX_NET_STATE_LISTENING;
-                            CX_INFO("[sv: %s] started serving on %s:%d", ctx->c.name, ctx->c.ip, ctx->c.port);
+                            CX_INFO("[%s<--] started serving on %s:%d", ctx->c.name, ctx->c.ip, ctx->c.port);
                         }
                     }
                 }
@@ -86,7 +86,7 @@ cx_net_ctx_sv_t* cx_net_listen(cx_net_args_t* _args)
         }
 
         ctx->c.errorNumber = errno;
-        CX_WARN(CX_ALW, "[sv: %s] listen failed: %s (%s:%d)", ctx->c.name, strerror(errno), ctx->c.ip, ctx->c.port);
+        CX_WARN(CX_ALW, "[%s<--] listen failed: %s (%s:%d)", ctx->c.name, strerror(errno), ctx->c.ip, ctx->c.port);
     }
 
     return ctx;
@@ -107,32 +107,32 @@ cx_net_ctx_cl_t* cx_net_connect(cx_net_args_t* _args)
     sockaddr_in address;
     if (cx_net_parse_address(ctx->c.ip, ctx->c.port, &address))
     {
-        CX_INFO("[cl: %s] creating socket...", ctx->c.name);
+        CX_INFO("[-->%s] creating socket...", ctx->c.name);
         ctx->c.sock = socket(AF_INET, SOCK_STREAM, 0);
         if (-1 != ctx->c.sock)
         {
-            CX_INFO("[cl: %s] setting socket options...", ctx->c.name);
+            CX_INFO("[-->%s] setting socket options...", ctx->c.name);
             if (-1 != fcntl(ctx->c.sock, F_SETFL, fcntl(ctx->c.sock, F_GETFL, 0) | O_NONBLOCK))
             {
-                CX_INFO("[cl: %s] initializing event pooling...", ctx->c.name);
+                CX_INFO("[-->%s] initializing event pooling...", ctx->c.name);
                 ctx->c.epollDescriptor = epoll_create(1);
                 if (INVALID_DESCRIPTOR != ctx->c.epollDescriptor)
                 {
                     event.events = EPOLLIN;
                     event.data.fd = ctx->c.sock;
 
-                    CX_INFO("[cl: %s] connecting to %s:%d...", ctx->c.name, ctx->c.ip, ctx->c.port);
+                    CX_INFO("[-->%s] connecting to %s:%d...", ctx->c.name, ctx->c.ip, ctx->c.port);
                     if (-1 != connect(ctx->c.sock, &address, sizeof(address)))
                     {
-                        ctx->c.state &= (~CX_NET_STATE_ERROR);
+                        ctx->c.state &= ~CX_NET_STATE_ERROR;
                         ctx->c.state |= CX_NET_STATE_CONNECTED;
-                        CX_INFO("[cl: %s] connection established to server on %s:%d", ctx->c.name, ctx->c.ip, ctx->c.port);
+                        CX_INFO("[-->%s] connection established to server on %s:%d", ctx->c.name, ctx->c.ip, ctx->c.port);
                     }
                     else if (EINPROGRESS == errno | EAGAIN == errno)
                     {
                         // operation can't be performed right now, but epoll will let us know when it's done
                         event.events |= EPOLLOUT;
-                        ctx->c.state &= (~CX_NET_STATE_ERROR);
+                        ctx->c.state &= ~CX_NET_STATE_ERROR;
                         ctx->c.state |= CX_NET_STATE_CONNECTING;
                     }
                 }
@@ -149,7 +149,7 @@ cx_net_ctx_cl_t* cx_net_connect(cx_net_args_t* _args)
         }
 
         ctx->c.errorNumber = errno;
-        CX_WARN(CX_ALW, "[cl: %s] connect failed: %s (%s:%d)", ctx->c.name, strerror(errno), ctx->c.ip, ctx->c.port);
+        CX_WARN(CX_ALW, "[-->%s] connect failed: %s (%s:%d)", ctx->c.name, strerror(errno), ctx->c.ip, ctx->c.port);
     }
     else
     {
@@ -185,7 +185,7 @@ void cx_net_close(void* _ctx)
         free(svCtx->clients);
         cx_halloc_destroy(svCtx->clientsHalloc);
         
-        CX_INFO("[sv: %s] finished serving on %s:%d", ctx.c->name, ctx.c->ip, ctx.c->port);
+        CX_INFO("[%s<--] finished serving on %s:%d", ctx.c->name, ctx.c->ip, ctx.c->port);
     }
     else if (CX_NET_STATE_CLIENT & ctx.c->state)
     {
@@ -193,7 +193,7 @@ void cx_net_close(void* _ctx)
         
         cx_net_flush(clCtx, INVALID_HANDLE);
 
-        CX_INFO("[cl: %s] disconnected from server on %s:%d", ctx.c->name, ctx.c->ip, ctx.c->port);
+        CX_INFO("[-->%s] disconnected from server on %s:%d", ctx.c->name, ctx.c->ip, ctx.c->port);
     }
 
     // destroy epoll instance and free epoll events array
@@ -250,23 +250,26 @@ void cx_net_send(void* _ctx, uint8_t _header, const char* _payload, uint32_t _pa
         uint32_t bytesRequired = MIN_PACKET_LEN + _payloadSize;
         int32_t sock = 0;
         char* buffer = NULL;
+        uint16_t bufferSize = 0;
         uint32_t* position = NULL;
 
         if (CX_NET_STATE_SERVER & ctx.c->state)
         {
             CX_CHECK(cx_handle_is_valid(ctx.sv->clientsHalloc, _clientHandle),
-                "[sv: %s] sending a packet to an invalid client! (handle: %d)", ctx.c->name, _clientHandle);
+                "[%s<--] sending a packet to an invalid client! (handle: %d)", ctx.c->name, _clientHandle);
 
             sock = ctx.sv->clients[_clientHandle].sock;
             buffer = ctx.sv->clients[_clientHandle].out;
+            bufferSize = sizeof(ctx.sv->clients[_clientHandle].out);
             position = &(ctx.sv->clients[_clientHandle].outPos);
         }
         else if (CX_NET_STATE_CLIENT & ctx.c->state)
         {
-            CX_CHECK(CX_NET_STATE_CONNECTED & ctx.c->state, "[cl: %s] this ctx is not connected! you must check CX_NET_STATE_CONNECTED flag before calling send", ctx.c->name);
+            CX_CHECK(CX_NET_STATE_CONNECTED & ctx.c->state, "[-->%s] this ctx is not connected! you must check CX_NET_STATE_CONNECTED flag before calling send", ctx.c->name);
 
             sock = ctx.cl->c.sock;
             buffer = ctx.cl->out;
+            bufferSize = sizeof(ctx.cl->out);
             position = &(ctx.cl->outPos);
         }
 
@@ -282,12 +285,12 @@ void cx_net_send(void* _ctx, uint8_t _header, const char* _payload, uint32_t _pa
                 // we'll ignore this packet for now :(
                 if (CX_NET_STATE_SERVER & ctx.c->state)
                 {
-                    CX_WARN(CX_ALW, "[sv: %s] [handle: %d] we ran out of outbound buffer space to write packet #%d of length %d bytes",
+                    CX_WARN(CX_ALW, "[%s<--] [handle: %d] we ran out of outbound buffer space to write packet #%d of length %d bytes",
                         ctx.c->name, _clientHandle, _header, _payloadSize);
                 }
                 else if (CX_NET_STATE_CLIENT & ctx.c->state)
                 {
-                    CX_WARN(CX_ALW, "[cl: %s] we ran out of outbound buffer space to write packet #%d of length %d bytes", 
+                    CX_WARN(CX_ALW, "[-->%s] we ran out of outbound buffer space to write packet #%d of length %d bytes", 
                         ctx.c->name, _header, _payloadSize);
                 }
                 return;
@@ -295,8 +298,8 @@ void cx_net_send(void* _ctx, uint8_t _header, const char* _payload, uint32_t _pa
         }
 
         // write the packet to our buffer
-        cx_binw_uint8(buffer, position, _header);
-        cx_binw_uint16(buffer, position, _payloadSize);
+        cx_binw_uint8(buffer, bufferSize - (*position), position, _header);
+        cx_binw_uint16(buffer, bufferSize - (*position), position, _payloadSize);
 
         if (_payloadSize > 0)
         {
@@ -323,7 +326,7 @@ bool cx_net_flush(void* _ctx, uint16_t _clientHandle)
     if (CX_NET_STATE_SERVER & ctx.c->state)
     {
         CX_CHECK(cx_handle_is_valid(ctx.sv->clientsHalloc, _clientHandle),
-            "[sv: %s] flushing an invalid client! (handle: %d)", ctx.c->name, _clientHandle);
+            "[%s<--] flushing an invalid client! (handle: %d)", ctx.c->name, _clientHandle);
 
         sock = ctx.sv->clients[_clientHandle].sock;
         buffer = ctx.sv->clients[_clientHandle].out;
@@ -368,12 +371,12 @@ bool cx_net_flush(void* _ctx, uint16_t _clientHandle)
             {
                 if (CX_NET_STATE_SERVER & ctx.c->state)
                 {
-                    CX_WARN(CX_ALW, "[sv: %s] [handle: %d] write failed with error: %s (errno %d)", 
+                    CX_WARN(CX_ALW, "[%s<--] [handle: %d] write failed with error: %s (errno %d)", 
                         ctx.c->name, _clientHandle, strerror(errno), errno);
                 }
                 else if (CX_NET_STATE_CLIENT & ctx.c->state)
                 {
-                    CX_WARN(CX_ALW, "[cl: %s] write failed with error: %s (errno %d)", 
+                    CX_WARN(CX_ALW, "[-->%s] write failed with error: %s (errno %d)", 
                         ctx.c->name, strerror(errno), errno);
                 }
             }
@@ -416,7 +419,7 @@ static void cx_net_poll_events_client(cx_net_ctx_cl_t* _ctx)
     int32_t bytesRead = 0;
 
     int32_t eventsCount = epoll_wait(_ctx->c.epollDescriptor, _ctx->c.epollEvents, 1, 0);
-    CX_WARN(-1 != eventsCount, "[cl: %s] epoll_wait failed - %s", _ctx->c.name, strerror(errno));
+    CX_WARN(-1 != eventsCount, "[-->%s] epoll_wait failed - %s", _ctx->c.name, strerror(errno));
 
     // handle epoll event
     if (1 == eventsCount && _ctx->c.epollEvents[0].data.fd == _ctx->c.sock)
@@ -427,7 +430,7 @@ static void cx_net_poll_events_client(cx_net_ctx_cl_t* _ctx)
             
             if (0 == bytesRead)
             {
-                CX_INFO("[cl: %s] the server closed the connection", _ctx->c.name);
+                CX_INFO("[-->%s] the server closed the connection", _ctx->c.name);
                 _ctx->c.state &= ~(CX_NET_STATE_CONNECTING | CX_NET_STATE_CONNECTED);
                 close(_ctx->c.sock);
             }
@@ -440,7 +443,7 @@ static void cx_net_poll_events_client(cx_net_ctx_cl_t* _ctx)
                 // in single-thread epoll mode recv should never block since we're 
                 // the only thread dealing with this file descriptor, but anyway... 
                 // it's good to know what's going on
-                CX_WARN(CX_ALW, "[cl: %s] recv failed with error: %s (errno %d)", 
+                CX_WARN(CX_ALW, "[-->%s] recv failed with error: %s (errno %d)", 
                     _ctx->c.name, strerror(errno), errno);
             }
         }
@@ -457,7 +460,7 @@ static void cx_net_poll_events_client(cx_net_ctx_cl_t* _ctx)
             }
             else if (CX_NET_STATE_CONNECTING & _ctx->c.state)
             {               
-                _ctx->c.state &= (~CX_NET_STATE_CONNECTING);
+                _ctx->c.state &= ~CX_NET_STATE_CONNECTING;
 
                 if (-1 != getsockopt(_ctx->c.sock, SOL_SOCKET, SO_ERROR, &(_ctx->c.errorNumber), &(socklen_t){ sizeof(_ctx->c.errorNumber) }))
                 {
@@ -466,7 +469,7 @@ static void cx_net_poll_events_client(cx_net_ctx_cl_t* _ctx)
                         _ctx->c.state |= CX_NET_STATE_CONNECTED;
                         cx_net_epoll_mod(_ctx->c.epollDescriptor, _ctx->c.sock, true, false);
 
-                        CX_INFO("[cl: %s] connection established with server on %s:%d", 
+                        CX_INFO("[-->%s] connection established with server on %s:%d", 
                             _ctx->c.name, _ctx->c.ip, _ctx->c.port);
                     }
                 }
@@ -478,7 +481,7 @@ static void cx_net_poll_events_client(cx_net_ctx_cl_t* _ctx)
                 if (0 != _ctx->c.errorNumber)
                 {
                     _ctx->c.state |= CX_NET_STATE_ERROR;
-                    CX_WARN(CX_ALW, "[cl: %s] connection with server on %s:%d failed - %s (errno %d)",
+                    CX_WARN(CX_ALW, "[-->%s] connection with server on %s:%d failed - %s (errno %d)",
                         _ctx->c.name, _ctx->c.ip, _ctx->c.port, strerror(_ctx->c.errorNumber), _ctx->c.errorNumber);
                 }
 
@@ -506,7 +509,7 @@ static void cx_net_poll_events_server(cx_net_ctx_sv_t* _ctx)
     int32_t eventsCount = epoll_wait(_ctx->c.epollDescriptor,
         _ctx->c.epollEvents, _ctx->clientsMax, 0);
 
-    CX_WARN(-1 != eventsCount, "[sv: %s] epoll_wait failed", _ctx->c.name);
+    CX_WARN(-1 != eventsCount, "[%s<--] epoll_wait failed", _ctx->c.name);
 
     // handle epoll events
     for (uint32_t i = 0; i < eventsCount; i++)
@@ -533,11 +536,11 @@ static void cx_net_poll_events_server(cx_net_ctx_sv_t* _ctx)
                     _ctx->clients[clientHandle].outPos = 0;
                     inet_ntop(AF_INET, &(address.sin_addr), _ctx->clients[clientHandle].ip, INET_ADDRSTRLEN);
 
-                    CX_INFO("[sv: %s] [handle: %d] client connected (ip: %s, socket: %d)", _ctx->c.name, clientHandle, _ctx->clients[clientHandle].ip, clientSock);
+                    CX_INFO("[%s<--] [handle: %d] client connected (ip: %s, socket: %d)", _ctx->c.name, clientHandle, _ctx->clients[clientHandle].ip, clientSock);
                 }
                 else
                 {
-                    CX_WARN(CX_ALW, "[sv: %s] the clients container is full. a new incoming connection was rejected. (socket %d)", _ctx->c.name, clientSock);
+                    CX_WARN(CX_ALW, "[%s<--] the clients container is full. a new incoming connection was rejected. (socket %d)", _ctx->c.name, clientSock);
                     close(clientSock);
                 }
             }
@@ -546,7 +549,7 @@ static void cx_net_poll_events_server(cx_net_ctx_sv_t* _ctx)
                 // in single-thread epoll mode accept should never block since we're the only 
                 // thread dealing with this file descriptor and in the worst case
                 // accept will just report that there's nothing to accept... but anyway
-                CX_WARN(CX_ALW, "[sv: %s] accept failed with error: %s (errno %d)", _ctx->c.name, strerror(errno), errno);
+                CX_WARN(CX_ALW, "[%s<--] accept failed with error: %s (errno %d)", _ctx->c.name, strerror(errno), errno);
             }
         }
         else
@@ -565,7 +568,7 @@ static void cx_net_poll_events_server(cx_net_ctx_sv_t* _ctx)
 
                     if (0 == bytesRead)
                     {
-                        CX_INFO("[sv: %s] [handle: %d] client disconnected (ip: %s, socket: %d)",
+                        CX_INFO("[%s<--] [handle: %d] client disconnected (ip: %s, socket: %d)",
                             _ctx->c.name, clientHandle, _ctx->clients[clientHandle].ip, clientSock);
 
                         close(client->sock);
@@ -581,7 +584,7 @@ static void cx_net_poll_events_server(cx_net_ctx_sv_t* _ctx)
                         // in single-thread epoll mode recv should never block since we're 
                         // the only thread dealing with this file descriptor, but anyway... 
                         // it's good to know what's going on
-                        CX_WARN(CX_ALW, "[sv: %s] [handle: %d] recv failed with error: %s (errno %d)", _ctx->c.name, clientHandle, strerror(errno), errno);
+                        CX_WARN(CX_ALW, "[%s<--] [handle: %d] recv failed with error: %s (errno %d)", _ctx->c.name, clientHandle, strerror(errno), errno);
                     }
                 }
 
@@ -598,7 +601,7 @@ static void cx_net_poll_events_server(cx_net_ctx_sv_t* _ctx)
                     }
                 }
             }
-            CX_WARN(INVALID_HANDLE != clientHandle, "[sv: %s] socket %d is not registered as a client!", _ctx->c.name, clientSock);
+            CX_WARN(INVALID_HANDLE != clientHandle, "[%s<--] socket %d is not registered as a client!", _ctx->c.name, clientSock);
         }
     }
 
@@ -626,8 +629,8 @@ static void cx_net_process_stream(const cx_net_common_t* _common, void* _passThr
 
     while ((_bufferSize - bytesParsed) >= MIN_PACKET_LEN)
     {
-        cx_binr_uint8(_buffer, &bytesParsed, &packetHeader);
-        cx_binr_uint16(_buffer, &bytesParsed, &packetLength);
+        cx_binr_uint8(_buffer, _bufferSize, &bytesParsed, &packetHeader);
+        cx_binr_uint16(_buffer, _bufferSize, &bytesParsed, &packetLength);
         
         if ((_bufferSize - bytesParsed) >= packetLength)
         {
@@ -635,9 +638,9 @@ static void cx_net_process_stream(const cx_net_common_t* _common, void* _passThr
             packetHandler = _common->msgHandlers[packetHeader];
             if (NULL != packetHandler)
             {
-                packetHandler(_common, _passThru, &(_buffer[bytesParsed]));
+                packetHandler(_common, _passThru, &(_buffer[bytesParsed]), packetLength);
             }
-            CX_WARN(NULL != packetHandler, "[sv: %s] message handler for packet #%d is not defined", _common->name, packetHeader);
+            CX_WARN(NULL != packetHandler, "[%s<--] message handler for packet #%d is not defined", _common->name, packetHeader);
 
             bytesParsed += packetLength;
         }

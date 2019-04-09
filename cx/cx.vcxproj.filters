@@ -18,9 +18,6 @@
     <ClCompile Include="src\file.c">
       <Filter>src</Filter>
     </ClCompile>
-    <ClCompile Include="src\math.c">
-      <Filter>src</Filter>
-    </ClCompile>
     <ClCompile Include="src\str.c">
       <Filter>src</Filter>
     </ClCompile>
