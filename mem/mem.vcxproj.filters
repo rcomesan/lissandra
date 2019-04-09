@@ -1,0 +1,42 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<Project ToolsVersion="4.0" xmlns="http://schemas.microsoft.com/developer/msbuild/2003">
+  <ItemGroup>
+    <Filter Include="src">
+      <UniqueIdentifier>{cffb9391-bc85-4829-9eb3-fa512de102a3}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="res">
+      <UniqueIdentifier>{25319b09-1b8d-4ea7-b3d9-40328764e8ba}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="include">
+      <UniqueIdentifier>{c8f57c43-785d-4a61-907e-e41149179f48}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="include\mem">
+      <UniqueIdentifier>{e385f5fe-a672-4266-8bad-0c035617ea41}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="src\common">
+      <UniqueIdentifier>{7ccc9b7c-8e6b-4cde-9bb2-9e1b04c70502}</UniqueIdentifier>
+    </Filter>
+  </ItemGroup>
+  <ItemGroup>
+    <None Include="makefile" />
+    <None Include="res\.desc">
+      <Filter>res</Filter>
+    </None>
+  </ItemGroup>
+  <ItemGroup>
+    <ClCompile Include="src\mem.c">
+      <Filter>src</Filter>
+    </ClCompile>
+    <ClCompile Include="src\common\mem_protocol.c">
+      <Filter>src\common</Filter>
+    </ClCompile>
+  </ItemGroup>
+  <ItemGroup>
+    <ClInclude Include="include\mem\mem_protocol.h">
+      <Filter>include\mem</Filter>
+    </ClInclude>
+    <ClInclude Include="src\mem.h">
+      <Filter>src</Filter>
+    </ClInclude>
+  </ItemGroup>
+</Project>

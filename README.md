@@ -19,7 +19,6 @@
 | ker       |proyecto nodo Kernel (balanceador de carga)|
 | mem       |proyecto nodo Memory (memoria caché)|
 | lfs       |proyecto nodo Lissandra Fs (persistencia)|
-| common    |archivos específicos del sistema a compartir entre nodos|
 | scripts   |scripts y utilidades varias|
 
 -------------------------------------------------------------

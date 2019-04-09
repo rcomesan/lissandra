@@ -1,0 +1,42 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<Project ToolsVersion="4.0" xmlns="http://schemas.microsoft.com/developer/msbuild/2003">
+  <ItemGroup>
+    <Filter Include="src">
+      <UniqueIdentifier>{cffb9391-bc85-4829-9eb3-fa512de102a3}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="res">
+      <UniqueIdentifier>{5bf44f41-8285-4614-981c-587dd16684a1}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="include">
+      <UniqueIdentifier>{a9f2282d-e70e-423e-885d-e4e2280d1150}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="include\lfs">
+      <UniqueIdentifier>{c9033d6f-240d-408f-80c6-3d6386014104}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="src\common">
+      <UniqueIdentifier>{7d1977d5-48e4-4bea-947d-991e3cf72bb1}</UniqueIdentifier>
+    </Filter>
+  </ItemGroup>
+  <ItemGroup>
+    <None Include="makefile" />
+    <None Include="res\.desc">
+      <Filter>res</Filter>
+    </None>
+  </ItemGroup>
+  <ItemGroup>
+    <ClCompile Include="src\lfs.c">
+      <Filter>src</Filter>
+    </ClCompile>
+    <ClCompile Include="src\common\lfs_protocol.c">
+      <Filter>src\common</Filter>
+    </ClCompile>
+  </ItemGroup>
+  <ItemGroup>
+    <ClInclude Include="include\lfs\lfs_protocol.h">
+      <Filter>include\lfs</Filter>
+    </ClInclude>
+    <ClInclude Include="src\lfs.h">
+      <Filter>src</Filter>
+    </ClInclude>
+  </ItemGroup>
+</Project>

@@ -1,0 +1,81 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<SerializableSnippets xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xmlns:xsd="http://www.w3.org/2001/XMLSchema">
+  <commands />
+  <extensions>
+    <Snippet>
+      <id>1</id>
+      <name>rsync-on-save</name>
+      <code>using EnvDTE;
+using EnvDTE80;
+using System.Collections.Generic;
+using System.IO;
+using System.Linq;
+
+public class E : VisualCommanderExt.IExtension
+{
+	private EnvDTE80.DTE2 DTE;
+	private EnvDTE.Events events;
+	private EnvDTE.DocumentEvents documentEvents;
+	private EnvDTE.CommandEvents commandEvents;
+	private EnvDTE80.Commands2 commands;
+	private bool enabled;
+
+	public void SetSite(EnvDTE80.DTE2 DTE_, Microsoft.VisualStudio.Shell.Package package)
+	{
+		DTE = DTE_;
+		events = DTE.Events;
+	  	documentEvents = events.DocumentEvents;
+		commandEvents = events.get_CommandEvents(null, 0);
+		commands = DTE.Commands as EnvDTE80.Commands2;
+
+		var allowedSolutions = new List&lt;string&gt; { "utnso", "lissandra", "ejercicio-01", "ejercicio-02" };
+		string solutionName = Path.GetFileNameWithoutExtension(DTE.Solution.FileName.ToLower());
+		enabled = allowedSolutions.Any(s =&gt; solutionName.Equals(s.ToLower()));
+
+		if (enabled)
+		{
+			//System.Windows.MessageBox.Show("enabled on " + solutionName);
+			commandEvents.AfterExecute += OnAfterExecute;
+		}
+	}
+
+	public void Close()
+	{
+		if (enabled)
+			commandEvents.AfterExecute -= OnAfterExecute;
+	}
+
+	private void OnAfterExecute(string Guid, int ID, object CustomIn, object CustomOut)
+	{
+		string name = GetCommandName(Guid, ID);
+		if (name == "File.SaveAll")
+		{
+			//System.Windows.MessageBox.Show("OnAfterExecute File.SaveAll");
+			DTE.ExecuteCommand("Tools.ExternalCommand1");
+		}
+    	}
+
+	private string GetCommandName(string Guid, int ID)
+	{
+		if (Guid == null) return "null";
+        	try
+		{
+			return commands.Item(Guid, ID).Name;
+		}
+		catch (System.Exception)
+		{
+		}
+		return "";
+	}
+}
+</code>
+      <referencedAssemblies />
+      <type>Extension</type>
+      <lang>CS</lang>
+      <langVersion>v4.0</langVersion>
+      <enabled>true</enabled>
+      <includeDebugInformation>false</includeDebugInformation>
+    </Snippet>
+  </extensions>
+  <commonCode />
+</SerializableSnippets>

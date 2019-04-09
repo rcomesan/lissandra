@@ -1,0 +1,42 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<Project ToolsVersion="4.0" xmlns="http://schemas.microsoft.com/developer/msbuild/2003">
+  <ItemGroup>
+    <Filter Include="src">
+      <UniqueIdentifier>{cffb9391-bc85-4829-9eb3-fa512de102a3}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="res">
+      <UniqueIdentifier>{257df4be-3a5e-488e-9117-91ca2ac2ff01}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="include">
+      <UniqueIdentifier>{31484b18-2d85-4296-a984-a588ce3bd39e}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="include\ker">
+      <UniqueIdentifier>{143d36df-d028-4e6a-b413-8b6012d65c2e}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="src\common">
+      <UniqueIdentifier>{41e38128-f257-43da-8cbf-5f085509bed5}</UniqueIdentifier>
+    </Filter>
+  </ItemGroup>
+  <ItemGroup>
+    <None Include="makefile" />
+    <None Include="res\.desc">
+      <Filter>res</Filter>
+    </None>
+  </ItemGroup>
+  <ItemGroup>
+    <ClCompile Include="src\ker.c">
+      <Filter>src</Filter>
+    </ClCompile>
+    <ClCompile Include="src\common\ker_protocol.c">
+      <Filter>src\common</Filter>
+    </ClCompile>
+  </ItemGroup>
+  <ItemGroup>
+    <ClInclude Include="include\ker\ker_protocol.h">
+      <Filter>include\ker</Filter>
+    </ClInclude>
+    <ClInclude Include="src\ker.h">
+      <Filter>src</Filter>
+    </ClInclude>
+  </ItemGroup>
+</Project>
