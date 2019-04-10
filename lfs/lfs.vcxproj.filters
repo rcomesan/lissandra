@@ -30,12 +30,24 @@
     <ClCompile Include="src\common\lfs_protocol.c">
       <Filter>src\common</Filter>
     </ClCompile>
+    <ClCompile Include="src\memtable.c">
+      <Filter>src</Filter>
+    </ClCompile>
+    <ClCompile Include="src\fs.c">
+      <Filter>src</Filter>
+    </ClCompile>
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="include\lfs\lfs_protocol.h">
       <Filter>include\lfs</Filter>
     </ClInclude>
     <ClInclude Include="src\lfs.h">
+      <Filter>src</Filter>
+    </ClInclude>
+    <ClInclude Include="src\memtable.h">
+      <Filter>src</Filter>
+    </ClInclude>
+    <ClInclude Include="src\fs.h">
       <Filter>src</Filter>
     </ClInclude>
   </ItemGroup>

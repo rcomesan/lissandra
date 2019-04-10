@@ -11,8 +11,9 @@
 #include <string.h>
 #include <unistd.h>
 
-cx_net_ctx_sv_t* g_sv;          // server context for serving API requests coming from MEM nodes
-char g_buffer[MAX_PACKET_LEN - MIN_PACKET_LEN];
+cx_net_ctx_sv_t*    g_sv;           // server context for serving API requests coming from MEM nodes
+char                g_buffer[MAX_PACKET_LEN - MIN_PACKET_LEN];
+t_dictionary*       g_memtable;     // memtables container indexed by table name
 
 int main(int _argc, char** _argv)
 {
@@ -34,4 +35,10 @@ int main(int _argc, char** _argv)
 
     cx_net_close(g_sv);
     return 0;
+}
+
+void dump_memtables()
+{
+    dictionary_iterator(g_memtable, memtable_dump);
+    dictionary_clean_and_destroy_elements(g_memtable, memtable_destroy);
 }

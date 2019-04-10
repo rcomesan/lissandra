@@ -66,7 +66,9 @@
   </PropertyGroup>
   <ItemGroup>
     <ClCompile Include="src\common\lfs_protocol.c" />
+    <ClCompile Include="src\fs.c" />
     <ClCompile Include="src\lfs.c" />
+    <ClCompile Include="src\memtable.c" />
   </ItemGroup>
   <ItemGroup>
     <None Include="makefile" />
@@ -79,7 +81,9 @@
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="include\lfs\lfs_protocol.h" />
+    <ClInclude Include="src\fs.h" />
     <ClInclude Include="src\lfs.h" />
+    <ClInclude Include="src\memtable.h" />
   </ItemGroup>
   <ItemDefinitionGroup />
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.targets" />
