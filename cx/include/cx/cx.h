@@ -13,10 +13,26 @@
 #define CX_DEBUG 0
 #endif
 
-void cx_init(const char* _projectName);
+/****************************************************************************************
+ ***  PUBLIC FUNCTIONS
+ ***************************************************************************************/
 
-void cx_trace(const char* _filePath, uint16_t _lineNumber, const char* _format, ...);
-    
+void            cx_init(const char* _projectName);
+
+void            cx_trace(const char* _filePath, uint16_t _lineNumber, const char* _format, ...);
+
+double          cx_time_counter();
+
+double          cx_time_delta();
+
+void            cx_time_update();
+
+uint32_t        cx_time_stamp();
+
+/****************************************************************************************
+ ***  MACROS
+ ***************************************************************************************/
+
 #define CX_MACRO_BLOCK_BEGIN do {
 #define CX_MACRO_BLOCK_END } while (0);
 #define CX_NOOP(...) CX_MACRO_BLOCK_BEGIN CX_MACRO_BLOCK_END
