@@ -22,8 +22,11 @@ void cx_trace(const char * _filePath, uint16_t _lineNumber, const char * _format
     va_list args;
     va_start(args, _format);
 
+    // format the header of the trace, the returned value is the strlen of the string (not counting the terminating null char)
     uint32_t sourceLen = snprintf(temp, sizeof(temp), "[%s] [%s:%d] ", g_projectName, _filePath, _lineNumber);
-    uint32_t totalLen = sourceLen + vsnprintf(temp + sourceLen, sizeof(temp) - sourceLen, _format, args);
+
+    // vsnprintf writes at most n-1 bytes. account one extra byte to make space for the new line character
+    uint32_t totalLen = sourceLen + vsnprintf(temp + sourceLen, sizeof(temp) - sourceLen - 1, _format, args) + 1;
 
     if (totalLen > sizeof(temp))
     {
@@ -42,10 +45,9 @@ void cx_trace(const char * _filePath, uint16_t _lineNumber, const char * _format
         }
     }
 
-    out[totalLen] = '\0';
+    out[totalLen - 1] = '\n';
+    out[totalLen + 0] = '\0';
     fputs(out, stdout);
-    fputs("\n", stdout);
-    fflush(stdout);
 
     if (out != temp)
     {

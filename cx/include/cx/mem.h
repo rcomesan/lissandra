@@ -4,17 +4,21 @@
 #include "cx.h"
 #include <stdint.h>
 
-#define CX_MEM_STRUCT_ALLOC(_var)                       \
-    malloc(sizeof(*(_var)));                            \
-    memset(_var, 0, sizeof(*(_var)));                   \
+#define CX_MEM_STRUCT_ALLOC(_var)                           \
+    malloc(sizeof(*(_var)));                                \
+    memset(_var, 0, sizeof(*(_var)));                       \
     CX_CHECK(_var, #_var " struct allocation failed!");
 
-#define CX_MEM_ARR_ALLOC(_var, _size)                   \
-    malloc((_size) * sizeof(*(_var)));                  \
-    memset((_var), 0, (_size) * sizeof(*(_var)));         \
-    CX_CHECK((_var), #_var " array of struct allocation failed! (%d elements)", (_size));
+#define CX_MEM_ARR_ALLOC(_var, _numElems)                   \
+    malloc((_numElems) * sizeof(*(_var)));                  \
+    memset((_var), 0, (_numElems) * sizeof(*(_var)));       \
+    CX_CHECK((_var), #_var " array of struct allocation failed! (%d bytes needed for %d elements)", (_numElems));
 
-#define CX_MEM_ZERO(_var)                               \
+#define CX_MEM_ARR_REALLOC(_var, _numElements)              \
+    realloc((_var), (_numElements) * sizeof(*(_var)));      \
+    CX_CHECK((_var), #_var " array of struct reallocation failed! (%d bytes needed for %d elements)", (_numElems) * sizeof(*(_var)), (_numElems));
+
+#define CX_MEM_ZERO(_var)                                   \
     memset(&(_var), 0, sizeof((_var)));
 
 typedef void(*cx_arr_free_cb_t)(void* _mem);

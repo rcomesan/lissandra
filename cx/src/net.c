@@ -13,6 +13,20 @@
 #include <string.h>
 
 /****************************************************************************************
+ ***  PRIVATE DECLARATIONS
+ ***************************************************************************************/
+
+static bool             cx_net_parse_address(const char* _ipAddress, uint16_t _port, sockaddr_in* _outAddr);
+
+static void             cx_net_poll_events_client(cx_net_ctx_cl_t* _ctx);
+
+static void             cx_net_poll_events_server(cx_net_ctx_sv_t* _ctx);
+
+static void             cx_net_process_stream(const cx_net_common_t* _common, void* _passThru, char* _buffer, uint32_t _bufferSize, uint32_t* _inOutPos);
+
+static void             cx_net_epoll_mod(int32_t _epollDescriptor, int32_t _sock, bool _in, bool _out);
+
+/****************************************************************************************
  ***  PUBLIC FUNCTIONS
  ***************************************************************************************/
 
