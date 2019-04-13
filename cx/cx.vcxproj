@@ -66,6 +66,7 @@
   <ItemGroup>
     <ClCompile Include="src\binr.c" />
     <ClCompile Include="src\binw.c" />
+    <ClCompile Include="src\cli.c" />
     <ClCompile Include="src\cx.c" />
     <ClCompile Include="src\file.c" />
     <ClCompile Include="src\halloc.c" />
@@ -79,6 +80,7 @@
   <ItemGroup>
     <ClInclude Include="include\cx\binr.h" />
     <ClInclude Include="include\cx\binw.h" />
+    <ClInclude Include="include\cx\cli.h" />
     <ClInclude Include="include\cx\cx.h" />
     <ClInclude Include="include\cx\file.h" />
     <ClInclude Include="include\cx\halloc.h" />

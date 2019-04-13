@@ -71,7 +71,7 @@ directory:
 	@mkdir -p $(PATH_BUILD).obj/
 
 $(PATH_BUILD).obj/%.o: $(PATH_SRC)%.c
-	$(CC) $(CFLAGS) -c $< -o $@ -l:$(LIB_COMMONS)
+	$(CC) $(CFLAGS) -c $< -o $@
 
 $(PATH_BUILD)$(BIN_OUTPUT): $(FILES_O)
-	$(CC) -shared $(CFLAGS) $(FILES_O) -o $(PATH_BUILD)$(BIN_OUTPUT) -l:$(LIB_COMMONS)
+	$(CC) -shared $(CFLAGS) $(FILES_O) -o $(PATH_BUILD)$(BIN_OUTPUT) -l:$(LIB_COMMONS) -l:libreadline.so -l:libpthread.so
