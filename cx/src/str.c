@@ -2,6 +2,7 @@
 #include "cx.h"
 #include "math.h"
 
+#include <errno.h>
 #include <stdlib.h>
 #include <stdio.h>
 #include <stdint.h>
@@ -68,9 +69,92 @@ char* cx_str_copy_d(const char* _src)
     return strdup(_src);
 }
 
-int32_t cx_str_parse_int(const char* _src)
+bool cx_str_parse_int32(const char* _src, int32_t* _out)
 {
-    return strtol(_src, NULL, 10);
+    char* end;
+
+    errno = 0;
+    int32_t i32 = strtol(_src, &end, 10);
+
+    if (errno || end == _src || *end != '\0')
+    {
+        return false;
+    }
+
+    (*_out) = i32;
+    return true;
+}
+
+bool cx_str_parse_uint32(const char* _src, uint32_t* _out)
+{
+    char* end;
+
+    errno = 0;
+    uint32_t ui32 = strtoul(_src, &end, 10);
+
+    if (errno || end == _src || *end != '\0')
+    {
+        return false;
+    }
+
+    (*_out) = ui32;
+    return true;
+}
+
+bool cx_str_parse_int16(const char* _src, int16_t* _out)
+{
+    int32_t i32 = 0;
+
+    if (true
+        && cx_str_parse_int32(_src, &i32)
+        && cx_math_in_range(i32, INT16_MIN, INT16_MAX))
+    {
+        (*_out) = (int16_t)i32;
+        return true;
+    }
+    return false;
+}
+
+bool cx_str_parse_uint16(const char* _src, uint16_t* _out)
+{
+    uint32_t ui32 = 0;
+
+    if (true
+        && cx_str_parse_uint32(_src, &ui32)
+        && cx_math_in_range(ui32, 0, UINT16_MAX))
+    {
+        (*_out) = (uint16_t)ui32;
+        return true;
+    }
+    return false;
+}
+
+bool cx_str_parse_int8(const char* _src, int8_t* _out)
+{
+    int32_t i32 = 0;
+
+    if (true
+        && cx_str_parse_int32(_src, &i32)
+        && cx_math_in_range(i32, INT8_MIN, INT8_MAX))
+    {
+        (*_out) = (int8_t)i32;
+        return true;
+    }
+    return false;
+}
+
+bool cx_str_parse_uint8(const char* _src, uint8_t* _out)
+{
+    uint32_t ui32 = 0;
+
+    if (true
+        && cx_str_parse_uint32(_src, &ui32)
+        && cx_math_in_range(ui32, 0, UINT8_MAX))
+    {
+        (*_out) = (uint8_t)ui32;
+        return true;
+    }
+    return false;
 }
 
 uint32_t cx_str_format(char* _buffer, uint32_t _bufferSize, const char* _format, ...)

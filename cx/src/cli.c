@@ -186,7 +186,7 @@ static void* cx_cli_main_loop(void* _arg)
         }
         else
         {
-            usleep(250 * 1000);
+            usleep(100 * 1000);
         }
     }
 
