@@ -1,5 +1,6 @@
 #include "cx.h"
 #include "binr.h"
+#include "math.h"
 
 //TODO this will only work on architectures of the same endianness 
 // check if endian-independent code is a requirement and make the byte swaps needed
@@ -65,4 +66,24 @@ void cx_binr_bool(const char* _buffer, uint16_t _bufferSize, uint32_t* _inOutPos
     CX_CHECK((*_inOutPos) + sizeof(bool) <= _bufferSize, "out of buffer space!!")
     memcpy(_outVal, &_buffer[*_inOutPos], sizeof(bool));
     (*_inOutPos) += sizeof(bool);
+}
+
+uint16_t cx_binr_str(const char* _buffer, uint16_t _bufferSize, uint32_t* _inOutPos, char* _outStr, uint32_t _outStrSize)
+{
+    uint16_t strLen = 0;
+    cx_binr_uint16(_buffer, _bufferSize, _inOutPos, &strLen);
+
+    if (NULL == _outStr)
+    {
+        (*_inOutPos) -= sizeof(uint16_t);
+        return strLen;
+    }
+    else
+    {
+        uint16_t bytesCopied = cx_math_min(strLen, _outStrSize - 1);
+        memcpy(_outStr, _buffer, bytesCopied);
+        _outStr[bytesCopied] = '\0';
+        (*_inOutPos) += bytesCopied;
+        return bytesCopied;
+    }
 }
