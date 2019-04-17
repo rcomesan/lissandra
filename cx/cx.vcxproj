@@ -69,6 +69,7 @@
     <ClCompile Include="src\cli.c" />
     <ClCompile Include="src\cx.c" />
     <ClCompile Include="src\file.c" />
+    <ClCompile Include="src\fs.c" />
     <ClCompile Include="src\halloc.c" />
     <ClCompile Include="src\mem.c" />
     <ClCompile Include="src\net.c" />
@@ -83,6 +84,7 @@
     <ClInclude Include="include\cx\cli.h" />
     <ClInclude Include="include\cx\cx.h" />
     <ClInclude Include="include\cx\file.h" />
+    <ClInclude Include="include\cx\fs.h" />
     <ClInclude Include="include\cx\halloc.h" />
     <ClInclude Include="include\cx\math.h" />
     <ClInclude Include="include\cx\mem.h" />
