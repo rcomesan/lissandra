@@ -28,13 +28,13 @@ static bool _cx_fs_rm(const cx_path_t* _filePath, cx_error_t* _outErr);
  ***  PUBLIC FUNCTIONS
  ***************************************************************************************/
 
-void cx_fs_path(cx_path_t* _path, const char* _format, ...)
+void cx_fs_path(cx_path_t* _outPath, const char* _format, ...)
 {
     va_list args;
     va_start(args, _format);
-    vsnprintf(_path, sizeof(*_path), _format, args);
+    vsnprintf(_outPath, sizeof(*_outPath), _format, args);
     va_end(args);
-    _cx_fs_absolutize(_path);
+    _cx_fs_absolutize(_outPath);
 }
 
 bool cx_fs_exists(const cx_path_t* _path)
@@ -96,43 +96,43 @@ bool cx_fs_remove(const cx_path_t* _path, cx_error_t* _outErr)
     return true;
 }
 
-cx_fs_browser_t* cx_fs_browser_init(const cx_path_t* _folderPath, cx_error_t* _outErr)
+cx_fs_explorer_t* cx_fs_explorer_init(const cx_path_t* _folderPath, cx_error_t* _outErr)
 {
     CX_CHECK(strlen(*_folderPath) > 0, "invalid folder path!");
     DIR* dir = NULL;
-    cx_fs_browser_t* browser = NULL;
+    cx_fs_explorer_t* explorer = NULL;
     
     dir = opendir(*_folderPath);
 
     if (NULL != dir)
     {
-        browser = CX_MEM_STRUCT_ALLOC(browser);
-        cx_str_copy(browser->path, sizeof(browser->path), _folderPath);
-        browser->dir = dir;
+        explorer = CX_MEM_STRUCT_ALLOC(explorer);
+        cx_str_copy(explorer->path, sizeof(explorer->path), _folderPath);
+        explorer->dir = dir;
     }
     else
     {
         CX_ERROR_SET(_outErr, 1, "Failed to open folder '%s'.", _folderPath);
     }
 
-    return browser;
+    return explorer;
 }
 
-bool cx_fs_browser_next_file(cx_fs_browser_t* _browser, cx_path_t* _outFile)
+bool cx_fs_explorer_next_file(cx_fs_explorer_t* _explorer, cx_path_t* _outFile)
 {
-    if (!_browser->readingFiles)
+    if (!_explorer->readingFiles)
     {
-        rewinddir(_browser->dir);
-        _browser->readingFiles = true;
+        rewinddir(_explorer->dir);
+        _explorer->readingFiles = true;
     }
 
-    int32_t folderPathLen = strlen(_browser->path);
-    if (folderPathLen == 1 && _browser->path[0] == '/') folderPathLen = 0;
-    cx_str_copy(*_outFile, sizeof(*_outFile), _browser->path);
+    int32_t folderPathLen = strlen(_explorer->path);
+    if (folderPathLen == 1 && _explorer->path[0] == '/') folderPathLen = 0;
+    cx_str_copy(*_outFile, sizeof(*_outFile), _explorer->path);
     (*_outFile)[folderPathLen] = '/';
     (*_outFile)[folderPathLen + 1] = '\0';
 
-    struct dirent* entry = readdir(_browser->dir);
+    struct dirent* entry = readdir(_explorer->dir);
     while (NULL != entry)
     {
         cx_str_copy(&((*_outFile)[folderPathLen + 1]), sizeof(*_outFile) - (folderPathLen + 1), entry->d_name);
@@ -141,26 +141,26 @@ bool cx_fs_browser_next_file(cx_fs_browser_t* _browser, cx_path_t* _outFile)
         {
             return true;
         }
-        entry = readdir(_browser->dir);
+        entry = readdir(_explorer->dir);
     }
     return false;
 }
 
-bool cx_fs_browser_next_folder(cx_fs_browser_t* _browser, cx_path_t* _outFolder)
+bool cx_fs_explorer_next_folder(cx_fs_explorer_t* _explorer, cx_path_t* _outFolder)
 {
-    if (_browser->readingFiles)
+    if (_explorer->readingFiles)
     {
-        rewinddir(_browser->dir);
-        _browser->readingFiles = false;
+        rewinddir(_explorer->dir);
+        _explorer->readingFiles = false;
     }
 
-    int32_t folderPathLen = strlen(_browser->path);
-    if (folderPathLen == 1 && _browser->path[0] == '/') folderPathLen = 0;
-    cx_str_copy(*_outFolder, sizeof(*_outFolder), _browser->path);
+    int32_t folderPathLen = strlen(_explorer->path);
+    if (folderPathLen == 1 && _explorer->path[0] == '/') folderPathLen = 0;
+    cx_str_copy(*_outFolder, sizeof(*_outFolder), _explorer->path);
     (*_outFolder)[folderPathLen] = '/';
     (*_outFolder)[folderPathLen + 1] = '\0';
 
-    struct dirent* entry = readdir(_browser->dir);
+    struct dirent* entry = readdir(_explorer->dir);
     while (NULL != entry)
     {
         if (true
@@ -174,22 +174,22 @@ bool cx_fs_browser_next_folder(cx_fs_browser_t* _browser, cx_path_t* _outFolder)
                 return true;
             }
         }
-        entry = readdir(_browser->dir);
+        entry = readdir(_explorer->dir);
     }
     return false;
 }
 
-void cx_fs_browser_terminate(cx_fs_browser_t* _browser)
+void cx_fs_explorer_terminate(cx_fs_explorer_t* _explorer)
 {
-    if (NULL == _browser) return;
+    if (NULL == _explorer) return;
    
-    if (NULL != _browser->dir)
+    if (NULL != _explorer->dir)
     {
-        closedir(_browser->dir);
-        _browser->dir = NULL;
+        closedir(_explorer->dir);
+        _explorer->dir = NULL;
     }
 
-    free(_browser);
+    free(_explorer);
 }
 
 /****************************************************************************************
@@ -261,24 +261,24 @@ static bool _cx_fs_rm(const cx_path_t* _filePath, cx_error_t* _outErr)
 static bool _cx_fs_rmdir(const cx_path_t* _folderPath, cx_error_t* _outErr)
 {
     cx_path_t path;
-    cx_fs_browser_t* brw = cx_fs_browser_init(_folderPath, _outErr);
+    cx_fs_explorer_t* brw = cx_fs_explorer_init(_folderPath, _outErr);
     if (NULL == brw) return false;
 
     bool failed = false;
     
-    while (cx_fs_browser_next_file(brw, &path) && !failed)
+    while (cx_fs_explorer_next_file(brw, &path) && !failed)
     {
         _cx_fs_rm(path, _outErr);
         failed = (0 != _outErr->num);
     }
 
-    while (cx_fs_browser_next_folder(brw, &path) && !failed)
+    while (cx_fs_explorer_next_folder(brw, &path) && !failed)
     {
         _cx_fs_rmdir(path, _outErr);
         failed = (0 != _outErr->num);
     }
 
-    cx_fs_browser_terminate(brw);
+    cx_fs_explorer_terminate(brw);
 
     return !failed && (0 == rmdir(*_folderPath));
 }

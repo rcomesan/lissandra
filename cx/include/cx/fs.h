@@ -9,18 +9,18 @@
 
 typedef char cx_path_t[PATH_MAX + 1];
 
-typedef struct cx_fs_browser_t
+typedef struct cx_fs_explorer_t
 {
     cx_path_t   path;
     DIR*        dir;
     bool        readingFiles;
-} cx_fs_browser_t;
+} cx_fs_explorer_t;
 
 /****************************************************************************************
  ***  PUBLIC FUNCTIONS
  ***************************************************************************************/
 
-void                cx_fs_path(cx_path_t* _path, const char* _format, ...);
+void                cx_fs_path(cx_path_t* _outPath, const char* _format, ...);
 
 bool                cx_fs_exists(const cx_path_t* _path);
 
@@ -30,12 +30,12 @@ bool                cx_fs_mkdir(const cx_path_t* _folderPath, cx_error_t* _outEr
 
 bool                cx_fs_remove(const cx_path_t* _path, cx_error_t* _outErr);
 
-cx_fs_browser_t*    cx_fs_browser_init(const cx_path_t* _folderPath, cx_error_t* _outErr);
+cx_fs_explorer_t*    cx_fs_explorer_init(const cx_path_t* _folderPath, cx_error_t* _outErr);
 
-bool                cx_fs_browser_next_file(cx_fs_browser_t* _browser, cx_path_t* _outFile);
+bool                cx_fs_explorer_next_file(cx_fs_explorer_t* _explorer, cx_path_t* _outFile);
 
-bool                cx_fs_browser_next_folder(cx_fs_browser_t* _browser, cx_path_t* _outFolder);
+bool                cx_fs_explorer_next_folder(cx_fs_explorer_t* _explorer, cx_path_t* _outFolder);
 
-void                cx_fs_browser_terminate(cx_fs_browser_t* _browser);
+void                cx_fs_explorer_terminate(cx_fs_explorer_t* _explorer);
 
 #endif
