@@ -13,6 +13,9 @@
 #define CX_DEBUG 0
 #endif
 
+#define TIMESTAMP_LEN 14
+typedef char timestamp_t[TIMESTAMP_LEN + 1];
+
 /****************************************************************************************
  ***  PUBLIC FUNCTIONS
  ***************************************************************************************/
@@ -27,7 +30,9 @@ double          cx_time_delta();
 
 void            cx_time_update();
 
-uint32_t        cx_time_stamp();
+uint32_t        cx_time_epoch();
+
+void            cx_time_stamp(timestamp_t* _outTimestamp);
 
 /****************************************************************************************
  ***  MACROS

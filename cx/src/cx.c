@@ -7,6 +7,7 @@
 #include <string.h>
 #include <stdarg.h>
 #include <sys/time.h>
+#include <time.h>
 
 static char     g_projectName[64] = "undefined";
 static int64_t  g_timeOffset;
@@ -87,8 +88,14 @@ void cx_time_update()
     g_timeCounterPrev = g_timeCounter;
 }
 
-uint32_t cx_time_stamp()
+uint32_t cx_time_epoch()
 {
     //TODO CHECKME is seconds precision OK for this?
     return time(NULL);
+}
+
+void cx_time_stamp(timestamp_t* _outTimestamp)
+{
+    time_t now = time(NULL);
+    strftime(_outTimestamp, 15, "%Y%m%d%H%M%S", localtime(&now));
 }
