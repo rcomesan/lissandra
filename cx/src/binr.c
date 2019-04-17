@@ -68,7 +68,7 @@ void cx_binr_bool(const char* _buffer, uint16_t _bufferSize, uint32_t* _inOutPos
     (*_inOutPos) += sizeof(bool);
 }
 
-uint16_t cx_binr_str(const char* _buffer, uint16_t _bufferSize, uint32_t* _inOutPos, char* _outStr, uint32_t _outStrSize)
+uint16_t cx_binr_str(const char* _buffer, uint16_t _bufferSize, uint32_t* _inOutPos, char* _outStr, uint32_t _strSize)
 {
     uint16_t strLen = 0;
     cx_binr_uint16(_buffer, _bufferSize, _inOutPos, &strLen);
@@ -80,7 +80,7 @@ uint16_t cx_binr_str(const char* _buffer, uint16_t _bufferSize, uint32_t* _inOut
     }
     else
     {
-        uint16_t bytesCopied = cx_math_min(strLen, _outStrSize - 1);
+        uint16_t bytesCopied = cx_math_min(strLen, _strSize - 1);
         memcpy(_outStr, _buffer, bytesCopied);
         _outStr[bytesCopied] = '\0';
         (*_inOutPos) += bytesCopied;

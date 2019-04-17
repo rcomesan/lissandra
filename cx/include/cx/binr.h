@@ -22,6 +22,6 @@ void        cx_binr_double(const char* _buffer, uint16_t _bufferSize, uint32_t* 
 
 void        cx_binr_bool(const char* _buffer, uint16_t _bufferSize, uint32_t* _inOutPos, bool* _outVal);
 
-uint16_t    cx_binr_str(const char* _buffer, uint16_t _bufferSize, uint32_t* _inOutPos, char* _outStr, uint32_t _outStrSize);
+uint16_t    cx_binr_str(const char* _buffer, uint16_t _bufferSize, uint32_t* _inOutPos, char* _outStr, uint32_t _strSize);
 
 #endif // CX_BINR_H_

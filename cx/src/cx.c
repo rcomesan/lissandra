@@ -94,7 +94,7 @@ uint32_t cx_time_epoch()
     return time(NULL);
 }
 
-void cx_time_stamp(timestamp_t* _outTimestamp)
+void cx_time_stamp(cx_timestamp_t* _outTimestamp)
 {
     time_t now = time(NULL);
     strftime(_outTimestamp, 15, "%Y%m%d%H%M%S", localtime(&now));

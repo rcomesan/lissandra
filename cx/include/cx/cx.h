@@ -13,8 +13,15 @@
 #define CX_DEBUG 0
 #endif
 
-#define TIMESTAMP_LEN 14
-typedef char timestamp_t[TIMESTAMP_LEN + 1];
+#define CX_TIMESTAMP_LEN 14
+typedef char cx_timestamp_t[CX_TIMESTAMP_LEN + 1];
+
+#define CX_ERROR_LEN 4095
+typedef struct cx_error_t
+{
+    uint32_t    num;
+    char        desc[CX_ERROR_LEN + 1];
+} cx_error_t;
 
 /****************************************************************************************
  ***  PUBLIC FUNCTIONS
@@ -32,7 +39,7 @@ void            cx_time_update();
 
 uint32_t        cx_time_epoch();
 
-void            cx_time_stamp(timestamp_t* _outTimestamp);
+void            cx_time_stamp(cx_timestamp_t* _outTimestamp);
 
 /****************************************************************************************
  ***  MACROS
@@ -41,6 +48,10 @@ void            cx_time_stamp(timestamp_t* _outTimestamp);
 #define CX_MACRO_BLOCK_BEGIN do {
 #define CX_MACRO_BLOCK_END } while (0);
 #define CX_NOOP(...) CX_MACRO_BLOCK_BEGIN CX_MACRO_BLOCK_END
+
+#define CX_ERROR_SET(_err, _num, _format, ...)                                          \
+    _err->num = _num;                                                                   \
+    snprintf(_err->desc, sizeof(_err->desc), _format, ##__VA_ARGS__);
 
 #if CX_DEBUG
     #define CX_INFO(_format, ...)                                                        \

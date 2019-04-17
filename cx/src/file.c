@@ -67,8 +67,8 @@ void cx_file_delete(cx_file_t* _file)
 {
     CX_CHECK_NOT_NULL(_file);
 
-    char filePath[MAX_FILE_PATH_LEN];
-    memcpy(filePath, _file->path, MAX_FILE_PATH_LEN);
+    char filePath[PATH_MAX];
+    memcpy(filePath, _file->path, PATH_MAX);
 
     cx_file_close(_file);
     remove(filePath);

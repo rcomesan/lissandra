@@ -3,8 +3,7 @@
 
 #include <stdio.h>
 #include <stdint.h>
-
-#define MAX_FILE_PATH_LEN 2048
+#include <limits.h>
 
 typedef enum
 {
@@ -17,7 +16,7 @@ typedef enum
 
 typedef struct file_t
 {
-    char path[MAX_FILE_PATH_LEN];   // Path to the opened file.
+    char path[PATH_MAX];            // Path to the opened file.
     FILE* handle;                   // Pointer to the opened file handle.
     CX_FILE_OPEN_MODE mode;         // The io mode intended for this file.
     uint32_t lastLineNumber;        // Previous line number (starting at 1). Cached for fast sequential read operations.

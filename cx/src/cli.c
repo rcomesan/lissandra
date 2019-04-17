@@ -27,10 +27,11 @@ static void*            cx_cli_main_loop(void* _arg);
 
 bool cx_cli_init()
 {
-    CX_CHECK(NULL == m_cliCtx, "cli module is already initialized!");
-    if (NULL != m_cliCtx) return false;
+    if (NULL == m_cliCtx)
+        m_cliCtx = CX_MEM_STRUCT_ALLOC(m_cliCtx);
 
-    m_cliCtx = CX_MEM_STRUCT_ALLOC(m_cliCtx);
+    CX_CHECK(!m_cliCtx->initialized, "cli module is already initialized!");
+    if (m_cliCtx->initialized) return false;
 
     int result = pthread_create(&m_cliCtx->thread, NULL, cx_cli_main_loop, NULL);
 
@@ -46,6 +47,8 @@ bool cx_cli_init()
 
 void cx_cli_terminate()
 {
+    if (NULL == m_cliCtx || !m_cliCtx->initialized) return;
+
     if (CX_CLI_STATE_READING == m_cliCtx->state)
     {
         m_cliCtx->state = CX_CLI_STATE_SHUTDOWN;

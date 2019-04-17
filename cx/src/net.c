@@ -177,7 +177,7 @@ cx_net_ctx_cl_t* cx_net_connect(cx_net_args_t* _args)
 
 void cx_net_close(void* _ctx)
 {
-    CX_CHECK_NOT_NULL(_ctx);
+    if (NULL == _ctx) return;
 
     cx_net_ctx_t ctx;
     ctx.c = _ctx;

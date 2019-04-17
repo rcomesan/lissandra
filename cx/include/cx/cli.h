@@ -8,8 +8,6 @@
 #define CX_CLI_MAX_CMD_LEN 32
 #define CX_CLI_MAX_CMD_ARGS 8
 
-typedef void(*cx_cli_handler_cb)(const char* _command, const char** _args, uint8_t _argsCount);
-
 typedef enum
 {
     CX_CLI_STATE_NONE = 0,                              // default state
