@@ -19,7 +19,7 @@ typedef char cx_timestamp_t[CX_TIMESTAMP_LEN + 1];
 #define CX_ERROR_LEN 4095
 typedef struct cx_error_t
 {
-    uint32_t    num;
+    uint32_t    code;
     char        desc[CX_ERROR_LEN + 1];
 } cx_error_t;
 
@@ -49,9 +49,9 @@ void            cx_time_stamp(cx_timestamp_t* _outTimestamp);
 #define CX_MACRO_BLOCK_END } while (0);
 #define CX_NOOP(...) CX_MACRO_BLOCK_BEGIN CX_MACRO_BLOCK_END
 
-#define CX_ERROR_SET(_err, _num, _format, ...)                                          \
-    _err->num = _num;                                                                   \
-    snprintf(_err->desc, sizeof(_err->desc), _format, ##__VA_ARGS__);
+#define CX_ERROR_SET(_err, _code, _format, ...)                                         \
+    (_err)->code = _code;                                                               \
+    snprintf((_err)->desc, sizeof((_err)->desc), _format, ##__VA_ARGS__);
 
 #if CX_DEBUG
     #define CX_INFO(_format, ...)                                                        \

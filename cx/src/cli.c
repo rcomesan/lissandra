@@ -52,7 +52,7 @@ void cx_cli_terminate()
     if (CX_CLI_STATE_READING == m_cliCtx->state)
     {
         m_cliCtx->state = CX_CLI_STATE_SHUTDOWN;
-        pthread_kill(m_cliCtx->thread, SIGKILL);
+        pthread_cancel(m_cliCtx->thread);
     }
     else
     {
@@ -111,7 +111,7 @@ static void* cx_cli_main_loop(void* _arg)
     {
         if (CX_CLI_STATE_READING == m_cliCtx->state)
         {
-            cmd = readline(">");
+            cmd = readline("> ");
             cmdLen = strlen(cmd);
 
             if (NULL != cmd)

@@ -30,7 +30,11 @@ void cx_halloc_destroy(cx_handle_alloc_t* _halloc)
         free(_halloc->indexToHandle);
         free(_halloc->handleToIndex);
         free(_halloc->handleToKey);
-        dictionary_destroy(_halloc);
+        if (NULL != _halloc->keyToHandle)
+        {
+            dictionary_destroy(_halloc->keyToHandle);
+            _halloc->keyToHandle = NULL;
+        }
         free(_halloc);
     }
 }

@@ -68,15 +68,15 @@ void cx_binw_bool(char* _buffer, uint16_t _size, uint32_t* _inOutPos, bool _val)
 
 void cx_binw_str(char* _buffer, uint16_t _bufferSize, uint32_t* _inOutPos, const char* _val)
 {
-    uint32_t strLen = strlen(_val);
-    CX_CHECK((*_inOutPos) + strLen + 2 <= _buffer, "out of buffer space!!");
-    CX_CHECK(strlen <= UINT16_MAX, "maximum allowed string length is %d", UINT16_MAX);
+    uint32_t len = strlen(_val);
+    CX_CHECK((*_inOutPos) + len + 2 <= _buffer, "out of buffer space!!");
+    CX_CHECK(len <= UINT16_MAX, "maximum allowed string length is %d", UINT16_MAX);
 
-    cx_binw_uint16(_buffer, _bufferSize, _inOutPos, (uint16_t)strLen);
+    cx_binw_uint16(_buffer, _bufferSize, _inOutPos, (uint16_t)len);
 
-    if (strLen > 0)
+    if (len > 0)
     {
-        memcpy(&_buffer[*_inOutPos], _val, strLen);
-        (*_inOutPos) += strLen;
+        memcpy(&_buffer[*_inOutPos], _val, len);
+        (*_inOutPos) += len;
     }
 }

@@ -18,11 +18,11 @@ typedef struct stat stat_t;
 
 static void _cx_fs_absolutize(cx_path_t* _inOutPath);
 
-static bool _cx_fs_mkdir(const cx_path_t* _folderPath, cx_error_t* _outErr);
+static bool _cx_fs_mkdir(const cx_path_t* _folderPath, cx_error_t* _err);
 
-static bool _cx_fs_rmdir(const cx_path_t* _folderPath, cx_error_t* _outErr);
+static bool _cx_fs_rmdir(const cx_path_t* _folderPath, cx_error_t* _err);
 
-static bool _cx_fs_rm(const cx_path_t* _filePath, cx_error_t* _outErr);
+static bool _cx_fs_rm(const cx_path_t* _filePath, cx_error_t* _err);
 
  /****************************************************************************************
  ***  PUBLIC FUNCTIONS
@@ -57,46 +57,46 @@ bool cx_fs_is_folder(const cx_path_t* _path)
     }
 }
 
-bool cx_fs_mkdir(const cx_path_t* _folderPath, cx_error_t* _outErr)
+bool cx_fs_mkdir(const cx_path_t* _folderPath, cx_error_t* _err)
 {
     int32_t len = strlen(*_folderPath);
 
     CX_CHECK(len > 0, "invalid folder path!");
-    CX_MEM_ZERO(*_outErr);   
+    CX_MEM_ZERO(*_err);   
     
     for (char* p = (*_folderPath) + 1; *p; p++)
     {
         if ('/' == *p)
         {
             *p = '\0';
-            if (!_cx_fs_mkdir(_folderPath, _outErr)) return;
+            if (!_cx_fs_mkdir(_folderPath, _err)) return false;
             *p = '/';
         }
     }
-    return _cx_fs_mkdir(_folderPath, _outErr);
+    return _cx_fs_mkdir(_folderPath, _err);
 }
 
-bool cx_fs_remove(const cx_path_t* _path, cx_error_t* _outErr)
+bool cx_fs_remove(const cx_path_t* _path, cx_error_t* _err)
 {
     CX_CHECK(strlen(*_path) > 0, "invalid folder path!");
-    CX_MEM_ZERO(*_outErr);
+    CX_MEM_ZERO(*_err);
     
     if (cx_fs_exists(_path))
     {
         if (cx_fs_is_folder(_path))
         {
-            _cx_fs_rmdir(_path, _outErr);
+            _cx_fs_rmdir(_path, _err);
         }
         else
         {
-            _cx_fs_rm(_path, _outErr);
+            _cx_fs_rm(_path, _err);
         }
-        return (0 != _outErr->num);
+        return (0 != _err->code);
     }
     return true;
 }
 
-cx_fs_explorer_t* cx_fs_explorer_init(const cx_path_t* _folderPath, cx_error_t* _outErr)
+cx_fs_explorer_t* cx_fs_explorer_init(const cx_path_t* _folderPath, cx_error_t* _err)
 {
     CX_CHECK(strlen(*_folderPath) > 0, "invalid folder path!");
     DIR* dir = NULL;
@@ -112,7 +112,7 @@ cx_fs_explorer_t* cx_fs_explorer_init(const cx_path_t* _folderPath, cx_error_t* 
     }
     else
     {
-        CX_ERROR_SET(_outErr, 1, "Failed to open folder '%s'.", _folderPath);
+        CX_ERROR_SET(_err, 1, "Failed to open folder '%s'.", _folderPath);
     }
 
     return explorer;
@@ -221,7 +221,7 @@ void _cx_fs_absolutize(cx_path_t* _inOutPath)
         (*_inOutPath)[len - 1] = '\0';
 }
 
-static bool _cx_fs_mkdir(const cx_path_t* _folderPath, cx_error_t* _outErr)
+static bool _cx_fs_mkdir(const cx_path_t* _folderPath, cx_error_t* _err)
 {
     CX_CHECK(strlen(*_folderPath) > 0, "invalid folder path!");
 
@@ -233,7 +233,7 @@ static bool _cx_fs_mkdir(const cx_path_t* _folderPath, cx_error_t* _outErr)
         }
         else
         {
-            CX_ERROR_SET(_outErr, 1, "A file already exists with the given path '%s'.", *_folderPath);
+            CX_ERROR_SET(_err, 1, "A file already exists with the given path '%s'.", *_folderPath);
             return false;
         }
     }
@@ -242,40 +242,40 @@ static bool _cx_fs_mkdir(const cx_path_t* _folderPath, cx_error_t* _outErr)
 
     if (0 != result)
     {
-        CX_ERROR_SET(_outErr, 1, "You do not have permissions to create the folder '%s'.", *_folderPath)
+        CX_ERROR_SET(_err, 1, "You do not have permissions to create the folder '%s'.", *_folderPath)
         return false;
     }
 
     return true;
 }
 
-static bool _cx_fs_rm(const cx_path_t* _filePath, cx_error_t* _outErr)
+static bool _cx_fs_rm(const cx_path_t* _filePath, cx_error_t* _err)
 {
     if (0 == remove(_filePath))
         return true;
 
-    CX_ERROR_SET(_outErr, 1, "Not enough permissions to delete file '%s'.", *_filePath)
+    CX_ERROR_SET(_err, 1, "Not enough permissions to delete file '%s'.", *_filePath)
     return false;
 }
 
-static bool _cx_fs_rmdir(const cx_path_t* _folderPath, cx_error_t* _outErr)
+static bool _cx_fs_rmdir(const cx_path_t* _folderPath, cx_error_t* _err)
 {
     cx_path_t path;
-    cx_fs_explorer_t* brw = cx_fs_explorer_init(_folderPath, _outErr);
+    cx_fs_explorer_t* brw = cx_fs_explorer_init(_folderPath, _err);
     if (NULL == brw) return false;
 
     bool failed = false;
     
     while (cx_fs_explorer_next_file(brw, &path) && !failed)
     {
-        _cx_fs_rm(path, _outErr);
-        failed = (0 != _outErr->num);
+        _cx_fs_rm(path, _err);
+        failed = (0 != _err->code);
     }
 
     while (cx_fs_explorer_next_folder(brw, &path) && !failed)
     {
-        _cx_fs_rmdir(path, _outErr);
-        failed = (0 != _outErr->num);
+        _cx_fs_rmdir(path, _err);
+        failed = (0 != _err->code);
     }
 
     cx_fs_explorer_terminate(brw);
