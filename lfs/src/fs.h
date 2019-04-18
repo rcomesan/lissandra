@@ -1,5 +1,5 @@
-#ifndef FS_H_
-#define FS_H_
+#ifndef LFS_FS_H_
+#define LFS_FS_H_
 
 #include "lfs.h"
 
@@ -58,4 +58,4 @@ void                fs_block_read(uint32_t _blockNumber, char* _buffer, uint32_t
 
 void                fs_block_write(uint32_t _blockNumber, char* _buffer, uint32_t _bufferSize);
 
-#endif // FS_H_
+#endif // LFS_FS_H_

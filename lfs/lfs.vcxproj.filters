@@ -39,6 +39,9 @@
     <ClCompile Include="src\fs.c">
       <Filter>src</Filter>
     </ClCompile>
+    <ClCompile Include="src\worker.c">
+      <Filter>src</Filter>
+    </ClCompile>
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="include\lfs\lfs_protocol.h">
@@ -51,6 +54,9 @@
       <Filter>src</Filter>
     </ClInclude>
     <ClInclude Include="src\fs.h">
+      <Filter>src</Filter>
+    </ClInclude>
+    <ClInclude Include="src\worker.h">
       <Filter>src</Filter>
     </ClInclude>
   </ItemGroup>

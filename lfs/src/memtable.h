@@ -1,5 +1,5 @@
-#ifndef MEMTABLE_H_
-#define MEMTABLE_H_
+#ifndef LFS_MEMTABLE_H_
+#define LFS_MEMTABLE_H_
 
 #include <ker/defines.h>
 
@@ -42,4 +42,4 @@ void                memtable_dump(memtable_t* _table);
  ***************************************************************************************/
 
 
-#endif // MEMTABLE_H_
+#endif // LFS_MEMTABLE_H_

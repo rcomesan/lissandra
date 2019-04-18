@@ -1,5 +1,6 @@
 #include "lfs.h"
 #include "memtable.h"
+#include "worker.h"
 
 #include <ker/cli_parser.h>
 #include <ker/cli_reporter.h>
@@ -28,8 +29,8 @@ static uint16_t     m_auxHandles[MAX_CONCURRENT_REQUESTS];  // statically alloca
 static bool         logger_init(cx_error_t* _err);
 static void         logger_destroy();
 
-static bool         config_init(const char* _cfgFilePath, cx_error_t* _err);
-static void         config_destroy();
+static bool         cfg_init(const char* _cfgFilePath, cx_error_t* _err);
+static void         cfg_destroy();
 
 static bool         lfs_init(cx_error_t* _err);
 static void         lfs_destroy();
@@ -41,6 +42,7 @@ static bool         cli_init();
 static void         cli_destroy();
 
 static void         handle_cli_command(const cx_cli_cmd_t* _cmd);
+static void         handle_worker_task(request_t* _req);
 
 static void         requests_update();
 static void         request_completed(const request_t* _req);
@@ -65,15 +67,15 @@ int main(int _argc, char** _argv)
 
     g_ctx.isRunning = true
         && logger_init(&err)
-        && config_init("res/lfs.cfg", &err)
+        && cfg_init("res/lfs.cfg", &err)
         && lfs_init(&err)
         && net_init(&err)
         && cli_init(&err);
 
     if (0 == err.code)
     {
-        // start main loop
         cx_cli_cmd_t* cmd = NULL;
+        cx_time_update();
 
         while (g_ctx.isRunning)
         {
@@ -102,18 +104,17 @@ int main(int _argc, char** _argv)
         printf("[FATAL] (errcode %d) %s", err.code, err.desc);
     }
 
-    // de-initialization
-    CX_INFO("server is shutting down...", PROJECT_NAME);
+    CX_INFO("node is shutting down...", PROJECT_NAME);
     cli_destroy();
     net_destroy();
     lfs_destroy();
-    config_destroy();
+    cfg_destroy();
     logger_destroy();
 
     if (0 == err.code)
-        CX_INFO("%s node terminated successfully.", PROJECT_NAME);
+        CX_INFO("node terminated successfully.");
     else
-        CX_INFO("%s node terminated with error %d.", PROJECT_NAME, err.code);
+        CX_INFO("node terminated with error %d.", err.code);
 
     return err.code;
 }
@@ -154,14 +155,15 @@ static void logger_destroy()
 {
     if (NULL != g_ctx.cfg.handle)
     {
-        logger_destroy(g_ctx.cfg.handle);
+        log_destroy(g_ctx.cfg.handle);
         g_ctx.cfg.handle = NULL;
     }
 }
 
-static bool config_init(const char* _cfgFilePath, cx_error_t* _err)
+static bool cfg_init(const char* _cfgFilePath, cx_error_t* _err)
 {
     char* temp = NULL;
+    char* key = "";
 
     cx_path_t cfgPath;
     cx_fs_path(&cfgPath, "%s", _cfgFilePath);
@@ -171,31 +173,94 @@ static bool config_init(const char* _cfgFilePath, cx_error_t* _err)
 
     if (NULL != g_ctx.cfg.handle)
     {
-         temp = config_get_string_value(g_ctx.cfg.handle, "listeningIp");
-         cx_str_copy(g_ctx.cfg.listeningIp, sizeof(g_ctx.cfg.listeningIp), temp);
+        CX_INFO("config file: %s", cfgPath);
 
-         g_ctx.cfg.listeningPort = (uint16_t)config_get_int_value(g_ctx.cfg.handle, "listeningPort");
+        key = "listeningIp";
+        if (config_has_property(g_ctx.cfg.handle, key))
+        {
+            temp = config_get_string_value(g_ctx.cfg.handle, key);
+            cx_str_copy(g_ctx.cfg.listeningIp, sizeof(g_ctx.cfg.listeningIp), temp);
+        }
+        else
+        {
+            goto key_missing;
+        }
+
+        key = "listeningPort";
+        if (config_has_property(g_ctx.cfg.handle, key))
+        {
+            g_ctx.cfg.listeningPort = (uint16_t)config_get_int_value(g_ctx.cfg.handle, key);
+        }
+        else
+        {
+            goto key_missing;
+        }
          
-         temp = config_get_string_value(g_ctx.cfg.handle, "rootDirectory");
-         cx_str_copy(g_ctx.cfg.rootDir, sizeof(g_ctx.cfg.rootDir), temp);
-
-         g_ctx.cfg.delay = (uint32_t)config_get_int_value(g_ctx.cfg.handle, "delay");
+        key = "workers";
+        if (config_has_property(g_ctx.cfg.handle, key))
+        {
+            g_ctx.cfg.workers = (uint16_t)config_get_int_value(g_ctx.cfg.handle, key);
+        }
+        else
+        {
+            goto key_missing;
+        }
          
-         g_ctx.cfg.valueSize = (uint16_t)config_get_int_value(g_ctx.cfg.handle, "valueSize");
+        key = "rootDirectory";
+        if (config_has_property(g_ctx.cfg.handle, key))
+        {
+            config_get_string_value(g_ctx.cfg.handle, key);
+            cx_str_copy(g_ctx.cfg.rootDir, sizeof(g_ctx.cfg.rootDir), temp);
+        }
+        else
+        {
+            goto key_missing;
+        }
 
-         g_ctx.cfg.dumpInterval = (uint32_t)config_get_int_value(g_ctx.cfg.handle, "dumpInterval");
+        key = "delay";
+        if (config_has_property(g_ctx.cfg.handle, key))
+        {
+            g_ctx.cfg.delay = (uint32_t)config_get_int_value(g_ctx.cfg.handle, key);
+        }
+        else
+        {
+            goto key_missing;
+        }
+         
+        key = "valueSize";
+        if (config_has_property(g_ctx.cfg.handle, key))
+        {
+            g_ctx.cfg.valueSize = (uint16_t)config_get_int_value(g_ctx.cfg.handle, key);
+        }
+        else
+        {
+            goto key_missing;
+        }
 
-         CX_INFO("config file: %s", cfgPath);
+        key = "dumpInterval";
+        if (config_has_property(g_ctx.cfg.handle, key))
+        {
+            g_ctx.cfg.dumpInterval = (uint32_t)config_get_int_value(g_ctx.cfg.handle, key);
+        }
+        else
+        {
+            goto key_missing;
+        }
+
          return true;
+
+     key_missing:
+         CX_ERROR_SET(_err, LFS_ERR_CFG_MISSINGKEY, "Key '%s' is missing in the configuration file.", key);
+         return false;
     }
     else
     {
-        CX_ERROR_SET(_err, LFS_ERR_CFG_MISSING, "Configuration file '%s' is missing or not readable.", cfgPath);
+        CX_ERROR_SET(_err, LFS_ERR_CFG_NOTFOUND, "Configuration file '%s' is missing or not readable.", cfgPath);
         return false;
     }
 }
 
-static void config_destroy()
+static void cfg_destroy()
 {
     if (NULL != g_ctx.cfg.handle)
     {
@@ -209,21 +274,29 @@ static bool lfs_init(cx_error_t* _err)
     uint8_t stage = 0;
 
     g_ctx.requestsHalloc = cx_halloc_init(MAX_CONCURRENT_REQUESTS);
-    if (NULL != g_ctx.requestsHalloc)
+    if (NULL == g_ctx.requestsHalloc)
     {
-        return true;
-    }
-    else
-    {
-        CX_ERROR_SET(_err, LFS_ERR_INIT_FAILED, "requests handle allocator creation failed.");
+        CX_ERROR_SET(_err, LFS_ERR_INIT_HALLOC, "requests handle allocator creation failed.");
         return false;
     }
+
+    g_ctx.pool = cx_pool_init("worker", g_ctx.cfg.workers, (cx_pool_handler_cb)handle_worker_task);
+    if (NULL == g_ctx.pool)
+    {
+        CX_ERROR_SET(_err, LFS_ERR_INIT_THREADPOOL, "thread pool creation failed.");
+        return false;
+    }
+
+    return true;
 }
 
 static void lfs_destroy()
 {
     cx_halloc_destroy(g_ctx.requestsHalloc);
     g_ctx.requestsHalloc = NULL;
+
+    cx_pool_destroy(g_ctx.pool);
+    g_ctx.pool = NULL;
 }
 
 static bool net_init(cx_error_t* _err)
@@ -338,6 +411,39 @@ static void handle_cli_command(const cx_cli_cmd_t* _cmd)
     }
 }
 
+static void handle_worker_task(request_t* _req)
+{
+    REQ_STATE r;
+    _req->state = REQ_STATE_RUNNING;
+
+    switch (_req->type)
+    {
+    case REQ_TYPE_CREATE:
+        worker_handle_create(_req);
+        break;
+
+    case REQ_TYPE_DROP:
+        worker_handle_drop(_req);
+        break;
+
+    case REQ_TYPE_DESCRIBE:
+        worker_handle_describe(_req);
+        break;
+
+    case REQ_TYPE_SELECT:
+        worker_handle_select(_req);
+        break;
+
+    case REQ_TYPE_INSERT:
+        worker_handle_insert(_req);
+        break;
+
+    default:
+        CX_WARN(CX_ALW, "Undefined worker behaviour for request type #%d.", _req->type);
+        break;
+    }
+}
+
 void dump_memtables()
 {
     //dictionary_iterator(g_ctx.tables, memtable_dump);
@@ -363,8 +469,7 @@ void requests_update()
             dataCommon->startTime = cx_time_counter();
             dataCommon->success = false;
 
-            // for now, we'll just mark it as completed
-            req->state = REQ_STATE_COMPLETED;
+            cx_pool_submit(g_ctx.pool, req);
         }
         else if (REQ_STATE_COMPLETED == req->state)
         {
@@ -372,7 +477,7 @@ void requests_update()
             request_free(req);
             m_auxHandles[removeCount++] = handle;
         }
-        else if (false /* TODO handle requests blocked here. re-schedule them into our blocked queue for delayed execution */)
+        else /* TODO handle requests blocked here. re-schedule them into our blocked queue for delayed execution */
         {
         }
     }
@@ -425,7 +530,7 @@ static void request_completed(const request_t* _req)
         break;
 
     default:
-        CX_WARN(CX_ALW, "Undefined completed behaviour for request type #%d", _req->type);
+        CX_WARN(CX_ALW, "Undefined <completed> behaviour for request type #%d", _req->type);
         break;
     }
 
@@ -478,12 +583,15 @@ static void request_free(request_t* _req)
     }
 
     default:
-        CX_WARN(CX_ALW, "Undefined free behaviour for request type #%d", _req->type);
+        CX_WARN(CX_ALW, "Undefined <free> behaviour for request type #%d", _req->type);
         break;
     }
 
     free(_req->data);
-    _req->data = NULL;
+    
+    // note that requests are statically allocated. we don't want to free them
+    // here since we'll keep reusing them in subsequent requests.
+    CX_MEM_ZERO(*_req)
 }
 
 static void api_response_create(const data_create_t* _result)
