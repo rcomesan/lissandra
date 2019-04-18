@@ -42,6 +42,12 @@
     <ClCompile Include="src\fs.c">
       <Filter>src</Filter>
     </ClCompile>
+    <ClCompile Include="src\mcq.c">
+      <Filter>src</Filter>
+    </ClCompile>
+    <ClCompile Include="src\pool.c">
+      <Filter>src</Filter>
+    </ClCompile>
   </ItemGroup>
   <ItemGroup>
     <None Include="makefile" />
@@ -78,6 +84,12 @@
       <Filter>include\cx</Filter>
     </ClInclude>
     <ClInclude Include="include\cx\fs.h">
+      <Filter>include\cx</Filter>
+    </ClInclude>
+    <ClInclude Include="include\cx\mcq.h">
+      <Filter>include\cx</Filter>
+    </ClInclude>
+    <ClInclude Include="include\cx\pool.h">
       <Filter>include\cx</Filter>
     </ClInclude>
   </ItemGroup>

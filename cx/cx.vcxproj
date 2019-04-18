@@ -71,8 +71,10 @@
     <ClCompile Include="src\file.c" />
     <ClCompile Include="src\fs.c" />
     <ClCompile Include="src\halloc.c" />
+    <ClCompile Include="src\mcq.c" />
     <ClCompile Include="src\mem.c" />
     <ClCompile Include="src\net.c" />
+    <ClCompile Include="src\pool.c" />
     <ClCompile Include="src\str.c" />
   </ItemGroup>
   <ItemGroup>
@@ -87,11 +89,22 @@
     <ClInclude Include="include\cx\fs.h" />
     <ClInclude Include="include\cx\halloc.h" />
     <ClInclude Include="include\cx\math.h" />
+    <ClInclude Include="include\cx\mcq.h" />
     <ClInclude Include="include\cx\mem.h" />
     <ClInclude Include="include\cx\net.h" />
+    <ClInclude Include="include\cx\pool.h" />
     <ClInclude Include="include\cx\str.h" />
   </ItemGroup>
-  <ItemDefinitionGroup />
+  <ItemDefinitionGroup Condition="'$(Configuration)|$(Platform)'=='Debug|x86'">
+    <PreBuildEvent>
+      <Command>$(SolutionDir)\scripts\rsync.bat $(SolutionFileName) $(ProjectFileName)</Command>
+    </PreBuildEvent>
+  </ItemDefinitionGroup>
+  <ItemDefinitionGroup Condition="'$(Configuration)|$(Platform)'=='Release|x86'">
+    <PreBuildEvent>
+      <Command>$(SolutionDir)\scripts\rsync.bat $(SolutionFileName) $(ProjectFileName)</Command>
+    </PreBuildEvent>
+  </ItemDefinitionGroup>
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.targets" />
   <ImportGroup Label="ExtensionTargets" />
 </Project>
