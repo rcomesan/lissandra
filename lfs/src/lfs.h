@@ -1,34 +1,64 @@
 #ifndef LFS_H_
 #define LFS_H_
 
-#include <commons/collections/dictionary.h>
-#include <cx/net.h>
-#include <limits.h>
+#include "memtable.h"
 
-#define TABLE_NAME_LEN_MIN 1
-#define TABLE_NAME_LEN_MAX NAME_MAX
-#define MEMTABLE_INITIAL_CAPACITY 256
+#include <ker/defines.h>
+#include <cx/net.h>
+
+#include <commons/config.h>
+#include <commons/log.h>
+#include <commons/collections/dictionary.h>
+
+typedef enum LFS_ERR_CODE
+{
+    LFS_ERR_NONE = 0,
+    LFS_ERR_LOGGER_FAILED,
+    LFS_ERR_INIT_FAILED,
+    LFS_ERR_CFG_MISSING,
+    LFS_ERR_NET_FAILED,
+} LFS_ERRR_CODE;
 
 typedef struct cfg_t
 {
-    char                    listeningIp[16];    // ip address on which the LFS server will listen on
-    uint16_t                listeningPort;      // tcp port on which the LFS server will listen on
-    char                    rootDir[PATH_MAX];  // initial root directory of our filesystem
-    uint32_t                delay;              // artificial delay in ms for each operation performed
-    uint16_t                valueSize;          // size in bytes of a value field in a table record
-    uint32_t                dumpInterval;       // interval in ms to perform memtable dumps
+    t_config*               handle;             // pointer to so-commons-lib config adt 
+    char                    listeningIp[16];    // ip address on which the LFS server will listen on.
+    uint16_t                listeningPort;      // tcp port on which the LFS server will listen on.
+    char                    rootDir[PATH_MAX];  // initial root directory of our filesystem.
+    uint32_t                delay;              // artificial delay in ms for each operation performed.
+    uint16_t                valueSize;          // size in bytes of a value field in a table record.
+    uint32_t                dumpInterval;       // interval in ms to perform memtable dumps.
 } cfg_t;
 
-typedef struct table_meta_t
+typedef struct request_t
 {
-    char                    name[TABLE_NAME_LEN_MAX + 1];   // name of the table
-    uint8_t                 consistency;                    // constistency needed for this table
-    uint16_t                partitionsCount;                // number of partitions for this table
-    uint32_t                compactionInterval;             // interval in ms to perform table compaction
-} table_meta_t;
+    REQ_STATE               state;                          // the current state of our request.
+    REQ_ORIGIN              origin;                         // origin of this request. it can be either command line interface or sockets api.
+    REQ_TYPE                type;                           // the requested operation.
+    uint16_t                clientHandle;                   // the handle to the client which requested this request in our server context. INVALID_HANDLE means a CLI-issued request.
+    void*                   data;                           // the data (arguments and result) of the requested operation. see data_*_t structures in ker/defines.h.
+} request_t;
 
-extern cx_net_ctx_sv_t*     g_sv;               // server context for serving API requests coming from MEM nodes
-extern char                 g_buffer[MAX_PACKET_LEN - MIN_PACKET_LEN];  // temporary pre-allocated buffer for building packets
-extern t_dictionary*        g_memtable;         // memtables container indexed by table name
+typedef struct table_t
+{
+    table_meta_t            meta;                           // table metadata
+    memtable_t*             memtable;                       // memtable for this table
+} table_t;
+
+typedef struct lfs_ctx_t
+{
+    cfg_t                   cfg;                                        // lfs configuration data.
+    t_log*                  log;                                        // pointer to so-commons-lib log adt.
+    bool                    logInitialized;                             // true if our logger was successfully initialized.
+    bool                    isRunning;                                  // true if the server is running. false if it's shutting down.
+    cx_net_ctx_sv_t*        sv;                                         // server context for serving API requests coming from MEM nodes.
+    char                    buffer[MAX_PACKET_LEN - MIN_PACKET_LEN];    // temporary pre-allocated buffer for building packets.
+    t_dictionary*           tables;                                     // container for storing table_t entries indexed by table name.
+    request_t               requests[MAX_CONCURRENT_REQUESTS];          // container for storing incoming requests during ready/running/completed states.
+    cx_handle_alloc_t*      requestsHalloc;                             // handle allocator for requests container.
+
+} lfs_ctx_t;
+
+extern lfs_ctx_t            g_ctx;
 
 #endif // LFS_H_

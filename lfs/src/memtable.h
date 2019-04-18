@@ -1,24 +1,24 @@
 #ifndef MEMTABLE_H_
 #define MEMTABLE_H_
 
-#include "lfs.h"
+#include <ker/defines.h>
 
 #include <stdint.h>
 #include <time.h>
 
-typedef struct record_t
+typedef struct memtable_record_t
 {
-    uint16_t        key;
-    int64_t         timestamp;
-    char*           value;
-} record_t;
+    uint16_t            key;
+    int64_t             timestamp;
+    char*               value;
+} memtable_record_t;
 
 typedef struct memtable_t
 {
-    char            name[TABLE_NAME_LEN_MAX + 1];
-    record_t*       records;
-    uint16_t        recordsCount;
-    uint16_t        recordsCapacity;
+    char                name[TABLE_NAME_LEN_MAX+1];
+    memtable_record_t*  records;
+    uint16_t            recordsCount;
+    uint16_t            recordsCapacity;
 } memtable_t;
 
 /****************************************************************************************

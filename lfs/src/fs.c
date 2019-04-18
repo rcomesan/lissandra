@@ -1,6 +1,6 @@
 #include "fs.h"
 
-static fs_ctx_t*       m_fsCtx;        // private filesystem context
+static fs_ctx_t*       m_fsCtx = NULL;        // private filesystem context
 
 /****************************************************************************************
  ***  PUBLIC FUNCTIONS

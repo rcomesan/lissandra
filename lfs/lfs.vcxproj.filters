@@ -22,6 +22,9 @@
     <None Include="res\.desc">
       <Filter>res</Filter>
     </None>
+    <None Include="res\lfs.cfg">
+      <Filter>res</Filter>
+    </None>
   </ItemGroup>
   <ItemGroup>
     <ClCompile Include="src\lfs.c">

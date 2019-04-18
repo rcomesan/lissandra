@@ -73,6 +73,7 @@
   <ItemGroup>
     <None Include="makefile" />
     <None Include="res\.desc" />
+    <None Include="res\lfs.cfg" />
   </ItemGroup>
   <ItemGroup>
     <ProjectReference Include="..\cx\cx.vcxproj">

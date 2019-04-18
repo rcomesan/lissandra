@@ -32,8 +32,6 @@ typedef struct fs_ctx_t
     uint32_t        blockNumberLast;    // last block number allocated to resume contigous (if possible) allocation the next time alloc is called
 } fs_ctx_t;
 
-fs_ctx_t*           m_fsCtx;            // private filesystem context
-
 /****************************************************************************************
  ***  PUBLIC FUNCTIONS
  ***************************************************************************************/
