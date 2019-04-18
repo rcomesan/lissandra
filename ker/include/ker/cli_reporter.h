@@ -2,10 +2,13 @@
 #define CLI_REPORTER_H_
 
 #include "defines.h"
+#include <cx/cx.h>
 
 /****************************************************************************************
  ***  PUBLIC FUNCTIONS
  ***************************************************************************************/
+
+void cli_report_error(cx_error_t* err);
 
 void cli_report_select(const data_select_t* _result);
 

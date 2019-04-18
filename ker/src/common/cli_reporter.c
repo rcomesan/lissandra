@@ -8,22 +8,27 @@
  ***************************************************************************************/
 
 #define CLI_REPORT_BEGIN                                                    \
-    float duration = _result->startTime - cx_time_counter();
+    float duration = _result->c.startTime - cx_time_counter();
 
 #define CLI_REPORT_END                                                      \
     printf("(%.3f sec)\n", duration);                                       \
     printf("\n");
 
+void cli_report_error(cx_error_t* err)
+{
+    printf("%s\n\n", err->desc);
+}
+
 void cli_report_select(const data_select_t* _result)
 {
     CLI_REPORT_BEGIN;
-    if (_result->success)
+    if (_result->c.success)
     {
         printf("%d: \"%s\".\n", _result->key, _result->value);
     }
     else
     {
-        printf("SELECT failed.");
+        printf("SELECT failed.\n");
     }
     CLI_REPORT_END;
 }
@@ -31,13 +36,13 @@ void cli_report_select(const data_select_t* _result)
 void cli_report_insert(const data_insert_t* _result)
 {
     CLI_REPORT_BEGIN;
-    if (_result->success)
+    if (_result->c.success)
     {
         printf("%d: \"%s\".\n", _result->key, _result->value);
     }
     else
     {
-        printf("INSERT failed.");
+        printf("INSERT failed.\n");
     }
     CLI_REPORT_END;
 }
@@ -45,13 +50,13 @@ void cli_report_insert(const data_insert_t* _result)
 void cli_report_create(const data_create_t* _result)
 {
     CLI_REPORT_BEGIN;
-    if (_result->success)
+    if (_result->c.success)
     {
         printf("Table '%s' created.\n", _result->tableName);
     }
     else
     {
-        printf("CREATE failed.");
+        printf("CREATE failed.\n");
     }
     CLI_REPORT_END;
 }
@@ -59,7 +64,7 @@ void cli_report_create(const data_create_t* _result)
 void cli_report_describe(const data_describe_t* _result)
 {
     CLI_REPORT_BEGIN;
-    if (_result->success)
+    if (_result->c.success)
     {
         for (uint16_t i = 0; i < _result->tablesCount; i++)
         {
@@ -77,7 +82,7 @@ void cli_report_describe(const data_describe_t* _result)
     }
     else
     {
-        printf("DESCRIBE failed.");
+        printf("DESCRIBE failed.\n");
     }
     CLI_REPORT_END;
 }
@@ -85,13 +90,13 @@ void cli_report_describe(const data_describe_t* _result)
 void cli_report_drop(const data_drop_t* _result)
 {
     CLI_REPORT_BEGIN;
-    if (_result->success)
+    if (_result->c.success)
     {
         printf("Table '%s' dropped.\n", _result->tableName);
     }
     else
     {
-        printf("DROP failed.");
+        printf("DROP failed.\n");
     }
     CLI_REPORT_END;
 }

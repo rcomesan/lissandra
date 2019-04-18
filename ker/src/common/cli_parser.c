@@ -31,7 +31,7 @@ static bool     valid_memory_number(const char* _str);
  ***  PUBLIC FUNCTIONS
  ***************************************************************************************/
 
-bool cli_parse_select(const cx_cli_cmd_t* _cmd, char* _outError, char** _outTableName, uint16_t* _outKey)
+bool cli_parse_select(const cx_cli_cmd_t* _cmd, cx_error_t* _err, char** _outTableName, uint16_t* _outKey)
 {
     CX_CHECK(0 == strcmp("SELECT", _cmd->header), "invalid command!");
 
@@ -45,12 +45,11 @@ bool cli_parse_select(const cx_cli_cmd_t* _cmd, char* _outError, char** _outTabl
         return true;
     }
 
-    cx_str_format(_outError, CLI_PARSER_ERROR_LEN,
-        "Invalid Syntax. Usage: SELECT [TABLE_NAME] [KEY]");
+    CX_ERROR_SET(_err, 1, "Invalid Syntax. Usage: SELECT [TABLE_NAME] [KEY]");
     return false;
 }
 
-bool cli_parse_insert(const cx_cli_cmd_t* _cmd, char* _outError, char** _outTableName, uint16_t* _outKey, char** _outValue, uint32_t* _outTimestamp)
+bool cli_parse_insert(const cx_cli_cmd_t* _cmd, cx_error_t* _err, char** _outTableName, uint16_t* _outKey, char** _outValue, uint32_t* _outTimestamp)
 {
     CX_CHECK(0 == strcmp("INSERT", _cmd->header), "invalid command!");
 
@@ -63,7 +62,7 @@ bool cli_parse_insert(const cx_cli_cmd_t* _cmd, char* _outError, char** _outTabl
         (*_outTableName) = _cmd->args[0];
         cx_str_parse_uint16(_cmd->args[1], _outKey);
         (*_outValue) = _cmd->args[2];
-        (*_outTimestamp) = cx_time_stamp();
+        (*_outTimestamp) = cx_time_epoch();
 
         if (_cmd->argsCount >= 4)
         {
@@ -73,12 +72,11 @@ bool cli_parse_insert(const cx_cli_cmd_t* _cmd, char* _outError, char** _outTabl
         return true;
     }
 
-    cx_str_format(_outError, CLI_PARSER_ERROR_LEN,
-        "Invalid Syntax. Usage: INSERT [TABLE_NAME] [KEY] \"[VALUE]\" (TIMESTAMP)");
+    CX_ERROR_SET(_err, 1, "Invalid Syntax. Usage: INSERT [TABLE_NAME] [KEY] \"[VALUE]\" (TIMESTAMP)");
     return false;
 }
 
-bool cli_parse_create(const cx_cli_cmd_t* _cmd, char* _outError, char** _outTableName, uint8_t* _outConsistency, uint16_t* _outNumPartitions, uint32_t* _outCompactionInterval)
+bool cli_parse_create(const cx_cli_cmd_t* _cmd, cx_error_t* _err, char** _outTableName, uint8_t* _outConsistency, uint16_t* _outNumPartitions, uint32_t* _outCompactionInterval)
 {
     CX_CHECK(0 == strcmp("CREATE", _cmd->header), "invalid command!");
 
@@ -97,12 +95,11 @@ bool cli_parse_create(const cx_cli_cmd_t* _cmd, char* _outError, char** _outTabl
         return true;
     }
 
-    cx_str_format(_outError, CLI_PARSER_ERROR_LEN,
-        "Invalid Syntax. Usage: CREATE [TABLE_NAME] [CONSISTENCY] [NUM_PARTITIONS] [COMPACTION_INTERVAL]");
+    CX_ERROR_SET(_err, 1, "Invalid Syntax. Usage: CREATE [TABLE_NAME] [CONSISTENCY] [NUM_PARTITIONS] [COMPACTION_INTERVAL]");
     return false;
 }
 
-bool cli_parse_describe(const cx_cli_cmd_t* _cmd, char* _outError, char** _outTableName)
+bool cli_parse_describe(const cx_cli_cmd_t* _cmd, cx_error_t* _err, char** _outTableName)
 {
     CX_CHECK(0 == strcmp("DESCRIBE", _cmd->header), "invalid command!");
 
@@ -122,12 +119,11 @@ bool cli_parse_describe(const cx_cli_cmd_t* _cmd, char* _outError, char** _outTa
         return true;
     }
 
-    cx_str_format(_outError, CLI_PARSER_ERROR_LEN,
-        "Invalid Syntax. Usage: DESCRIBE (TABLE_NAME)");
+    CX_ERROR_SET(_err, 1, "Invalid Syntax. Usage: DESCRIBE (TABLE_NAME)");
     return false;
 }
 
-bool cli_parse_drop(const cx_cli_cmd_t* _cmd, char* _outError, char** _outTableName)
+bool cli_parse_drop(const cx_cli_cmd_t* _cmd, cx_error_t* _err, char** _outTableName)
 {
     CX_CHECK(0 == strcmp("DROP", _cmd->header), "invalid command!");
 
@@ -139,12 +135,11 @@ bool cli_parse_drop(const cx_cli_cmd_t* _cmd, char* _outError, char** _outTableN
         return true;
     }
 
-    cx_str_format(_outError, CLI_PARSER_ERROR_LEN,
-        "Invalid Syntax. Usage: DROP [TABLE_NAME]");
+    CX_ERROR_SET(_err, 1, "Invalid Syntax. Usage: DROP [TABLE_NAME]");
     return false;
 }
 
-bool cli_parse_run(const cx_cli_cmd_t* _cmd, char* _outError, char** _outLqlPath)
+bool cli_parse_run(const cx_cli_cmd_t* _cmd, cx_error_t* _err, char** _outLqlPath)
 {
     CX_CHECK(0 == strcmp("RUN", _cmd->header), "invalid command!");
 
@@ -155,12 +150,11 @@ bool cli_parse_run(const cx_cli_cmd_t* _cmd, char* _outError, char** _outLqlPath
         return true;
     }
 
-    cx_str_format(_outError, CLI_PARSER_ERROR_LEN,
-        "Invalid Syntax. Usage: RUN [LQL_FILE_PATH]");
+    CX_ERROR_SET(_err, 1, "Invalid Syntax. Usage: RUN [LQL_FILE_PATH]");
     return false;
 }
 
-bool cli_parse_add_memory(const cx_cli_cmd_t* _cmd, char* _outError, uint16_t* _outMemNumber, uint8_t* _outConsistency)
+bool cli_parse_add_memory(const cx_cli_cmd_t* _cmd, cx_error_t* _err, uint16_t* _outMemNumber, uint8_t* _outConsistency)
 {
     CX_CHECK(0 == strcmp("ADD", _cmd->header), "invalid command!");
 
@@ -175,8 +169,7 @@ bool cli_parse_add_memory(const cx_cli_cmd_t* _cmd, char* _outError, uint16_t* _
         cx_str_parse_uint8(_cmd->args[3], _outConsistency);
     }
 
-    cx_str_format(_outError, CLI_PARSER_ERROR_LEN,
-        "Invalid Syntax. Usage: ADD MEMORY [MEM_NUMBER] TO [CONSISTENCY]");
+    CX_ERROR_SET(_err, 1, "Invalid Syntax. Usage: ADD MEMORY [MEM_NUMBER] TO [CONSISTENCY]");
     return false;
 }
 
