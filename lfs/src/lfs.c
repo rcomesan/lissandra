@@ -26,19 +26,19 @@ static uint16_t     m_auxHandles[MAX_CONCURRENT_REQUESTS];  // statically alloca
  ***************************************************************************************/
 
 static bool         logger_init(cx_error_t* _err);
-static void         logger_terminate();
+static void         logger_destroy();
 
 static bool         config_init(const char* _cfgFilePath, cx_error_t* _err);
-static void         config_terminate();
+static void         config_destroy();
 
 static bool         lfs_init(cx_error_t* _err);
-static void         lfs_terminate();
+static void         lfs_destroy();
 
 static bool         net_init(cx_error_t* _err);
-static void         net_terminate();
+static void         net_destroy();
 
 static bool         cli_init();
-static void         cli_terminate();
+static void         cli_destroy();
 
 static void         handle_cli_command(const cx_cli_cmd_t* _cmd);
 
@@ -62,7 +62,6 @@ int main(int _argc, char** _argv)
     CX_MEM_ZERO(g_ctx);
 
     cx_error_t err;
-    cx_timestamp_t timestamp;
 
     g_ctx.isRunning = true
         && logger_init(&err)
@@ -105,20 +104,16 @@ int main(int _argc, char** _argv)
 
     // de-initialization
     CX_INFO("server is shutting down...", PROJECT_NAME);
-    cli_terminate();
-    net_terminate();
-    lfs_terminate();
-    config_terminate();
-    logger_terminate();
+    cli_destroy();
+    net_destroy();
+    lfs_destroy();
+    config_destroy();
+    logger_destroy();
 
     if (0 == err.code)
-    {
         CX_INFO("%s node terminated successfully.", PROJECT_NAME);
-    }
     else
-    {
         CX_INFO("%s node terminated with error %d.", PROJECT_NAME, err.code);
-    }
 
     return err.code;
 }
@@ -155,11 +150,11 @@ static bool logger_init(cx_error_t* _err)
     return false;
 }
 
-static void logger_terminate()
+static void logger_destroy()
 {
     if (NULL != g_ctx.cfg.handle)
     {
-        logger_terminate(g_ctx.cfg.handle);
+        logger_destroy(g_ctx.cfg.handle);
         g_ctx.cfg.handle = NULL;
     }
 }
@@ -191,7 +186,6 @@ static bool config_init(const char* _cfgFilePath, cx_error_t* _err)
          g_ctx.cfg.dumpInterval = (uint32_t)config_get_int_value(g_ctx.cfg.handle, "dumpInterval");
 
          CX_INFO("config file: %s", cfgPath);
-
          return true;
     }
     else
@@ -201,7 +195,7 @@ static bool config_init(const char* _cfgFilePath, cx_error_t* _err)
     }
 }
 
-static void config_terminate()
+static void config_destroy()
 {
     if (NULL != g_ctx.cfg.handle)
     {
@@ -226,7 +220,7 @@ static bool lfs_init(cx_error_t* _err)
     }
 }
 
-static void lfs_terminate()
+static void lfs_destroy()
 {
     cx_halloc_destroy(g_ctx.requestsHalloc);
     g_ctx.requestsHalloc = NULL;
@@ -258,7 +252,7 @@ static bool net_init(cx_error_t* _err)
     }
 }
 
-static void net_terminate()
+static void net_destroy()
 {
     cx_net_close(g_ctx.sv);
     g_ctx.sv = NULL;
@@ -269,9 +263,9 @@ static bool cli_init()
     return cx_cli_init();
 }
 
-static void cli_terminate()
+static void cli_destroy()
 {
-    cx_cli_terminate();
+    cx_cli_destroy();
 }
 
 static void handle_cli_command(const cx_cli_cmd_t* _cmd)

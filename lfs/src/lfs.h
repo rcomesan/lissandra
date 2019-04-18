@@ -21,7 +21,7 @@ typedef enum LFS_ERR_CODE
 
 typedef struct cfg_t
 {
-    t_config*               handle;             // pointer to so-commons-lib config adt 
+    t_config*               handle;             // pointer to so-commons-lib config adt.
     char                    listeningIp[16];    // ip address on which the LFS server will listen on.
     uint16_t                listeningPort;      // tcp port on which the LFS server will listen on.
     char                    rootDir[PATH_MAX];  // initial root directory of our filesystem.
@@ -56,7 +56,6 @@ typedef struct lfs_ctx_t
     t_dictionary*           tables;                                     // container for storing table_t entries indexed by table name.
     request_t               requests[MAX_CONCURRENT_REQUESTS];          // container for storing incoming requests during ready/running/completed states.
     cx_handle_alloc_t*      requestsHalloc;                             // handle allocator for requests container.
-
 } lfs_ctx_t;
 
 extern lfs_ctx_t            g_ctx;

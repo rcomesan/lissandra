@@ -38,7 +38,7 @@ typedef struct fs_ctx_t
 
 bool                fs_init(const char* _rootFilePath);
 
-void                fs_terminate();
+void                fs_destroy();
 
 bool                fs_table_exists(const char* _tableName);
 

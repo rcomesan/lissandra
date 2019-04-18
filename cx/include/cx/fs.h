@@ -36,6 +36,6 @@ bool                cx_fs_explorer_next_file(cx_fs_explorer_t* _explorer, cx_pat
 
 bool                cx_fs_explorer_next_folder(cx_fs_explorer_t* _explorer, cx_path_t* _outFolder);
 
-void                cx_fs_explorer_terminate(cx_fs_explorer_t* _explorer);
+void                cx_fs_explorer_destroy(cx_fs_explorer_t* _explorer);
 
 #endif

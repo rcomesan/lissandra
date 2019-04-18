@@ -179,7 +179,7 @@ bool cx_fs_explorer_next_folder(cx_fs_explorer_t* _explorer, cx_path_t* _outFold
     return false;
 }
 
-void cx_fs_explorer_terminate(cx_fs_explorer_t* _explorer)
+void cx_fs_explorer_destroy(cx_fs_explorer_t* _explorer)
 {
     if (NULL == _explorer) return;
    
@@ -278,7 +278,7 @@ static bool _cx_fs_rmdir(const cx_path_t* _folderPath, cx_error_t* _err)
         failed = (0 != _err->code);
     }
 
-    cx_fs_explorer_terminate(brw);
+    cx_fs_explorer_destroy(brw);
 
     return !failed && (0 == rmdir(*_folderPath));
 }

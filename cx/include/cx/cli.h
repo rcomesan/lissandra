@@ -45,7 +45,7 @@ typedef struct cx_cli_ctx_t
 
 bool                    cx_cli_init();
 
-void                    cx_cli_terminate();
+void                    cx_cli_destroy();
 
 bool                    cx_cli_command_begin(cx_cli_cmd_t** _outCmd);
 

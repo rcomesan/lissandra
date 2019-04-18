@@ -27,7 +27,7 @@ typedef struct memtable_t
 
 bool                memtable_init();
 
-void                memtable_terminate();
+//void                memtable_destroy();
 
 memtable_t*         memtable_create(const char* _tableName);
 

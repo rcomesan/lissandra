@@ -45,7 +45,7 @@ bool cx_cli_init()
     return m_cliCtx->initialized;
 }
 
-void cx_cli_terminate()
+void cx_cli_destroy()
 {
     if (NULL == m_cliCtx || !m_cliCtx->initialized) return;
 
