@@ -6,6 +6,7 @@
 #include <ker/defines.h>
 #include <cx/net.h>
 #include <cx/pool.h>
+#include <cx/cdict.h>
 
 #include <commons/config.h>
 #include <commons/log.h>
@@ -17,6 +18,11 @@ typedef enum LFS_ERR_CODE
     LFS_ERR_LOGGER_FAILED,
     LFS_ERR_INIT_HALLOC,
     LFS_ERR_INIT_THREADPOOL,
+    LFS_ERR_INIT_FS_ROOTDIR,
+    LFS_ERR_INIT_FS_BOOTSTRAP,
+    LFS_ERR_INIT_FS_META,
+    LFS_ERR_INIT_FS_TABLES,
+    LFS_ERR_INIT_FS_BITMAP,
     LFS_ERR_CFG_NOTFOUND,
     LFS_ERR_CFG_MISSINGKEY,
     LFS_ERR_NET_FAILED,
@@ -29,6 +35,8 @@ typedef struct cfg_t
     uint16_t                listeningPort;      // tcp port on which the LFS server will listen on.
     uint16_t                workers;            // number of worker threads to spawn to process requests.
     char                    rootDir[PATH_MAX];  // initial root directory of our filesystem.
+    uint32_t                blocksCount;        // maximum number of blocks available in our filesystem.
+    uint32_t                blocksSize;         // size in bytes of each block in our filesystem.
     uint32_t                delay;              // artificial delay in ms for each operation performed.
     uint16_t                valueSize;          // size in bytes of a value field in a table record.
     uint32_t                dumpInterval;       // interval in ms to perform memtable dumps.
@@ -59,7 +67,8 @@ typedef struct lfs_ctx_t
     request_t               requests[MAX_CONCURRENT_REQUESTS];          // container for storing incoming requests during ready/running/completed states.
     cx_handle_alloc_t*      requestsHalloc;                             // handle allocator for requests container.
     cx_pool_t*              pool;                                       // main pool of worker threads to process incoming requests.
-    t_dictionary*           tables;                                     // container for storing table_t entries indexed by table name.
+    cx_cdict_t*             tables;                                     // container for storing table_t entries indexed by table name.
+
 
 } lfs_ctx_t;
 

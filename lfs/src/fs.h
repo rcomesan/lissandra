@@ -6,13 +6,21 @@
 #include <stdint.h>
 #include <stdbool.h>
 
+#include <cx/cx.h>
+
 #include <commons/bitarray.h>
+
+#define LFS_ROOT_FILE_MARKER ".lfs_root"
+#define LFS_DIR_METADATA "metadata"
+#define LFS_DIR_TABLES "tables"
+#define LFS_DIR_BLOCKS "blocks"
+#define LFS_FILE_BITMAP "bitmap.bin"
 
 typedef struct fs_meta_t
 {
-    uint32_t        blockSize;          // size in bytes of each block in our filesystem
+    uint32_t        blocksSize;         // size in bytes of each block in our filesystem
     uint32_t        blocksCount;        // number of blocks in our filesystem
-    char*           magicNumber;        // "Un string fijo con el valor 'lfs'" ????
+    char            magicNumber[100];   // "Un string fijo con el valor 'lfs'" ????
 } fs_meta_t;
 
 typedef struct fs_file_t
@@ -24,19 +32,19 @@ typedef struct fs_file_t
 
 typedef struct fs_ctx_t
 {
-    fs_meta_t       meta;               // filesystem metadata
-    char            rootDir[PATH_MAX];  // initial root directory of our filesystem
-    char*           blocksMapBuffer;    // buffer for storing our bit array containing blocks status (unset bit mean the block is free to use)
-                                        // must be large enough to hold at least meta.blocksCount amount of bits
-    t_bitarray*     blocksMap;          // bit array adt (so-commons-lib implementation)
-    uint32_t        blockNumberLast;    // last block number allocated to resume contigous (if possible) allocation the next time alloc is called
+    fs_meta_t       meta;               // filesystem metadata.
+    char            rootDir[PATH_MAX];  // initial root directory of our filesystem.
+    char*           blocksmapBuffer;    // buffer for storing our bit array containing blocks status (unset bit mean the block is free to use).
+                                        // must be large enough to hold at least meta.blocksCount amount of bits.
+    t_bitarray*     blocksmap;          // bit array adt (so-commons-lib implementation).
+    uint32_t        blockNumberLast;    // last block number allocated to resume contigous (if possible) allocation the next time alloc is called.
 } fs_ctx_t;
 
 /****************************************************************************************
  ***  PUBLIC FUNCTIONS
  ***************************************************************************************/
 
-bool                fs_init(const char* _rootFilePath);
+bool                fs_init(cx_error_t* _err);
 
 void                fs_destroy();
 

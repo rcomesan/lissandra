@@ -1,6 +1,7 @@
 #include "lfs.h"
 #include "memtable.h"
 #include "worker.h"
+#include "fs.h"
 
 #include <ker/cli_parser.h>
 #include <ker/cli_reporter.h>
@@ -11,6 +12,7 @@
 #include <cx/str.h>
 #include <cx/cli.h>
 #include <cx/fs.h>
+#include <cx/cdict.h>
 
 #include <lfs/lfs_protocol.h>
 #include <commons/config.h>
@@ -124,7 +126,7 @@ int main(int _argc, char** _argv)
 static bool logger_init(cx_error_t* _err)
 {
     cx_timestamp_t timestamp;
-    cx_time_stamp(timestamp);
+    cx_time_stamp(&timestamp);
 
     cx_path_t path;
     cx_fs_path(&path, "logs");
@@ -207,8 +209,28 @@ static bool cfg_init(const char* _cfgFilePath, cx_error_t* _err)
         key = "rootDirectory";
         if (config_has_property(g_ctx.cfg.handle, key))
         {
-            config_get_string_value(g_ctx.cfg.handle, key);
+            temp = config_get_string_value(g_ctx.cfg.handle, key);
             cx_str_copy(g_ctx.cfg.rootDir, sizeof(g_ctx.cfg.rootDir), temp);
+        }
+        else
+        {
+            goto key_missing;
+        }
+
+        key = "blocksCount";
+        if (config_has_property(g_ctx.cfg.handle, key))
+        {
+            g_ctx.cfg.blocksCount = (uint32_t)config_get_int_value(g_ctx.cfg.handle, key);
+        }
+        else
+        {
+            goto key_missing;
+        }
+
+        key = "blocksSize";
+        if (config_has_property(g_ctx.cfg.handle, key))
+        {
+            g_ctx.cfg.blocksSize = (uint32_t)config_get_int_value(g_ctx.cfg.handle, key);
         }
         else
         {
@@ -248,14 +270,14 @@ static bool cfg_init(const char* _cfgFilePath, cx_error_t* _err)
          return true;
 
      key_missing:
-         CX_ERROR_SET(_err, LFS_ERR_CFG_MISSINGKEY, "Key '%s' is missing in the configuration file.", key);
-         return false;
+         CX_ERROR_SET(_err, LFS_ERR_CFG_MISSINGKEY, "key '%s' is missing in the configuration file.", key);
     }
     else
     {
-        CX_ERROR_SET(_err, LFS_ERR_CFG_NOTFOUND, "Configuration file '%s' is missing or not readable.", cfgPath);
-        return false;
+        CX_ERROR_SET(_err, LFS_ERR_CFG_NOTFOUND, "configuration file '%s' is missing or not readable.", cfgPath);
     }
+
+    return false;
 }
 
 static void cfg_destroy()
@@ -285,6 +307,17 @@ static bool lfs_init(cx_error_t* _err)
         return false;
     }
 
+    g_ctx.tables = cx_cdict_init();
+    if (NULL == g_ctx.tables)
+    {
+        CX_ERROR_SET(_err, LFS_ERR_INIT_FS_TABLES, "tables cdict creation failed.");
+        return false;
+    }
+    else
+    {
+        if (!fs_init(_err)) return false;
+    }
+
     return true;
 }
 
@@ -295,6 +328,8 @@ static void lfs_destroy()
 
     cx_pool_destroy(g_ctx.pool);
     g_ctx.pool = NULL;
+
+    fs_destroy();
 }
 
 static bool net_init(cx_error_t* _err)
@@ -306,7 +341,7 @@ static bool net_init(cx_error_t* _err)
     svCtxArgs.port = g_ctx.cfg.listeningPort;
 
     // message headers to handlers mappings
-    svCtxArgs.msgHandlers[LFSP_SUM_REQUEST] = lfs_handle_sum_request;
+    svCtxArgs.msgHandlers[LFSP_SUM_REQUEST] = (cx_net_handler_cb*)lfs_handle_sum_request;
 
     // start server context and start listening for requests
     g_ctx.sv = cx_net_listen(&svCtxArgs);
@@ -317,7 +352,7 @@ static bool net_init(cx_error_t* _err)
     }
     else
     {
-        CX_ERROR_SET(_err, LFS_ERR_NET_FAILED, "Could not start a listening server context on %s:%d.",
+        CX_ERROR_SET(_err, LFS_ERR_NET_FAILED, "could not start a listening server context on %s:%d.",
             svCtxArgs.ip, svCtxArgs.port);
         return false;
     }
@@ -437,7 +472,7 @@ static void handle_worker_task(request_t* _req)
         break;
 
     default:
-        CX_WARN(CX_ALW, "Undefined worker behaviour for request type #%d.", _req->type);
+        CX_WARN(CX_ALW, "undefined worker behaviour for request type #%d.", _req->type);
         break;
     }
 }
@@ -508,9 +543,9 @@ static void request_completed(const request_t* _req)
 
     case REQ_TYPE_DESCRIBE:
         if (REQ_ORIGIN_API == _req->origin)
-            api_response_describe((data_create_t*)_req->data);
+            api_response_describe((data_describe_t*)_req->data);
         else
-            cli_report_describe((data_create_t*)_req->data);
+            cli_report_describe((data_describe_t*)_req->data);
         break;
 
     case REQ_TYPE_SELECT:
@@ -528,7 +563,7 @@ static void request_completed(const request_t* _req)
         break;
 
     default:
-        CX_WARN(CX_ALW, "Undefined <completed> behaviour for request type #%d", _req->type);
+        CX_WARN(CX_ALW, "undefined <completed> behaviour for request type #%d", _req->type);
         break;
     }
 
@@ -581,7 +616,7 @@ static void request_free(request_t* _req)
     }
 
     default:
-        CX_WARN(CX_ALW, "Undefined <free> behaviour for request type #%d", _req->type);
+        CX_WARN(CX_ALW, "undefined <free> behaviour for request type #%d", _req->type);
         break;
     }
 
