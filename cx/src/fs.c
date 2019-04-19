@@ -252,7 +252,7 @@ int32_t cx_fs_read(const cx_path_t* _path, char* _outBuffer, uint32_t _bufferSiz
                     }
                     close(fileHandle);
 
-                    if (0 == _err->code) return true;
+                    if (0 == _err->code) return bytesToRead;
                 }
                 else
                 {

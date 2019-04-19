@@ -1,6 +1,9 @@
 #include "cdict.h"
 #include "mem.h"
 
+#include <sys/syscall.h>
+#include <sys/types.h>
+
 /****************************************************************************************
  ***  PUBLIC FUNCTIONS
  ***************************************************************************************/
@@ -130,7 +133,7 @@ void cx_cdict_iter_begin(cx_cdict_t* _cdict)
 void cx_cdict_iter_first(cx_cdict_t* _cdict)
 {
     CX_CHECK_NOT_NULL(_cdict);
-    CX_CHECK(pthread_self() == _cdict->mutex.__data.__owner, "you do not own this mutex! you must call cx_cdict_iter_begin first!");
+    CX_CHECK(syscall(__NR_gettid) == _cdict->mutex.__data.__owner, "you do not own this mutex! you must call cx_cdict_iter_begin first!");
 
     _cdict->iterTableIndex = 0;
     _cdict->iterElement = NULL;
@@ -139,7 +142,7 @@ void cx_cdict_iter_first(cx_cdict_t* _cdict)
 bool cx_cdict_iter_next(cx_cdict_t* _cdict, char** _outKey, void** _outData)
 {
     CX_CHECK_NOT_NULL(_cdict);
-    CX_CHECK(pthread_self() == _cdict->mutex.__data.__owner, "you do not own this mutex! you must call cx_cdict_iter_begin first!");
+    CX_CHECK(syscall(__NR_gettid) == _cdict->mutex.__data.__owner, "you do not own this mutex! you must call cx_cdict_iter_begin first!");
     
     for (; _cdict->iterTableIndex < _cdict->handle->table_max_size; _cdict->iterTableIndex++)
     {
