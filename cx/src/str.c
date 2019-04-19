@@ -9,6 +9,7 @@
 #include <string.h>
 #include <stdarg.h>
 #include <inttypes.h>
+#include <ctype.h>
 
 bool cx_str_is_empty(const char* _a)
 {
@@ -68,6 +69,28 @@ char* cx_str_copy_d(const char* _src)
     CX_CHECK_NOT_NULL(_src);
     
     return strdup(_src);
+}
+
+void cx_str_to_upper(char* _a)
+{
+    CX_CHECK_NOT_NULL(_a);   
+    char* s = _a;
+    while (*s)
+    {
+        (*s) = (char)toupper((int32_t)*s);
+        s++;
+    }
+}
+
+void cx_str_to_lower(char* _a)
+{
+    CX_CHECK_NOT_NULL(_a);
+    char* s = _a;
+    while (*s)
+    {
+        (*s) = (char)tolower((int32_t)*s);
+        s++;
+    }
 }
 
 bool cx_str_parse_int32(const char* _src, int32_t* _out)

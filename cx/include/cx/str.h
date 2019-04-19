@@ -12,6 +12,10 @@ uint32_t    cx_str_cat(char* _dst, uint32_t _dstSize, const char* _src);
 
 uint32_t    cx_str_copy(char* _dst, uint32_t _dstSize, const char* _src);
 
+void        cx_str_to_upper(char* _a);
+
+void        cx_str_to_lower(char* _a);
+
 char*       cx_str_copy_d(const char* _src);
 
 bool        cx_str_parse_int32(const char* _src, int32_t* _out);
