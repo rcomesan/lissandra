@@ -8,6 +8,7 @@
 #include <stdint.h>
 #include <string.h>
 #include <stdarg.h>
+#include <inttypes.h>
 
 bool cx_str_is_empty(const char* _a)
 {
@@ -155,6 +156,36 @@ bool cx_str_parse_uint8(const char* _src, uint8_t* _out)
         return true;
     }
     return false;
+}
+
+int32_t cx_str_from_int32(int32_t _value, char* _buffer, uint32_t _bufferSize)
+{
+    return snprintf(_buffer, _bufferSize, "%" PRId32, _value);
+}
+
+int32_t cx_str_from_uint32(uint32_t _value, char* _buffer, uint32_t _bufferSize)
+{
+    return snprintf(_buffer, _bufferSize, "%" PRIu32, _value);
+}
+
+int32_t cx_str_from_int16(int16_t _value, char* _buffer, uint32_t _bufferSize)
+{
+    return snprintf(_buffer, _bufferSize, "%" PRId16, _value);
+}
+
+int32_t cx_str_from_uint16(uint16_t _value, char* _buffer, uint32_t _bufferSize)
+{
+    return snprintf(_buffer, _bufferSize, "%" PRIu16, _value);
+}
+
+int32_t cx_str_from_int8(int8_t _value, char* _buffer, uint32_t _bufferSize)
+{
+    return snprintf(_buffer, _bufferSize, "%" PRId8, _value);
+}
+
+int32_t cx_str_from_uint8(uint8_t _value, char* _buffer, uint32_t _bufferSize)
+{
+    return snprintf(_buffer, _bufferSize, "%" PRIu8, _value);
 }
 
 uint32_t cx_str_format(char* _buffer, uint32_t _bufferSize, const char* _format, ...)

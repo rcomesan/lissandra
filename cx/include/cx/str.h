@@ -26,6 +26,18 @@ bool        cx_str_parse_int8(const char* _src, int8_t* _out);
 
 bool        cx_str_parse_uint8(const char* _src, uint8_t* _out);
 
+int32_t     cx_str_from_int32(int32_t _value, char* _buffer, uint32_t _bufferSize);
+
+int32_t     cx_str_from_uint32(uint32_t _value, char* _buffer, uint32_t _bufferSize);
+
+int32_t     cx_str_from_int16(int16_t _value, char* _buffer, uint32_t _bufferSize);
+
+int32_t     cx_str_from_uint16(uint16_t _value, char* _buffer, uint32_t _bufferSize);
+
+int32_t     cx_str_from_int8(int8_t _value, char* _buffer, uint32_t _bufferSize);
+
+int32_t     cx_str_from_uint8(uint8_t _value, char* _buffer, uint32_t _bufferSize);
+
 uint32_t    cx_str_format(char* _buffer, uint32_t _bufferSize, const char* _format, ...);
 
 char*       cx_str_format_d(const char* _format, ...);
