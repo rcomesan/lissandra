@@ -79,10 +79,12 @@
   </ItemGroup>
   <ItemGroup>
     <None Include="makefile" />
+    <None Include="src\cdict.c" />
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="include\cx\binr.h" />
     <ClInclude Include="include\cx\binw.h" />
+    <ClInclude Include="include\cx\cdict.h" />
     <ClInclude Include="include\cx\cli.h" />
     <ClInclude Include="include\cx\cx.h" />
     <ClInclude Include="include\cx\file.h" />

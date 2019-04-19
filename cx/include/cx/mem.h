@@ -3,6 +3,7 @@
 
 #include "cx.h"
 #include <stdint.h>
+#include <string.h>
 
 #define CX_MEM_STRUCT_ALLOC(_var)                           \
     malloc(sizeof(*(_var)));                                \

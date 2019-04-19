@@ -51,6 +51,9 @@
   </ItemGroup>
   <ItemGroup>
     <None Include="makefile" />
+    <None Include="src\cdict.c">
+      <Filter>src</Filter>
+    </None>
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="include\cx\cx.h">
@@ -90,6 +93,9 @@
       <Filter>include\cx</Filter>
     </ClInclude>
     <ClInclude Include="include\cx\pool.h">
+      <Filter>include\cx</Filter>
+    </ClInclude>
+    <ClInclude Include="include\cx\cdict.h">
       <Filter>include\cx</Filter>
     </ClInclude>
   </ItemGroup>

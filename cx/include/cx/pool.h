@@ -18,7 +18,7 @@ typedef struct cx_pool_worker_t
     pthread_t           thread;             // pthread instances for worker.
     bool                isRunning;          // true if this worker is currently running. false if it returned from the main loop.
     bool                isWaiting;          // true if this worker is currently idle waiting for more work.
-};
+} cx_pool_worker_t;
 
 typedef struct cx_pool_t
 {
@@ -28,13 +28,13 @@ typedef struct cx_pool_t
     uint16_t            workersCount;       // number of workers in our thread pool.    
     cx_mcq_t*           queue;              // multi-consumer queue which holds the tasks available to the pool.
     cx_pool_handler_cb  handler;            // user-given handler to process each task dequeued from the queue.
-};
+} cx_pool_t;
 
 typedef struct cx_pool_handler_args_t
 {
     cx_pool_t*          pool;               // pool instance.
     uint16_t            index;              // worker number that this current thread manages.
-};
+} cx_pool_handler_args_t;
 
 /****************************************************************************************
  ***  PUBLIC FUNCTIONS

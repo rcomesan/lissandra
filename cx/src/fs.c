@@ -222,7 +222,7 @@ bool cx_fs_write(const cx_path_t* _path, const char* _buffer, uint32_t _bufferSi
     return false;
 }
 
-uint32_t cx_fs_read(const cx_path_t* _path, char* _outBuffer, uint32_t _bufferSize, cx_error_t* _err)
+int32_t cx_fs_read(const cx_path_t* _path, char* _outBuffer, uint32_t _bufferSize, cx_error_t* _err)
 {
     CX_CHECK(strlen(*_path) > 0, "invalid file path!");
     CX_MEM_ZERO(*_err);
