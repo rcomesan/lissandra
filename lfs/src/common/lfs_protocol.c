@@ -17,8 +17,8 @@
 #include "../lfs.h"
 
 #define LFS_REQ_BEGIN                                                                   \
-    cx_net_ctx_sv_t* svCtx = _common;                                                   \
-    cx_net_client_t* client = _passThrou;                                               \
+    cx_net_ctx_sv_t* svCtx = (cx_net_ctx_sv_t*)_common;                                 \
+    cx_net_client_t* client = (cx_net_client_t*)_passThrou;                             \
     uint32_t pos = 0;                                                                   \
     uint16_t requestHandle = cx_handle_alloc(g_ctx.requestsHalloc);                     \
     if (INVALID_HANDLE != requestHandle)                                                \
@@ -70,7 +70,7 @@ void lfs_handle_create(const cx_net_common_t* _common, void* _passThrou, const c
         req->type = REQ_TYPE_CREATE;
         req->data = data;
         cx_binr_uint16(_data, _size, &pos, &data->c.remoteId);
-        cx_binr_str(_data, _size, &pos, &data->tableName, sizeof(data->tableName));
+        cx_binr_str(_data, _size, &pos, data->tableName, sizeof(data->tableName));
         cx_binr_uint8(_data, _size, &pos, &data->consistency);
         cx_binr_uint16(_data, _size, &pos, &data->numPartitions);
         cx_binr_uint32(_data, _size, &pos, &data->compactionInterval);
@@ -84,7 +84,7 @@ void lfs_handle_drop(const cx_net_common_t* _common, void* _passThrou, const cha
         req->type = REQ_TYPE_DROP;
         req->data = data;
         cx_binr_uint16(_data, _size, &pos, &data->c.remoteId);
-        cx_binr_str(_data, _size, &pos, &data->tableName, sizeof(data->tableName));
+        cx_binr_str(_data, _size, &pos, data->tableName, sizeof(data->tableName));
     LFS_REQ_END;
 }
 
@@ -97,25 +97,26 @@ void lfs_handle_describe(const cx_net_common_t* _common, void* _passThrou, const
         cx_binr_uint16(_data, _size, &pos, &data->c.remoteId);
         
         char tableName[TABLE_NAME_LEN_MAX + 1];
-        cx_binr_str(_data, _size, &pos, &tableName, sizeof(tableName));
+        cx_binr_str(_data, _size, &pos, tableName, sizeof(tableName));
 
         if (cx_str_is_empty(tableName))
         {
-            data->tablesCount = dictionary_size(g_ctx.tables);
+            data->tablesCount = (uint16_t)cx_cdict_size(g_ctx.tables);
             data->tables = CX_MEM_ARR_ALLOC(data->tables, data->tablesCount);
 
             //TODO iterate the dictionary somehow
         }
         else
         {
-            table_t* table = dictionary_get(data->tables, tableName);
-
-            if (NULL != table)
+            table_t* table = NULL;
+            
+            if (cx_cdict_get(g_ctx.tables, tableName, (void**)&table))
             {
                 data->tablesCount = 0;
                 data->tables = CX_MEM_STRUCT_ALLOC(data->tables);
                 memcpy(&data->tables[0], &table->meta, sizeof(table->meta));
             }
+            //TODO table does not exist
         }
     LFS_REQ_END;
 }
@@ -127,7 +128,7 @@ void lfs_handle_select(const cx_net_common_t* _common, void* _passThrou, const c
         req->type = REQ_TYPE_SELECT;
         req->data = data;
         cx_binr_uint16(_data, _size, &pos, &data->c.remoteId);
-        cx_binr_str(_data, _size, &pos, &data->tableName, sizeof(data->tableName));
+        cx_binr_str(_data, _size, &pos, data->tableName, sizeof(data->tableName));
         cx_binr_uint16(_data, _size, &pos, &data->key);
     LFS_REQ_END;
 }
@@ -139,7 +140,7 @@ void lfs_handle_insert(const cx_net_common_t* _common, void* _passThrou, const c
         req->type = REQ_TYPE_INSERT;
         req->data = data;
         cx_binr_uint16(_data, _size, &pos, &data->c.remoteId);
-        cx_binr_str(_data, _size, &pos, &data->tableName, sizeof(data->tableName));
+        cx_binr_str(_data, _size, &pos, data->tableName, sizeof(data->tableName));
         cx_binr_uint16(_data, _size, &pos, &data->key);
 
         uint16_t valueLen = cx_binr_str(_data, _size, &pos, NULL, 0) + 1;

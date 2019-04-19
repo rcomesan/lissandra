@@ -15,7 +15,7 @@ typedef struct memtable_record_t
 
 typedef struct memtable_t
 {
-    char                name[TABLE_NAME_LEN_MAX+1];
+    char                name[TABLE_NAME_LEN_MAX + 1];
     memtable_record_t*  records;
     uint16_t            recordsCount;
     uint16_t            recordsCapacity;

@@ -1,5 +1,7 @@
 #include "worker.h"
+
 #include <ker/defines.h>
+#include <unistd.h>
 
 /****************************************************************************************
 ***  PUBLIC FUNCTIONS

@@ -25,7 +25,9 @@ CFLAGS ?=                                 \
 	-I../lfs/include/                     \
 	-DPROJECT_NAME=\"$(PROJECT_NAME)\"    \
 	-D$(PROJECT_NAME_UCASE)               \
-	-g3 -Wall -Wextra
+	-g3 -Wall -Wextra                     \
+	-Wno-unused-variable                  \
+	-Wno-unused-parameter
 
 LDFLAGS ?= -Wl,-R -Wl,/home/utnso/lissandra/cx/build/$(TARGET)
 
