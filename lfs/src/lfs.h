@@ -53,14 +53,14 @@ typedef struct lfs_ctx_t
 {
     cfg_t                   cfg;                                        // lfs configuration data.
     t_log*                  log;                                        // pointer to so-commons-lib log adt.
-    bool                    logInitialized;                             // true if our logger was successfully initialized.
     bool                    isRunning;                                  // true if the server is running. false if it's shutting down.
     cx_net_ctx_sv_t*        sv;                                         // server context for serving API requests coming from MEM nodes.
     char                    buffer[MAX_PACKET_LEN - MIN_PACKET_LEN];    // temporary pre-allocated buffer for building packets.
-    t_dictionary*           tables;                                     // container for storing table_t entries indexed by table name.
     request_t               requests[MAX_CONCURRENT_REQUESTS];          // container for storing incoming requests during ready/running/completed states.
     cx_handle_alloc_t*      requestsHalloc;                             // handle allocator for requests container.
     cx_pool_t*              pool;                                       // main pool of worker threads to process incoming requests.
+    t_dictionary*           tables;                                     // container for storing table_t entries indexed by table name.
+
 } lfs_ctx_t;
 
 extern lfs_ctx_t            g_ctx;

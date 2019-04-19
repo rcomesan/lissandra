@@ -189,11 +189,11 @@ static void* cx_cli_main_loop(void* _arg)
         }
         else
         {
-            usleep(100 * 1000);
+            usleep(100 * 1000); //TODO volar esto y meter pthread_cond
         }
     }
 
-    CX_INFO("command line interface loop terminated gracefully");
+    CX_INFO("command line interface loop terminated gracefully.");
 
     return 0;
 }

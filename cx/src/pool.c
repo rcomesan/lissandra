@@ -34,6 +34,7 @@ cx_pool_t* cx_pool_init(const char* name, uint16_t _numWorkers, cx_pool_handler_
         if (NULL != pool->workers)
         {
             CX_INFO("[pool: %s] initiating thread pool with %d workers...", pool->name, _numWorkers);
+            pool->isRunning = true;
 
             for (uint16_t i = 0; i < _numWorkers; i++)
             {
@@ -52,11 +53,7 @@ cx_pool_t* cx_pool_init(const char* name, uint16_t _numWorkers, cx_pool_handler_
                 pool->workersCount++;
             }
 
-            if (!failed)
-            {
-                pool->isRunning = true;
-                return pool;
-            }
+            if (!failed) return pool;
         }
     }
 

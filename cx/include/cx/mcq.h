@@ -32,6 +32,6 @@ void                    cx_mcq_pop(cx_mcq_t* _mcq, void** _outData);
 
 int32_t                 cx_mcq_size(cx_mcq_t* _mcq);
 
-bool            cx_mcq_is_empty(cx_mcq_t* _mcq);
+bool                    cx_mcq_is_empty(cx_mcq_t* _mcq);
 
 #endif // CX_MCQ_H_

@@ -16,15 +16,15 @@
  ***  PRIVATE DECLARATIONS
  ***************************************************************************************/
 
-static bool             cx_net_parse_address(const char* _ipAddress, uint16_t _port, sockaddr_in* _outAddr);
+static bool             _cx_net_parse_address(const char* _ipAddress, uint16_t _port, sockaddr_in* _outAddr);
 
-static void             cx_net_poll_events_client(cx_net_ctx_cl_t* _ctx);
+static void             _cx_net_poll_events_client(cx_net_ctx_cl_t* _ctx);
 
-static void             cx_net_poll_events_server(cx_net_ctx_sv_t* _ctx);
+static void             _cx_net_poll_events_server(cx_net_ctx_sv_t* _ctx);
 
-static void             cx_net_process_stream(const cx_net_common_t* _common, void* _passThru, char* _buffer, uint32_t _bufferSize, uint32_t* _inOutPos);
+static void             _cx_net_process_stream(const cx_net_common_t* _common, void* _passThru, char* _buffer, uint32_t _bufferSize, uint32_t* _inOutPos);
 
-static void             cx_net_epoll_mod(int32_t _epollDescriptor, int32_t _sock, bool _in, bool _out);
+static void             _cx_net_epoll_mod(int32_t _epollDescriptor, int32_t _sock, bool _in, bool _out);
 
 /****************************************************************************************
  ***  PUBLIC FUNCTIONS
@@ -41,7 +41,7 @@ cx_net_ctx_sv_t* cx_net_listen(cx_net_args_t* _args)
     ctx->clientsMax = 1000;
 
     sockaddr_in address;
-    if (cx_net_parse_address(ctx->c.ip, ctx->c.port, &address))
+    if (_cx_net_parse_address(ctx->c.ip, ctx->c.port, &address))
     {
         CX_INFO("[%s<--] creating socket...", ctx->c.name);
         ctx->c.sock = socket(AF_INET, SOCK_STREAM, 0);
@@ -119,7 +119,7 @@ cx_net_ctx_cl_t* cx_net_connect(cx_net_args_t* _args)
     CX_MEM_ZERO(event);
 
     sockaddr_in address;
-    if (cx_net_parse_address(ctx->c.ip, ctx->c.port, &address))
+    if (_cx_net_parse_address(ctx->c.ip, ctx->c.port, &address))
     {
         CX_INFO("[-->%s] creating socket...", ctx->c.name);
         ctx->c.sock = socket(AF_INET, SOCK_STREAM, 0);
@@ -239,14 +239,14 @@ void cx_net_poll_events(void* _ctx)
     {
         if (CX_NET_STATE_LISTENING & ctx.c->state)
         {
-            cx_net_poll_events_server(ctx.sv);
+            _cx_net_poll_events_server(ctx.sv);
         }
     }
     else if (CX_NET_STATE_CLIENT & ctx.c->state)
     {
         if ((CX_NET_STATE_CONNECTING | CX_NET_STATE_CONNECTED) & ctx.c->state)
         {
-            cx_net_poll_events_client(ctx.cl);
+            _cx_net_poll_events_client(ctx.cl);
         }
     }
 }
@@ -398,7 +398,7 @@ bool cx_net_flush(void* _ctx, uint16_t _clientHandle)
 
         if (reschedule)
         {
-            cx_net_epoll_mod(ctx.c->epollDescriptor, sock, true, true);
+            _cx_net_epoll_mod(ctx.c->epollDescriptor, sock, true, true);
             CX_INFO("[sock: %s] write operation delayed with epoll %s (errno %d)", ctx.c->name, strerror(errno), errno); //TODO borrame
         }
     }
@@ -411,7 +411,7 @@ bool cx_net_flush(void* _ctx, uint16_t _clientHandle)
  ***  PRIVATE FUNCTIONS
  ***************************************************************************************/
 
-static bool cx_net_parse_address(const char* _ipAddress, uint16_t _port, sockaddr_in* _outAddr)
+static bool _cx_net_parse_address(const char* _ipAddress, uint16_t _port, sockaddr_in* _outAddr)
 {
     CX_CHECK(strlen(_ipAddress) >= 7, "_ipAddress must have at least 7 characters");
     CX_CHECK(_port > 1023, "_port must be greater to 1023");
@@ -426,7 +426,7 @@ static bool cx_net_parse_address(const char* _ipAddress, uint16_t _port, sockadd
     return success;
 }
 
-static void cx_net_poll_events_client(cx_net_ctx_cl_t* _ctx)
+static void _cx_net_poll_events_client(cx_net_ctx_cl_t* _ctx)
 {
     epoll_event event;
 
@@ -450,7 +450,7 @@ static void cx_net_poll_events_client(cx_net_ctx_cl_t* _ctx)
             }
             else if (bytesRead > 0)
             {
-                cx_net_process_stream(&_ctx->c, NULL, _ctx->in, _ctx->inPos + bytesRead, &_ctx->inPos);
+                _cx_net_process_stream(&_ctx->c, NULL, _ctx->in, _ctx->inPos + bytesRead, &_ctx->inPos);
             }
             else
             {
@@ -469,7 +469,7 @@ static void cx_net_poll_events_client(cx_net_ctx_cl_t* _ctx)
                 if (cx_net_flush(_ctx, INVALID_HANDLE))
                 {
                     // done. unset the EPOLLOUT flag
-                    cx_net_epoll_mod(_ctx->c.epollDescriptor, _ctx->c.sock, true, false);
+                    _cx_net_epoll_mod(_ctx->c.epollDescriptor, _ctx->c.sock, true, false);
                 }
             }
             else if (CX_NET_STATE_CONNECTING & _ctx->c.state)
@@ -481,7 +481,7 @@ static void cx_net_poll_events_client(cx_net_ctx_cl_t* _ctx)
                     if (_ctx->c.errorNumber == 0)
                     {
                         _ctx->c.state |= CX_NET_STATE_CONNECTED;
-                        cx_net_epoll_mod(_ctx->c.epollDescriptor, _ctx->c.sock, true, false);
+                        _cx_net_epoll_mod(_ctx->c.epollDescriptor, _ctx->c.sock, true, false);
 
                         CX_INFO("[-->%s] connection established with server on %s:%d", 
                             _ctx->c.name, _ctx->c.ip, _ctx->c.port);
@@ -510,7 +510,7 @@ static void cx_net_poll_events_client(cx_net_ctx_cl_t* _ctx)
     }
 }
 
-static void cx_net_poll_events_server(cx_net_ctx_sv_t* _ctx)
+static void _cx_net_poll_events_server(cx_net_ctx_sv_t* _ctx)
 {
     epoll_event event;
     sockaddr_in address;
@@ -590,7 +590,7 @@ static void cx_net_poll_events_server(cx_net_ctx_sv_t* _ctx)
                     }
                     else if (bytesRead > 0)
                     {
-                        cx_net_process_stream(&_ctx->c, client,
+                        _cx_net_process_stream(&_ctx->c, client,
                             client->in, client->inPos + bytesRead, &client->inPos);
                     }
                     else
@@ -632,7 +632,7 @@ static void cx_net_poll_events_server(cx_net_ctx_sv_t* _ctx)
         }
     }
 }
-static void cx_net_process_stream(const cx_net_common_t* _common, void* _passThru, 
+static void _cx_net_process_stream(const cx_net_common_t* _common, void* _passThru,
     char* _buffer, uint32_t _bufferSize, uint32_t* _outPos)
 {   
     uint32_t bytesParsed = 0;       // current amount of bytes parsed from the given buffer
@@ -681,7 +681,7 @@ static void cx_net_process_stream(const cx_net_common_t* _common, void* _passThr
     }
 }
 
-static void cx_net_epoll_mod(int32_t _epollDescriptor, int32_t _sock, bool _in, bool _out)
+static void _cx_net_epoll_mod(int32_t _epollDescriptor, int32_t _sock, bool _in, bool _out)
 {
     epoll_event event;
     CX_MEM_ZERO(event);

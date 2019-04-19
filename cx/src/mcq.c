@@ -24,11 +24,9 @@ cx_mcq_t* cx_mcq_init()
     {
         return mcq;
     }
-    else
-    {
-        cx_mcq_destroy(&mcq, NULL);
-        return NULL;
-    }
+    
+    cx_mcq_destroy(&mcq, NULL);
+    return NULL;
 }
 
 void cx_mcq_destroy(cx_mcq_t* _mcq, cx_destroyer_cb _cb)

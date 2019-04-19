@@ -84,9 +84,7 @@ int main(int _argc, char** _argv)
 
             // poll cli events
             if (cx_cli_command_begin(&cmd))
-            {
                 handle_cli_command(cmd);
-            }
 
             // poll socket events
             cx_net_poll_events(g_ctx.sv);
@@ -95,7 +93,7 @@ int main(int _argc, char** _argv)
             requests_update();
         }
     }
-    else if (g_ctx.logInitialized)
+    else if (NULL != g_ctx.log)
     {
         log_error(g_ctx.log, "Initialization failed (errcode %d). %s", err.code, err.desc);
     }
@@ -109,13 +107,13 @@ int main(int _argc, char** _argv)
     net_destroy();
     lfs_destroy();
     cfg_destroy();
-    logger_destroy();
 
     if (0 == err.code)
         CX_INFO("node terminated successfully.");
     else
         CX_INFO("node terminated with error %d.", err.code);
-
+    
+    logger_destroy();
     return err.code;
 }
 
@@ -134,9 +132,8 @@ static bool logger_init(cx_error_t* _err)
     {
         cx_fs_path(&path, "logs/%s.txt", timestamp);
         g_ctx.log = log_create(path, PROJECT_NAME, true, LOG_LEVEL_INFO);
-        g_ctx.logInitialized = NULL != g_ctx.log;
 
-        if (g_ctx.logInitialized)
+        if (NULL != g_ctx.log)
         {
             CX_INFO("log file: %s", path);
             return true;
@@ -153,10 +150,11 @@ static bool logger_init(cx_error_t* _err)
 
 static void logger_destroy()
 {
-    if (NULL != g_ctx.cfg.handle)
+    if (NULL != g_ctx.log)
     {
-        log_destroy(g_ctx.cfg.handle);
-        g_ctx.cfg.handle = NULL;
+        
+        log_destroy(g_ctx.log);
+        g_ctx.log = NULL;
     }
 }
 
