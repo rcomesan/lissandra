@@ -9,6 +9,7 @@
 #include <sys/stat.h>
 #include <stdarg.h>
 #include <stdio.h>
+#include <fcntl.h>
 
 typedef struct stat stat_t;
 
@@ -35,6 +36,14 @@ void cx_fs_path(cx_path_t* _outPath, const char* _format, ...)
     vsnprintf(_outPath, sizeof(*_outPath), _format, args);
     va_end(args);
     _cx_fs_absolutize(_outPath);
+
+    //TODO. improvement: pre-process "." and ".." directories
+
+    //TODO. improvement: get rid of multiple trailing slashes "///"
+    // lastly, get rid of trailing slashes
+    int32_t len = strlen(*_outPath);
+    if (len > 1 && '/' == (*_outPath)[len - 1])
+        (*_outPath)[len - 1] = '\0';
 }
 
 bool cx_fs_exists(const cx_path_t* _path)
@@ -57,13 +66,83 @@ bool cx_fs_is_folder(const cx_path_t* _path)
     }
 }
 
+void cx_fs_get_name(const cx_path_t* _path, bool _stripExtension, cx_path_t* _outName)
+{
+    char* slash = strrchr(_path, '/');
+    
+    if (NULL == slash)
+    {
+        cx_str_copy(*_outName, sizeof(*_outName), _path);
+    }
+    else if ((*_path) == slash)
+    {
+        (*_outName)[0] = '\0';
+    }
+    else
+    {
+        cx_str_copy(*_outName, sizeof(*_outName), slash + 1);
+    }
+
+    if (_stripExtension)
+    {
+        char* extension = strrchr(_outName, '.');
+        if (NULL != extension)
+        {
+            extension[0] = '\0';
+        }
+    }
+}
+
+void cx_fs_get_path(const cx_path_t* _path, cx_path_t* _outPath)
+{
+    char* slash = strrchr(_path, '/');
+
+    if (NULL == slash || (*_path) == slash)
+    {
+        (*_outPath)[0] = '\0';
+    }
+    else
+    {
+        cx_str_copy(*_outPath, sizeof(*_outPath), _path);
+        (*_outPath)[slash - (*_path)] = '\0';
+    }
+}
+
+bool cx_fs_touch(const cx_path_t* _filePath, cx_error_t* _err)
+{
+    CX_CHECK(strlen(*_filePath) > 0, "invalid file path!");
+    CX_MEM_ZERO(*_err);
+
+    if (!cx_fs_exists(_filePath))
+    {
+        cx_path_t parentFolderPath;
+        cx_fs_get_path(_filePath, &parentFolderPath);
+
+        if (cx_fs_mkdir(parentFolderPath, _err))
+        {
+            // we'll stick to default privileges (664)
+            int32_t fd = open(_filePath, O_RDWR | O_CREAT, S_IRUSR | S_IWUSR | S_IRGRP | S_IWGRP | S_IROTH);
+
+            if (INVALID_DESCRIPTOR == fd)
+            {
+                CX_ERROR_SET(_err, 1, "File '%s' creation failed.", _filePath);
+            }
+        }
+        else
+        {
+            return false;
+        }
+    }
+    return true;
+}
+
 bool cx_fs_mkdir(const cx_path_t* _folderPath, cx_error_t* _err)
 {
-    int32_t len = strlen(*_folderPath);
-
-    CX_CHECK(len > 0, "invalid folder path!");
+    CX_CHECK(strlen(*_folderPath) > 0, "invalid folder path!");
     CX_MEM_ZERO(*_err);   
     
+    if (cx_fs_exists(_folderPath) && cx_fs_is_folder(_folderPath)) return true;
+
     for (char* p = (*_folderPath) + 1; *p; p++)
     {
         if ('/' == *p)
@@ -214,11 +293,6 @@ void _cx_fs_absolutize(cx_path_t* _inOutPath)
         }
         CX_CHECK(NULL != result, "getcwd failed!");
     }
-
-    // lastly, get rid of trailing slashes
-    int32_t len = strlen(*_inOutPath);
-    if (len > 1 && '/' == (*_inOutPath)[len - 1])
-        (*_inOutPath)[len - 1] = '\0';
 }
 
 static bool _cx_fs_mkdir(const cx_path_t* _folderPath, cx_error_t* _err)

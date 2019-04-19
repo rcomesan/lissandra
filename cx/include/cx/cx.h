@@ -13,6 +13,8 @@
 #define CX_DEBUG 0
 #endif
 
+#define INVALID_DESCRIPTOR -1
+
 #define CX_TIMESTAMP_LEN 14
 typedef char cx_timestamp_t[CX_TIMESTAMP_LEN + 1];
 

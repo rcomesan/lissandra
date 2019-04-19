@@ -6,7 +6,6 @@
 #include <sys/socket.h>
 #include <stdbool.h>
 
-#define INVALID_DESCRIPTOR -1
 #define MAX_PACKET_LEN 4096
 #define MIN_PACKET_LEN 3
 #define CX_NET_BUFLEN (2 * MAX_PACKET_LEN)
