@@ -41,7 +41,7 @@ bool cli_parse_select(const cx_cli_cmd_t* _cmd, cx_error_t* _err, char** _outTab
         && valid_key(_cmd->args[1]))
     {
         (*_outTableName) = _cmd->args[0];
-        cx_str_parse_uint16(_cmd->args[1], _outKey);
+        cx_str_to_uint16(_cmd->args[1], _outKey);
         return true;
     }
 
@@ -60,13 +60,13 @@ bool cli_parse_insert(const cx_cli_cmd_t* _cmd, cx_error_t* _err, char** _outTab
         && _cmd->argsCount >= 4 ? valid_timestamp(_cmd->args[3]) : true)
     {
         (*_outTableName) = _cmd->args[0];
-        cx_str_parse_uint16(_cmd->args[1], _outKey);
+        cx_str_to_uint16(_cmd->args[1], _outKey);
         (*_outValue) = _cmd->args[2];
         (*_outTimestamp) = cx_time_epoch();
 
         if (_cmd->argsCount >= 4)
         {
-            cx_str_parse_uint32(_cmd->args[3], _outTimestamp);
+            cx_str_to_uint32(_cmd->args[3], _outTimestamp);
         }
         
         return true;
@@ -88,9 +88,9 @@ bool cli_parse_create(const cx_cli_cmd_t* _cmd, cx_error_t* _err, char** _outTab
         && valid_compaction_interval(_cmd->args[3]))
     {
         (*_outTableName) = _cmd->args[0];
-        cx_str_parse_uint8(_cmd->args[1], _outConsistency);
-        cx_str_parse_uint16(_cmd->args[2], _outNumPartitions);
-        cx_str_parse_uint32(_cmd->args[3], _outCompactionInterval);
+        cx_str_to_uint8(_cmd->args[1], _outConsistency);
+        cx_str_to_uint16(_cmd->args[2], _outNumPartitions);
+        cx_str_to_uint32(_cmd->args[3], _outCompactionInterval);
 
         return true;
     }
@@ -165,8 +165,8 @@ bool cli_parse_add_memory(const cx_cli_cmd_t* _cmd, cx_error_t* _err, uint16_t* 
         && (0 == strcasecmp("TO", _cmd->args[2]))
         && valid_consistency(_cmd->args[3]))
     {
-        cx_str_parse_uint16(_cmd->args[1], _outMemNumber);
-        cx_str_parse_uint8(_cmd->args[3], _outConsistency);
+        cx_str_to_uint16(_cmd->args[1], _outMemNumber);
+        cx_str_to_uint8(_cmd->args[3], _outConsistency);
     }
 
     CX_ERROR_SET(_err, 1, "Invalid Syntax. Usage: ADD MEMORY [MEM_NUMBER] TO [CONSISTENCY]");
@@ -185,37 +185,37 @@ static bool valid_table(const char* _str)
 static bool valid_key(const char* _str)
 {
     uint16_t ui16 = 0;
-    return cx_str_parse_uint16(_str, &ui16);
+    return cx_str_to_uint16(_str, &ui16);
 }
 
 static bool valid_timestamp(const char* _str)
 {
     uint32_t ui32 = 0;
-    return cx_str_parse_uint32(_str, &ui32);
+    return cx_str_to_uint32(_str, &ui32);
 }
 
 static bool valid_consistency(const char* _str)
 {
     uint8_t ui8 = 0;
     return true
-        && cx_str_parse_uint8(_str, &ui8)
+        && cx_str_to_uint8(_str, &ui8)
         && cx_math_in_range(ui8, 1, 3); //TODO CHECKME. consistency enum
 }
 
 static bool valid_partitions_number(const char* _str)
 {
     uint16_t ui16 = 0;
-    return cx_str_parse_uint16(_str, &ui16);
+    return cx_str_to_uint16(_str, &ui16);
 }
 
 static bool valid_compaction_interval(const char* _str)
 {
     uint32_t ui32 = 0;
-    return cx_str_parse_uint32(_str, &ui32);
+    return cx_str_to_uint32(_str, &ui32);
 }
 
 static bool valid_memory_number(const char* _str)
 {
     uint16_t ui16 = 0;
-    return cx_str_parse_uint16(_str, &ui16);
+    return cx_str_to_uint16(_str, &ui16);
 }

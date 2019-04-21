@@ -93,7 +93,7 @@ void cx_str_to_lower(char* _a)
     }
 }
 
-bool cx_str_parse_int32(const char* _src, int32_t* _out)
+bool cx_str_to_int32(const char* _src, int32_t* _out)
 {
     char* end;
 
@@ -109,7 +109,7 @@ bool cx_str_parse_int32(const char* _src, int32_t* _out)
     return true;
 }
 
-bool cx_str_parse_uint32(const char* _src, uint32_t* _out)
+bool cx_str_to_uint32(const char* _src, uint32_t* _out)
 {
     char* end;
 
@@ -125,12 +125,12 @@ bool cx_str_parse_uint32(const char* _src, uint32_t* _out)
     return true;
 }
 
-bool cx_str_parse_int16(const char* _src, int16_t* _out)
+bool cx_str_to_int16(const char* _src, int16_t* _out)
 {
     int32_t i32 = 0;
 
     if (true
-        && cx_str_parse_int32(_src, &i32)
+        && cx_str_to_int32(_src, &i32)
         && cx_math_in_range(i32, INT16_MIN, INT16_MAX))
     {
         (*_out) = (int16_t)i32;
@@ -139,12 +139,12 @@ bool cx_str_parse_int16(const char* _src, int16_t* _out)
     return false;
 }
 
-bool cx_str_parse_uint16(const char* _src, uint16_t* _out)
+bool cx_str_to_uint16(const char* _src, uint16_t* _out)
 {
     uint32_t ui32 = 0;
 
     if (true
-        && cx_str_parse_uint32(_src, &ui32)
+        && cx_str_to_uint32(_src, &ui32)
         && cx_math_in_range(ui32, 0, UINT16_MAX))
     {
         (*_out) = (uint16_t)ui32;
@@ -153,12 +153,12 @@ bool cx_str_parse_uint16(const char* _src, uint16_t* _out)
     return false;
 }
 
-bool cx_str_parse_int8(const char* _src, int8_t* _out)
+bool cx_str_to_int8(const char* _src, int8_t* _out)
 {
     int32_t i32 = 0;
 
     if (true
-        && cx_str_parse_int32(_src, &i32)
+        && cx_str_to_int32(_src, &i32)
         && cx_math_in_range(i32, INT8_MIN, INT8_MAX))
     {
         (*_out) = (int8_t)i32;
@@ -167,12 +167,12 @@ bool cx_str_parse_int8(const char* _src, int8_t* _out)
     return false;
 }
 
-bool cx_str_parse_uint8(const char* _src, uint8_t* _out)
+bool cx_str_to_uint8(const char* _src, uint8_t* _out)
 {
     uint32_t ui32 = 0;
 
     if (true
-        && cx_str_parse_uint32(_src, &ui32)
+        && cx_str_to_uint32(_src, &ui32)
         && cx_math_in_range(ui32, 0, UINT8_MAX))
     {
         (*_out) = (uint8_t)ui32;
