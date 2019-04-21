@@ -24,9 +24,11 @@ static bool         _fs_load_meta(cx_error_t* _err);
 
 static bool         _fs_load_tables(cx_error_t* _err);
 
-static bool         _fs_load_table_meta(cx_path_t* _tableFolderPath, table_meta_t* _outMeta, cx_error_t* _err);
-
 static bool         _fs_load_blocks(cx_error_t* _err);
+
+static void         _fs_table_init(table_t* _table);
+
+static void         _fs_table_destroy(table_t* _table);
 
 /****************************************************************************************
  ***  PUBLIC FUNCTIONS
@@ -70,7 +72,17 @@ bool fs_init(cx_error_t* _err)
     {
         cx_str_copy(m_fsCtx->rootDir, sizeof(m_fsCtx->rootDir), rootDir);
         
+        m_fsCtx->mtxCreateDropInit = (0 == pthread_mutex_init(&m_fsCtx->mtxCreateDrop, NULL));
+        m_fsCtx->mtxBlocksInit = (0 == pthread_mutex_init(&m_fsCtx->mtxBlocks, NULL));
+
+        if (!m_fsCtx->mtxCreateDropInit || !m_fsCtx->mtxBlocksInit)
+        {
+            CX_ERROR_SET(_err, 1, "pthread mutex initialization failed!");
+        }
+
         return true
+            && m_fsCtx->mtxCreateDropInit
+            && m_fsCtx->mtxBlocksInit
             && _fs_load_meta(_err)
             && _fs_load_tables(_err)
             && _fs_load_blocks(_err);
@@ -99,14 +111,244 @@ void fs_destroy()
     cx_cdict_iter_begin(g_ctx.tables);
     while (cx_cdict_iter_next(g_ctx.tables, &key, (void**)&table))
     {
-        //TODO destroy memtable here
-        table->memtable = NULL;
+        _fs_table_destroy(table);
         free(table);
     }
     cx_cdict_iter_end(g_ctx.tables);
     cx_cdict_clear(g_ctx.tables, NULL);
 
+    // mutexes
+    if (m_fsCtx->mtxCreateDropInit)
+    {
+        pthread_mutex_destroy(&m_fsCtx->mtxCreateDrop);
+        m_fsCtx->mtxCreateDropInit = false;
+    }
+    if (m_fsCtx->mtxBlocksInit)
+    {
+        pthread_mutex_destroy(&m_fsCtx->mtxBlocks);
+        m_fsCtx->mtxBlocksInit = false;
+    }
+
     free(m_fsCtx);
+}
+
+bool fs_table_exists(const char* _tableName)
+{
+    return cx_cdict_contains(g_ctx.tables, _tableName);
+}
+
+bool fs_table_create(const char* _tableName, uint8_t _consistency, uint16_t _partitions, uint32_t _compactionInterval, cx_error_t* _err)
+{
+    CX_MEM_ZERO(*_err);
+
+    //TODO should we normalize tableName here? I think we should expect this api to receive uppercase table names.
+
+    pthread_mutex_lock(&m_fsCtx->mtxCreateDrop);
+
+    if (fs_table_exists(_tableName))
+    {
+        CX_ERROR_SET(_err, 1, "Table '%s' already exists.", _tableName);
+        return false;
+    }
+
+    table_t* table = CX_MEM_STRUCT_ALLOC(table);
+
+    char temp[32];
+    cx_path_t path;
+
+    cx_fs_path(&path, "%s/%s/%s", m_fsCtx->rootDir, LFS_DIR_TABLES, _tableName);
+    if (cx_fs_mkdir(&path, _err))
+    {
+        cx_fs_path(&path, "%s/%s/%s", m_fsCtx->rootDir, LFS_DIR_TABLES, LFS_DIR_METADATA);
+        if (cx_fs_touch(&path, _err))
+        {
+            t_config* meta = config_create(path);
+            if (NULL != meta)
+            {
+                cx_str_from_uint8(_consistency, temp, sizeof(temp));
+                config_set_value(meta, "consistency", temp);
+
+                cx_str_from_uint16(_partitions, temp, sizeof(temp));
+                config_set_value(meta, "partitionsCount", temp);
+
+                cx_str_from_uint32(_compactionInterval, temp, sizeof(temp));
+                config_set_value(meta, "compactionInterval", temp);
+
+                config_save(meta);
+
+                if (fs_table_get_meta(_tableName, &table->meta, _err))
+                {
+                    for (uint16_t i = 0; i < _partitions; i++)
+                    {
+
+                    }
+
+                    _fs_table_init(table);
+                    cx_cdict_set(g_ctx.tables, _tableName, table);
+                }
+                else
+                {
+                    CX_ERROR_SET(_err, 1, "Table metadata file '%s' could not be retrieved.", path);
+                }
+            }
+            else
+            {
+                CX_ERROR_SET(_err, 1, "Table metadata file '%s' could not be created.", path);
+            }
+
+            if (NULL != meta) config_destroy(meta);
+        }
+    }
+
+    if (0 != _err) free(table);
+    pthread_mutex_unlock(&m_fsCtx->mtxCreateDrop);
+    return (0 == _err);
+}
+
+bool fs_table_get_meta(const char* _tableName, table_meta_t* _outMeta, cx_error_t* _err)
+{
+    CX_MEM_ZERO(*_err);
+    CX_CHECK_NOT_NULL(_outMeta);
+    CX_MEM_ZERO(_outMeta);
+
+    char* key = "";
+
+    cx_str_copy(_outMeta->name, sizeof(_outMeta->name), _tableName);
+
+    cx_path_t metadataPath;
+    cx_fs_path(&metadataPath, "%s/%s/%s", m_fsCtx->rootDir, LFS_DIR_TABLES, _tableName);
+
+    t_config* meta = config_create(metadataPath);
+
+    if (NULL != meta)
+    {
+        key = "consistency";
+        if (config_has_property(meta, key))
+        {
+            _outMeta->consistency = (uint8_t)config_get_int_value(meta, key);
+        }
+        else
+        {
+            goto key_missing;
+        }
+
+        key = "partitionsCount";
+        if (config_has_property(meta, key))
+        {
+            _outMeta->partitionsCount = (uint16_t)config_get_int_value(meta, key);
+        }
+        else
+        {
+            goto key_missing;
+        }
+
+        key = "compactionInterval";
+        if (config_has_property(meta, key))
+        {
+            _outMeta->compactionInterval = (uint32_t)config_get_int_value(meta, key);
+        }
+        else
+        {
+            goto key_missing;
+        }
+
+        config_destroy(meta);
+        return true;
+
+    key_missing:
+        CX_ERROR_SET(_err, 1, "key '%s' is missing in table '%s' metadata file.", key, _tableName);
+        config_destroy(meta);
+    }
+
+    CX_ERROR_SET(_err, 1, "table metadata file '%s' is missing or not readable.", metadataPath);
+    return false;
+}
+
+bool fs_table_get_part(const char* _tableName, uint16_t _partNumber, fs_file_t* _outFile, cx_error_t* _err)
+{
+    cx_path_t path;
+    cx_fs_path(&path, "%s/%s/%s/%d.bin", m_fsCtx->rootDir, LFS_DIR_TABLES, _tableName, _partNumber);
+
+    t_config* part;
+
+    if (cx_fs_exists(path))
+    {
+        part = config_create(path);
+        if (NULL != part)
+        {
+            _outFile->size = (uint32_t)config_get_int_value(part, "size");
+            _outFile->blocksCount = (uint32_t)config_get_int_value(part, "blocksCount");
+            
+            char** blocks = config_get_array_value(part, "blocks");
+
+            uint32_t i = 0, j = 0;
+            while (NULL != blocks[i])
+            {
+                cx_str_to_uint32(blocks[i], &(_outFile->blocks[j++]));
+                free(blocks[i++]);
+            }
+            free(blocks);
+            
+            CX_CHECK(_outFile->blocksCount == (j - 1), "blocksCount (%d) and actual amount of blocks (%d) read from the array do not match!",
+                _outFile->blocksCount, j - 1);
+        }
+        else
+        {
+            CX_ERROR_SET(_err, 1, "File '%s' could not be loaded!", path);
+        }
+    }
+    else
+    {
+        CX_ERROR_SET(_err, 1, "Partition #%d from table '%s' could not be retrieved. The file does not exist.", _partNumber, _tableName);
+    }
+
+    if (NULL != part) config_destroy(part);
+    return (0 == _err->code);
+}
+
+bool fs_table_set_part(const char* _tableName, uint16_t _partNumber, fs_file_t* _inFile, cx_error_t* _err)
+{
+    cx_path_t path;
+    cx_fs_path(&path, "%s/%s/%s/%d.bin", m_fsCtx->rootDir, LFS_DIR_TABLES, _tableName, _partNumber);
+
+    char temp[32];
+    t_config* part;
+
+    if (cx_fs_remove(path, _err) && cx_fs_touch(path, _err))
+    {
+        part = config_create(path);
+        if (NULL != part)
+        {
+            cx_str_from_uint32(_inFile->size, temp, sizeof(temp));
+            config_set_value(part, "size", temp);
+
+            cx_str_from_uint32(_inFile->blocksCount, temp, sizeof(temp));
+            config_set_value(part, "blocksCount", temp);
+
+            char* buff = NULL, buffPrev = NULL;
+            for (uint32_t i = 0; i < _inFile->blocksCount; i++)
+            {
+                cx_str_format(temp, sizeof(temp), ",%d", _inFile->blocks[i]);
+                buffPrev = buff;
+                buff = cx_str_cat_d(buffPrev, temp);
+                free(buffPrev);
+            }
+            buffPrev = buff;
+            buff = cx_str_format_d("[%s]", buffPrev);
+
+            config_set_value(part, "blocks", buff);
+
+            free(buffPrev);
+            free(buff);
+        }
+        else
+        {
+            CX_ERROR_SET(_err, 1, "File '%s' could not be loaded!", path);
+        }
+    }
+
+    if (NULL != part) config_destroy(part);
+    return (0 == _err->code);
 }
 
  /****************************************************************************************
@@ -283,12 +525,11 @@ static bool _fs_load_tables(cx_error_t* _err)
         while (cx_fs_explorer_next_folder(explorer, &tableFolderPath))
         {
             table = CX_MEM_STRUCT_ALLOC(table);
+            cx_fs_get_name(&tableFolderPath, false, &tableName);
 
-            if (_fs_load_table_meta(&tableFolderPath, &table->meta, _err))
+            if (fs_table_get_meta(&tableName, &table->meta, _err))
             {
-                // initialize stuff
-                table->memtable = NULL; //TODO initialize memtable here
-
+                _fs_table_init(table);
                 cx_cdict_set(g_ctx.tables, tableName, table);
                 count++;
             }
@@ -306,64 +547,6 @@ static bool _fs_load_tables(cx_error_t* _err)
 
     CX_ERROR_SET(_err, LFS_ERR_INIT_FS_TABLES,
         "tables directory '%s' is not accessible.", tablesPath);
-    return false;
-}
-
-static bool _fs_load_table_meta(cx_path_t* _tableFolderPath, table_meta_t* _outMeta, cx_error_t* _err)
-{
-    CX_MEM_ZERO(*_err);
-    CX_CHECK_NOT_NULL(_outMeta);
-
-    char* key = "";
-
-    cx_path_t metadataPath;
-    cx_fs_path(&metadataPath, "%s/%s", *_tableFolderPath, LFS_DIR_METADATA);
-    
-    cx_path_t tableName;
-    cx_fs_get_name(_tableFolderPath, false, &tableName);
-    cx_str_copy(_outMeta->name, sizeof(_outMeta->name), tableName);
-
-    t_config* meta = config_create(metadataPath);
-
-    if (NULL != meta)
-    {
-        key = "consistency";
-        if (config_has_property(meta, key))
-        {
-            _outMeta->consistency = (uint8_t)config_get_int_value(meta, key);
-        }
-        else
-        {
-            goto key_missing;
-        }
-
-        key = "partitionsCount";
-        if (config_has_property(meta, key))
-        {
-            _outMeta->partitionsCount = (uint16_t)config_get_int_value(meta, key);
-        }
-        else
-        {
-            goto key_missing;
-        }
-
-        key = "compactionInterval";
-        if (config_has_property(meta, key))
-        {
-            _outMeta->compactionInterval = (uint32_t)config_get_int_value(meta, key);
-        }
-        else
-        {
-            goto key_missing;
-        }
-
-        return true;
-
-    key_missing:
-        CX_ERROR_SET(_err, 1, "key '%s' is missing in table '%s' metadata file.", key, tableName);
-    }
-
-    CX_ERROR_SET(_err, 1, "table metadata file '%s' is missing or not readable.", metadataPath);
     return false;
 }
 
@@ -396,4 +579,14 @@ static bool _fs_load_blocks(cx_error_t* _err)
     free(m_fsCtx->blocksmapBuffer);
     m_fsCtx->blocksmapBuffer = NULL;
     return false;
+}
+
+void _fs_table_init(table_t* _table)
+{
+    _table->memtable = NULL; //TODO initialize memtable here
+}
+
+void _fs_table_destroy(table_t* _table)
+{
+    _table->memtable = NULL; //TODO destroy memtable here
 }
