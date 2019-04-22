@@ -25,7 +25,7 @@ cx_cdict_t* cx_cdict_init()
         return dict;
     }
     
-    cx_cdict_destroy(&dict, NULL);
+    cx_cdict_destroy(dict, NULL);
     return NULL;
 }
 
@@ -39,14 +39,8 @@ void cx_cdict_destroy(cx_cdict_t* _cdict, cx_destroyer_cb _cb)
         _cdict->mutexInitialized = false;
     }
 
-    if (NULL != _cb)
-    {
-        dictionary_destroy_and_destroy_elements(_cdict->handle, _cb);
-    }
-    else
-    {
-        dictionary_destroy(_cdict->handle);
-    }
+    dictionary_destroy_and_destroy_elements(_cdict->handle, _cb);
+    
     _cdict->handle = NULL;
     free(_cdict);
 }
@@ -117,9 +111,26 @@ uint32_t cx_cdict_size(cx_cdict_t* _cdict)
 void cx_cdict_clear(cx_cdict_t* _cdict, cx_destroyer_cb _cb)
 {
     CX_CHECK_NOT_NULL(_cdict);
-    pthread_mutex_lock(&_cdict->mutex);
-    dictionary_clean_and_destroy_elements(_cdict, _cb);
-    pthread_mutex_unlock(&_cdict->mutex);
+
+    if (NULL != _cb)
+    {
+        char* key = NULL;
+        void* data = NULL;
+
+        cx_cdict_iter_begin(_cdict);
+        while (cx_cdict_iter_next(_cdict, &key, &data))
+        {
+            _cb(data);
+        }
+        dictionary_clean(_cdict->handle);
+        cx_cdict_iter_end(_cdict);
+    }
+    else
+    {
+        pthread_mutex_lock(&_cdict->mutex);
+        dictionary_clean(_cdict->handle);
+        pthread_mutex_unlock(&_cdict->mutex);
+    }    
 }
 
 void cx_cdict_iter_begin(cx_cdict_t* _cdict)
@@ -155,7 +166,10 @@ bool cx_cdict_iter_next(cx_cdict_t* _cdict, char** _outKey, void** _outData)
         {
             (*_outKey) = _cdict->iterElement->key;
             (*_outData) = _cdict->iterElement->data;
+            
             _cdict->iterElement = _cdict->iterElement->next;
+            if (NULL == _cdict->iterElement) _cdict->iterTableIndex++;
+
             return true;
         }       
     }
