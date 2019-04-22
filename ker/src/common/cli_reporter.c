@@ -52,7 +52,7 @@ void cli_report_create(const data_create_t* _result)
     CLI_REPORT_BEGIN;
     if (_result->c.success)
     {
-        printf("Table '%s' created.\n", _result->tableName);
+        printf("Table '%s' created.\n", _result->name);
     }
     else
     {
@@ -92,7 +92,7 @@ void cli_report_drop(const data_drop_t* _result)
     CLI_REPORT_BEGIN;
     if (_result->c.success)
     {
-        printf("Table '%s' dropped.\n", _result->tableName);
+        printf("Table '%s' dropped.\n", _result->name);
     }
     else
     {

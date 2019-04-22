@@ -209,6 +209,7 @@ bool cx_fs_write(const cx_path_t* _path, const char* _buffer, uint32_t _bufferSi
                     CX_ERROR_SET(_err, 1, "file '%s' could not be written. %s", _path, strerror(errno));
                 }
             }
+            fflush(fileHandle);
             close(fileHandle);
 
             if (0 == _err->code) return true;

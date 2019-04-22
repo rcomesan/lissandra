@@ -12,7 +12,7 @@ bool cli_parse_select(const cx_cli_cmd_t* _cmd, cx_error_t* _err, char** _outTab
 
 bool cli_parse_insert(const cx_cli_cmd_t* _cmd, cx_error_t* _err, char** _outTableName, uint16_t* _outKey, char** _outValue, uint32_t* _outTimestamp);
 
-bool cli_parse_create(const cx_cli_cmd_t* _cmd, cx_error_t* _err, char** _outTableName, uint8_t* _outConsistency, uint16_t* _outNumPartitions, uint32_t* _outCompactionTime);
+bool cli_parse_create(const cx_cli_cmd_t* _cmd, cx_error_t* _err, char** _outTableName, uint8_t* _outConsistency, uint16_t* _outNumPartitions, uint32_t* _outCompactionInterval);
 
 bool cli_parse_describe(const cx_cli_cmd_t* _cmd, cx_error_t* _err, char** _outTableName);
 

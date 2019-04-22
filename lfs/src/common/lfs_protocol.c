@@ -70,7 +70,7 @@ void lfs_handle_create(const cx_net_common_t* _common, void* _passThrou, const c
         req->type = REQ_TYPE_CREATE;
         req->data = data;
         cx_binr_uint16(_data, _size, &pos, &data->c.remoteId);
-        cx_binr_str(_data, _size, &pos, data->tableName, sizeof(data->tableName));
+        cx_binr_str(_data, _size, &pos, data->name, sizeof(data->name));
         cx_binr_uint8(_data, _size, &pos, &data->consistency);
         cx_binr_uint16(_data, _size, &pos, &data->numPartitions);
         cx_binr_uint32(_data, _size, &pos, &data->compactionInterval);
@@ -84,7 +84,7 @@ void lfs_handle_drop(const cx_net_common_t* _common, void* _passThrou, const cha
         req->type = REQ_TYPE_DROP;
         req->data = data;
         cx_binr_uint16(_data, _size, &pos, &data->c.remoteId);
-        cx_binr_str(_data, _size, &pos, data->tableName, sizeof(data->tableName));
+        cx_binr_str(_data, _size, &pos, data->name, sizeof(data->name));
     LFS_REQ_END;
 }
 
@@ -128,7 +128,7 @@ void lfs_handle_select(const cx_net_common_t* _common, void* _passThrou, const c
         req->type = REQ_TYPE_SELECT;
         req->data = data;
         cx_binr_uint16(_data, _size, &pos, &data->c.remoteId);
-        cx_binr_str(_data, _size, &pos, data->tableName, sizeof(data->tableName));
+        cx_binr_str(_data, _size, &pos, data->name, sizeof(data->name));
         cx_binr_uint16(_data, _size, &pos, &data->key);
     LFS_REQ_END;
 }
@@ -140,7 +140,7 @@ void lfs_handle_insert(const cx_net_common_t* _common, void* _passThrou, const c
         req->type = REQ_TYPE_INSERT;
         req->data = data;
         cx_binr_uint16(_data, _size, &pos, &data->c.remoteId);
-        cx_binr_str(_data, _size, &pos, data->tableName, sizeof(data->tableName));
+        cx_binr_str(_data, _size, &pos, data->name, sizeof(data->name));
         cx_binr_uint16(_data, _size, &pos, &data->key);
 
         uint16_t valueLen = cx_binr_str(_data, _size, &pos, NULL, 0) + 1;
