@@ -2,6 +2,8 @@
 #include "binr.h"
 #include "math.h"
 
+#include <string.h>
+
 //TODO this will only work on architectures of the same endianness 
 // check if endian-independent code is a requirement and make the byte swaps needed
 
@@ -81,7 +83,7 @@ uint16_t cx_binr_str(const char* _buffer, uint16_t _bufferSize, uint32_t* _inOut
     else
     {
         uint16_t bytesCopied = cx_math_min(strLen, _strSize - 1);
-        memcpy(_outStr, _buffer, bytesCopied);
+        memcpy(_outStr, &(_buffer[*_inOutPos]), bytesCopied);
         _outStr[bytesCopied] = '\0';
         (*_inOutPos) += bytesCopied;
         return bytesCopied;
