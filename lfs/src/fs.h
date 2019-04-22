@@ -39,7 +39,6 @@ typedef struct fs_ctx_t
     char*               blocksmapBuffer;        // buffer for storing our bit array containing blocks status (unset bit mean the block is free to use).
                                                 // must be large enough to hold at least meta.blocksCount amount of bits.
     t_bitarray*         blocksmap;              // bit array adt (so-commons-lib implementation).
-    uint32_t            blockNumberLast;        // last block number allocated to resume contigous (if possible) allocation the next time alloc is called.
     pthread_mutex_t     mtxCreateDrop;          // mutex for syncing create/drop queries.
     bool                mtxCreateDropInit;      // true if mtxCreateDrop was successfully initialized and therefore needs to be destroyed.
     pthread_mutex_t     mtxBlocks;              // mutex for syncing blocks alloc/free operations;
@@ -68,10 +67,10 @@ void                fs_table_get_dump(const char* _tableName, uint16_t _dumpNumb
 
 uint32_t            fs_block_alloc(uint32_t _blocksCount, uint32_t* _outBlocksArr);
 
-void                fs_block_free(uint32_t _blockNumber);
+void                fs_block_free(uint32_t* _blocksArr, uint32_t _blocksCount);
 
-void                fs_block_read(uint32_t _blockNumber, char* _buffer, uint32_t _bufferSize);
+int32_t             fs_block_read(uint32_t _blockNumber, char* _buffer, cx_error_t* _err);
 
-void                fs_block_write(uint32_t _blockNumber, char* _buffer, uint32_t _bufferSize);
+bool                fs_block_write(uint32_t _blockNumber, char* _buffer, uint32_t _bufferSize, cx_error_t* _err);
 
 #endif // LFS_FS_H_

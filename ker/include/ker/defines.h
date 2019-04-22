@@ -12,6 +12,9 @@
 
 #define MAX_CONCURRENT_REQUESTS 4096
 
+// defines the maximum number of blocks in which a file from our filesystem can be fragmentated.
+#define MAX_FILE_FRAG 1024
+
 typedef enum CONSISTENCY_TYPE
 {
     CONSISTENCY_STRONG = 1,
@@ -48,9 +51,11 @@ typedef enum REQ_STATE
     REQ_STATE_COMPLETED,
 } REQ_STATE;
 
+typedef char table_name_t[TABLE_NAME_LEN_MAX + 1];
+
 typedef struct table_meta_t
 {
-    char                    name[TABLE_NAME_LEN_MAX + 1];   // name of the table.
+    table_name_t            name;                           // name of the table.
     CONSISTENCY_TYPE        consistency;                    // constistency needed for this table.
     uint16_t                partitionsCount;                // number of partitions for this table.
     uint32_t                compactionInterval;             // interval in ms to perform table compaction.
@@ -66,7 +71,7 @@ typedef struct data_common_t
 typedef struct data_create_t
 {
     data_common_t   c;
-    char            tableName[TABLE_NAME_LEN_MAX + 1];
+    table_name_t    name;
     uint8_t         consistency;
     uint16_t        numPartitions;
     uint32_t        compactionInterval;
@@ -75,7 +80,7 @@ typedef struct data_create_t
 typedef struct data_drop_t
 {
     data_common_t   c;
-    char            tableName[TABLE_NAME_LEN_MAX + 1];
+    table_name_t    name;
 } data_drop_t;
 
 typedef struct data_describe_t
@@ -88,7 +93,7 @@ typedef struct data_describe_t
 typedef struct data_select_t
 {
     data_common_t   c;
-    char            tableName[TABLE_NAME_LEN_MAX + 1];
+    table_name_t    name;
     uint16_t        key;
     char*           value;
 } data_select_t;
@@ -96,7 +101,7 @@ typedef struct data_select_t
 typedef struct data_insert_t
 {
     data_common_t   c;
-    char            tableName[TABLE_NAME_LEN_MAX +1 ];
+    table_name_t    name;
     uint16_t        key;
     char*           value;
     uint32_t        timestamp;
