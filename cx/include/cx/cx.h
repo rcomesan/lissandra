@@ -55,8 +55,11 @@ void            cx_time_stamp(cx_timestamp_t* _outTimestamp);
 #define CX_NOOP(...) CX_MACRO_BLOCK_BEGIN CX_MACRO_BLOCK_END
 
 #define CX_ERROR_SET(_err, _code, _format, ...)                                         \
-    (_err)->code = _code;                                                               \
-    snprintf((_err)->desc, sizeof((_err)->desc), _format, ##__VA_ARGS__);
+    if (NULL != (_err))                                                                 \
+    {                                                                                   \
+        (_err)->code = _code;                                                           \
+        snprintf((_err)->desc, sizeof((_err)->desc), _format, ##__VA_ARGS__);           \
+    }
 
 #if CX_DEBUG
     #define CX_INFO(_format, ...)                                                        \
@@ -76,7 +79,7 @@ void            cx_time_stamp(cx_timestamp_t* _outTimestamp);
         }
         
     #define CX_CHECK_NOT_NULL(_var)                                                      \
-        CX_CHECK(_var, #_var " can't be NULL!")
+        CX_CHECK(NULL != (_var), #_var " can't be NULL!")
 
     #define CX_FATAL(_condition, _format, ...)                                           \
         if (!(_condition))                                                               \

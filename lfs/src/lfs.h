@@ -68,8 +68,6 @@ typedef struct lfs_ctx_t
     cx_handle_alloc_t*      requestsHalloc;                             // handle allocator for requests container.
     cx_pool_t*              pool;                                       // main pool of worker threads to process incoming requests.
     cx_cdict_t*             tables;                                     // container for storing table_t entries indexed by table name.
-
-
 } lfs_ctx_t;
 
 extern lfs_ctx_t            g_ctx;

@@ -8,8 +8,6 @@
 
 #include <cx/cx.h>
 
-#include <commons/bitarray.h>
-
 #include <pthread.h>
 
 #define LFS_ROOT_FILE_MARKER ".lfs_root"
@@ -36,9 +34,9 @@ typedef struct fs_ctx_t
 {
     fs_meta_t           meta;                   // filesystem metadata.
     char                rootDir[PATH_MAX];      // initial root directory of our filesystem.
-    char*               blocksmapBuffer;        // buffer for storing our bit array containing blocks status (unset bit mean the block is free to use).
+    char*               blocksMap;              // buffer for storing our bit array containing blocks status (unset bit mean the block is free to use).
                                                 // must be large enough to hold at least meta.blocksCount amount of bits.
-    t_bitarray*         blocksmap;              // bit array adt (so-commons-lib implementation).
+   
     pthread_mutex_t     mtxCreateDrop;          // mutex for syncing create/drop queries.
     bool                mtxCreateDropInit;      // true if mtxCreateDrop was successfully initialized and therefore needs to be destroyed.
     pthread_mutex_t     mtxBlocks;              // mutex for syncing blocks alloc/free operations;

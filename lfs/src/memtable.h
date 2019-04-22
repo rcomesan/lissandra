@@ -15,7 +15,7 @@ typedef struct memtable_record_t
 
 typedef struct memtable_t
 {
-    char                name[TABLE_NAME_LEN_MAX + 1];
+    table_name_t        name;
     memtable_record_t*  records;
     uint16_t            recordsCount;
     uint16_t            recordsCapacity;
@@ -25,11 +25,7 @@ typedef struct memtable_t
  ***  PUBLIC FUNCTIONS
  ***************************************************************************************/
 
-bool                memtable_init();
-
-//void                memtable_destroy();
-
-memtable_t*         memtable_create(const char* _tableName);
+memtable_t*         memtable_init(const char* _tableName);
 
 void                memtable_destroy(memtable_t* _table);
 

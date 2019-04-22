@@ -1,7 +1,7 @@
 #ifndef LFS_WORKER_H
 #define LFS_WORKER_H
 
-#include "lfs.h"
+#include "fs.h"
 
 /****************************************************************************************
 ***  PUBLIC FUNCTIONS

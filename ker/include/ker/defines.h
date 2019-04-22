@@ -4,6 +4,7 @@
 #include <limits.h>
 #include <stdbool.h>
 #include <stdint.h>
+#include <cx/cx.h>
 
 #define TABLE_NAME_LEN_MIN 1
 #define TABLE_NAME_LEN_MAX NAME_MAX
@@ -14,6 +15,8 @@
 
 // defines the maximum number of blocks in which a file from our filesystem can be fragmentated.
 #define MAX_FILE_FRAG 1024
+
+#define ERR_NONE 0
 
 typedef enum CONSISTENCY_TYPE
 {
@@ -63,7 +66,7 @@ typedef struct table_meta_t
 
 typedef struct data_common_t
 {
-    bool            success;
+    cx_error_t      err;
     double          startTime;
     uint16_t        remoteId;
 } data_common_t;

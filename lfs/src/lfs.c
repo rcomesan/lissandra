@@ -323,13 +323,16 @@ static bool lfs_init(cx_error_t* _err)
 
 static void lfs_destroy()
 {
+    fs_destroy();
+
     cx_halloc_destroy(g_ctx.requestsHalloc);
     g_ctx.requestsHalloc = NULL;
 
     cx_pool_destroy(g_ctx.pool);
     g_ctx.pool = NULL;
 
-    fs_destroy();
+    cx_cdict_destroy(g_ctx.tables, NULL);
+    g_ctx.tables = NULL;
 }
 
 static bool net_init(cx_error_t* _err)
@@ -498,9 +501,9 @@ void requests_update()
 
         if (REQ_STATE_NEW == req->state)
         {
-            dataCommon = req->data;
+            dataCommon = (data_common_t*)req->data;
             dataCommon->startTime = cx_time_counter();
-            dataCommon->success = false;
+            CX_MEM_ZERO(dataCommon->err);
 
             cx_pool_submit(g_ctx.pool, req);
         }

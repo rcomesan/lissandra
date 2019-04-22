@@ -22,13 +22,13 @@ void cli_report_error(cx_error_t* err)
 void cli_report_select(const data_select_t* _result)
 {
     CLI_REPORT_BEGIN;
-    if (_result->c.success)
+    if (ERR_NONE == _result->c.err.code)
     {
         printf("%d: \"%s\".\n", _result->key, _result->value);
     }
     else
     {
-        printf("SELECT failed.\n");
+        printf("SELECT failed. %s\n", _result->c.err.desc);
     }
     CLI_REPORT_END;
 }
@@ -36,13 +36,13 @@ void cli_report_select(const data_select_t* _result)
 void cli_report_insert(const data_insert_t* _result)
 {
     CLI_REPORT_BEGIN;
-    if (_result->c.success)
+    if (ERR_NONE == _result->c.err.code)
     {
         printf("%d: \"%s\".\n", _result->key, _result->value);
     }
     else
     {
-        printf("INSERT failed.\n");
+        printf("INSERT failed. %s\n", _result->c.err.desc);
     }
     CLI_REPORT_END;
 }
@@ -50,13 +50,13 @@ void cli_report_insert(const data_insert_t* _result)
 void cli_report_create(const data_create_t* _result)
 {
     CLI_REPORT_BEGIN;
-    if (_result->c.success)
+    if (ERR_NONE == _result->c.err.code)
     {
         printf("Table '%s' created.\n", _result->name);
     }
     else
     {
-        printf("CREATE failed.\n");
+        printf("CREATE failed. %s\n", _result->c.err.desc);
     }
     CLI_REPORT_END;
 }
@@ -64,7 +64,7 @@ void cli_report_create(const data_create_t* _result)
 void cli_report_describe(const data_describe_t* _result)
 {
     CLI_REPORT_BEGIN;
-    if (_result->c.success)
+    if (ERR_NONE == _result->c.err.code)
     {
         for (uint16_t i = 0; i < _result->tablesCount; i++)
         {
@@ -82,7 +82,7 @@ void cli_report_describe(const data_describe_t* _result)
     }
     else
     {
-        printf("DESCRIBE failed.\n");
+        printf("DESCRIBE failed. %s\n", _result->c.err.desc);
     }
     CLI_REPORT_END;
 }
@@ -90,13 +90,13 @@ void cli_report_describe(const data_describe_t* _result)
 void cli_report_drop(const data_drop_t* _result)
 {
     CLI_REPORT_BEGIN;
-    if (_result->c.success)
+    if (ERR_NONE == _result->c.err.code)
     {
         printf("Table '%s' dropped.\n", _result->name);
     }
     else
     {
-        printf("DROP failed.\n");
+        printf("DROP failed. %s\n", _result->c.err.desc);
     }
     CLI_REPORT_END;
 }
