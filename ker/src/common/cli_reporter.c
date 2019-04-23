@@ -66,13 +66,13 @@ void cli_report_describe(const data_describe_t* _result)
     CLI_REPORT_BEGIN;
     if (ERR_NONE == _result->c.err.code)
     {
+        printf("+--------------------------------+---------------+----------------------------+\n");
+        printf("| Name                           | Consistency   | Partitions | Compaction    |\n");
+        printf("+--------------------------------+---------------+----------------------------+\n");
+
         for (uint16_t i = 0; i < _result->tablesCount; i++)
         {
-            // name, consistency, partitions, compaction
-            printf("+--------------------------------+---------------+----------------------------+\n");
-            printf("| Name                           | Consistency   | Partitions | Compaction    |\n");
-            printf("+--------------------------------+---------------+----------------------------+\n");
-            printf("| %-30s | %-13s | %-10d | %-14d |\n", 
+            printf("| %-30s | %-13s | %-10d | %-13d |\n", 
                 _result->tables[i].name,
                 CONSISTENCY_NAME[_result->tables[i].consistency],
                 _result->tables[i].partitionsCount,

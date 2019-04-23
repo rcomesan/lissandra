@@ -51,6 +51,8 @@ bool                fs_init(cx_error_t* _err);
 
 void                fs_destroy();
 
+table_meta_t*       fs_describe(uint16_t* _outTablesCount, cx_error_t* _err);
+
 bool                fs_table_exists(const char* _tableName);
 
 bool                fs_table_is_blocked(const char* _tableName);

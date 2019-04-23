@@ -109,7 +109,7 @@ void fs_destroy()
     m_fsCtx->blocksMap = NULL;
     
     // destroy tables
-    cx_cdict_clear(g_ctx.tables, _fs_table_destroy);
+    cx_cdict_clear(g_ctx.tables, (cx_destroyer_cb)_fs_table_destroy);
 
     // mutexes
     if (m_fsCtx->mtxCreateDropInit)
@@ -126,12 +126,48 @@ void fs_destroy()
     free(m_fsCtx);
 }
 
+table_meta_t* fs_describe(uint16_t* _outTablesCount, cx_error_t* _err)
+{
+    table_meta_t* tables = NULL;
+    char* key = NULL;
+    table_t* table;
+    uint16_t i = 0;
+
+    pthread_mutex_lock(&m_fsCtx->mtxCreateDrop);
+    cx_cdict_iter_begin(g_ctx.tables);
+
+    (*_outTablesCount) = (uint16_t)cx_cdict_size(g_ctx.tables);
+
+    if (0 < (*_outTablesCount))
+    {
+        tables = CX_MEM_ARR_ALLOC(tables, (*_outTablesCount));
+
+        while (cx_cdict_iter_next(g_ctx.tables, &key, (void**)&table))
+        {
+            if (!table->deleted)
+            {
+                memcpy(&(tables[i++]), &(table->meta), sizeof(tables[0]));
+            }
+        }
+
+        if ((*_outTablesCount) != i)
+        {
+            (*_outTablesCount) = i;
+            tables = CX_MEM_ARR_REALLOC(tables, (*_outTablesCount));
+        }
+    }
+
+    cx_cdict_iter_end(g_ctx.tables);
+    pthread_mutex_unlock(&m_fsCtx->mtxCreateDrop);
+    return tables;
+}
+
 bool fs_table_exists(const char* _tableName)
 {
     table_t* table;
 
     return true
-        && cx_cdict_get(g_ctx.tables, _tableName, &table)
+        && cx_cdict_get(g_ctx.tables, _tableName, (void**)&table)
         && !table->deleted;
 }
 
@@ -140,7 +176,7 @@ bool fs_table_is_blocked(const char* _tableName)
     table_t* table;
 
     return true
-        && cx_cdict_get(g_ctx.tables, _tableName, &table)
+        && cx_cdict_get(g_ctx.tables, _tableName, (void**)&table)
         && (table->deleted || table->blocked);
 }
 
@@ -240,7 +276,7 @@ bool fs_table_delete(const char* _tableName, cx_error_t* _err)
     fs_file_t part;
     table_t* table;
 
-    if (cx_cdict_get(g_ctx.tables, _tableName, &table))
+    if (cx_cdict_get(g_ctx.tables, _tableName, (void**)&table))
     {
         table->deleted = true;
 
@@ -266,7 +302,7 @@ bool fs_table_delete(const char* _tableName, cx_error_t* _err)
         
         // delete files
         cx_fs_path(&path, "%s/%s/%s", m_fsCtx->rootDir, LFS_DIR_TABLES, _tableName);
-        cx_fs_remove(path, _err);
+        cx_fs_remove(&path, _err);
     }
     else
     {

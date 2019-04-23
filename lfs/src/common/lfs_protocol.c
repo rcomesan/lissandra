@@ -101,22 +101,14 @@ void lfs_handle_describe(const cx_net_common_t* _common, void* _passThrou, const
 
         if (cx_str_is_empty(tableName))
         {
-            data->tablesCount = (uint16_t)cx_cdict_size(g_ctx.tables);
-            data->tables = CX_MEM_ARR_ALLOC(data->tables, data->tablesCount);
-
-            //TODO iterate the dictionary somehow
+            data->tablesCount = 0;
+            data->tables = NULL;
         }
         else
         {
-            table_t* table = NULL;
-            
-            if (cx_cdict_get(g_ctx.tables, tableName, (void**)&table))
-            {
-                data->tablesCount = 0;
-                data->tables = CX_MEM_STRUCT_ALLOC(data->tables);
-                memcpy(&data->tables[0], &table->meta, sizeof(table->meta));
-            }
-            //TODO table does not exist
+            data->tablesCount = 1;
+            data->tables = CX_MEM_ARR_ALLOC(data->tables, data->tablesCount);
+            cx_str_copy(data->tables[0].name, sizeof(data->tables[0].name), tableName);
         }
     LFS_REQ_END;
 }
