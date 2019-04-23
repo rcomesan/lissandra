@@ -52,6 +52,7 @@ typedef enum REQ_STATE
     REQ_STATE_READY,
     REQ_STATE_RUNNING,
     REQ_STATE_COMPLETED,
+    REQ_STATE_BLOCKED_DOAGAIN,
 } REQ_STATE;
 
 typedef char table_name_t[TABLE_NAME_LEN_MAX + 1];

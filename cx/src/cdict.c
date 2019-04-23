@@ -52,6 +52,7 @@ bool cx_cdict_get(cx_cdict_t* _cdict, const char* _key, void** _outData)
     pthread_mutex_lock(&_cdict->mutex);
     (*_outData) = dictionary_get(_cdict->handle, _key);
     pthread_mutex_unlock(&_cdict->mutex);
+    return NULL != (*_outData);
 }
 
 void cx_cdict_set(cx_cdict_t* _cdict, const char* _key, void* _data)

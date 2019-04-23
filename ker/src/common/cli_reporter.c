@@ -8,7 +8,7 @@
  ***************************************************************************************/
 
 #define CLI_REPORT_BEGIN                                                    \
-    float duration = _result->c.startTime - cx_time_counter();
+    float duration = cx_time_counter() - _result->c.startTime;
 
 #define CLI_REPORT_END                                                      \
     printf("(%.3f sec)\n", duration);                                       \

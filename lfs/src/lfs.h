@@ -15,6 +15,7 @@
 typedef enum LFS_ERR_CODE
 {
     LFS_ERR_NONE = 0,
+    LFS_ERR_GENERIC = 1,
     LFS_ERR_LOGGER_FAILED,
     LFS_ERR_INIT_HALLOC,
     LFS_ERR_INIT_THREADPOOL,
@@ -26,6 +27,7 @@ typedef enum LFS_ERR_CODE
     LFS_ERR_CFG_NOTFOUND,
     LFS_ERR_CFG_MISSINGKEY,
     LFS_ERR_NET_FAILED,
+    LFS_ERR_TABLE_BLOCKED,
 } LFS_ERRR_CODE;
 
 typedef struct cfg_t
@@ -55,6 +57,8 @@ typedef struct table_t
 {
     table_meta_t            meta;                           // table metadata
     memtable_t*             memtable;                       // memtable for this table
+    bool                    deleted;                        // true if this table is marked as deleted (pending to be removed).
+    bool                    blocked;                        // true if this table is marked as blocked (pending to be compacted).
 } table_t;
 
 typedef struct lfs_ctx_t
@@ -66,6 +70,7 @@ typedef struct lfs_ctx_t
     char                    buffer[MAX_PACKET_LEN - MIN_PACKET_LEN];    // temporary pre-allocated buffer for building packets.
     request_t               requests[MAX_CONCURRENT_REQUESTS];          // container for storing incoming requests during ready/running/completed states.
     cx_handle_alloc_t*      requestsHalloc;                             // handle allocator for requests container.
+    bool                    pendingSync;                                // true if we need to sync in the main loop to perform table operations.
     cx_pool_t*              pool;                                       // main pool of worker threads to process incoming requests.
     cx_cdict_t*             tables;                                     // container for storing table_t entries indexed by table name.
 } lfs_ctx_t;

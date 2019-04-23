@@ -36,6 +36,8 @@ static table_t*     _fs_table_init(const char* _tableName, cx_error_t* _err);
 
 static void         _fs_table_destroy(table_t* _table);
 
+static bool         _fs_table_blocked_guard(const char* _tableName, cx_error_t* _err, pthread_mutex_t* _mtx);
+
 /****************************************************************************************
  ***  PUBLIC FUNCTIONS
  ***************************************************************************************/
@@ -126,7 +128,20 @@ void fs_destroy()
 
 bool fs_table_exists(const char* _tableName)
 {
-    return cx_cdict_contains(g_ctx.tables, _tableName);
+    table_t* table;
+
+    return true
+        && cx_cdict_get(g_ctx.tables, _tableName, &table)
+        && !table->deleted;
+}
+
+bool fs_table_is_blocked(const char* _tableName)
+{
+    table_t* table;
+
+    return true
+        && cx_cdict_get(g_ctx.tables, _tableName, &table)
+        && (table->deleted || table->blocked);
 }
 
 bool fs_table_create(const char* _tableName, uint8_t _consistency, uint16_t _partitions, uint32_t _compactionInterval, cx_error_t* _err)
@@ -135,7 +150,8 @@ bool fs_table_create(const char* _tableName, uint8_t _consistency, uint16_t _par
     CX_MEM_ZERO(*_err);
 
     pthread_mutex_lock(&m_fsCtx->mtxCreateDrop);
-    
+    if (_fs_table_blocked_guard(_tableName, _err, &m_fsCtx->mtxCreateDrop)) return false;
+
     cx_path_t path;
     t_config* meta = NULL;
     table_t* table = NULL;
@@ -206,6 +222,56 @@ bool fs_table_create(const char* _tableName, uint8_t _consistency, uint16_t _par
     
     if (NULL != meta) config_destroy(meta);
     if (NULL != table && ERR_NONE != _err->code) _fs_table_destroy(table);
+
+    pthread_mutex_unlock(&m_fsCtx->mtxCreateDrop);
+    return (ERR_NONE == _err->code);
+}
+
+bool fs_table_delete(const char* _tableName, cx_error_t* _err)
+{
+    CX_CHECK(strlen(_tableName) > 0, "invalid _tableName!");
+    CX_MEM_ZERO(*_err);
+
+    pthread_mutex_lock(&m_fsCtx->mtxCreateDrop);
+    if (_fs_table_blocked_guard(_tableName, _err, &m_fsCtx->mtxCreateDrop)) return false;
+
+    cx_path_t path;
+    table_meta_t meta;
+    fs_file_t part;
+    table_t* table;
+
+    if (cx_cdict_get(g_ctx.tables, _tableName, &table))
+    {
+        table->deleted = true;
+
+        // free the blocks in use
+        if (fs_table_get_meta(_tableName, &meta, _err))
+        {
+            for (uint32_t i = 0; i < meta.partitionsCount; i++)
+            {
+                if (fs_table_get_part(_tableName, i, &part, _err))
+                {
+                    fs_block_free(part.blocks, part.blocksCount);
+                }
+                else
+                {
+                    CX_WARN(CX_ALW, "Partition #%d from table '%s' could not be retrieved and some blocks may have just been leaked!", i, _tableName);
+                }
+            }
+        }
+        else
+        {
+            CX_WARN(CX_ALW, "Metadata file for table '%s' does not exist!", _tableName);
+        }
+        
+        // delete files
+        cx_fs_path(&path, "%s/%s/%s", m_fsCtx->rootDir, LFS_DIR_TABLES, _tableName);
+        cx_fs_remove(path, _err);
+    }
+    else
+    {
+        CX_ERROR_SET(_err, 1, "Table '%s' does not exist.", _tableName);
+    }
 
     pthread_mutex_unlock(&m_fsCtx->mtxCreateDrop);
     return (ERR_NONE == _err->code);
@@ -288,15 +354,19 @@ bool fs_table_get_part(const char* _tableName, uint16_t _partNumber, fs_file_t* 
             char** blocks = config_get_array_value(part, "blocks");
 
             uint32_t i = 0, j = 0;
-            while (NULL != blocks[i])
+            bool finished = (NULL == blocks[i]);
+            while (!finished && j < sizeof(_outFile->blocks))
             {
                 cx_str_to_uint32(blocks[i], &(_outFile->blocks[j++]));
                 free(blocks[i++]);
+                finished = (NULL == blocks[i]);
             }
             free(blocks);
+
+            CX_CHECK(finished, "there're still pending blocks to read! static buffer of %d elements is not enough!", sizeof(_outFile->blocks));
             
-            CX_CHECK(_outFile->blocksCount == (j - 1), "blocksCount (%d) and actual amount of blocks (%d) read from the array do not match!",
-                _outFile->blocksCount, j - 1);
+            CX_CHECK(_outFile->blocksCount == j, "blocksCount (%d) and actual amount of blocks read from the array (%d) do not match!",
+                _outFile->blocksCount, j);
         }
         else
         {
@@ -438,6 +508,8 @@ uint32_t fs_block_alloc(uint32_t _blocksCount, uint32_t* _outBlocksArr)
 
 void fs_block_free(uint32_t* _blocksArr, uint32_t _blocksCount)
 {
+    if (_blocksCount < 1) return;
+
     pthread_mutex_lock(&m_fsCtx->mtxBlocks);
 
     cx_path_t bitmapFilePath;
@@ -711,7 +783,7 @@ static bool _fs_load_blocks(cx_error_t* _err)
     return false;
 }
 
-table_t* _fs_table_init(const char* _tableName, cx_error_t* _err)
+static table_t* _fs_table_init(const char* _tableName, cx_error_t* _err)
 {
     CX_CHECK(strlen(_tableName) > 0, "invalid table name!");
 
@@ -727,10 +799,24 @@ table_t* _fs_table_init(const char* _tableName, cx_error_t* _err)
     return NULL;
 }
 
-void _fs_table_destroy(table_t* _table)
+static void _fs_table_destroy(table_t* _table)
 {
     if (NULL == _table) return;
 
     _table->memtable = NULL; //TODO destroy memtable here
     free(_table);
+}
+
+static bool _fs_table_blocked_guard(const char* _tableName, cx_error_t* _err, pthread_mutex_t* _mtx)
+{
+    if (fs_table_is_blocked(_tableName))
+    {
+        CX_ERROR_SET(_err, LFS_ERR_TABLE_BLOCKED, "Operation cannot be performed at this time since the table is blocked. Try agian later.");
+        if (NULL != _mtx)
+        {
+            pthread_mutex_unlock(_mtx);
+        }
+        return true;
+    }
+    return false;
 }
