@@ -57,7 +57,7 @@ bool cli_parse_insert(const cx_cli_cmd_t* _cmd, cx_error_t* _err, char** _outTab
         && _cmd->argsCount >= 3
         && valid_table(_cmd->args[0])
         && valid_key(_cmd->args[1])
-        && _cmd->argsCount >= 4 ? valid_timestamp(_cmd->args[3]) : true)
+        && (_cmd->argsCount >= 4 ? valid_timestamp(_cmd->args[3]) : true))
     {
         (*_outTableName) = _cmd->args[0];
         cx_str_to_uint16(_cmd->args[1], _outKey);

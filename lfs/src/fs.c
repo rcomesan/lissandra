@@ -36,8 +36,6 @@ static table_t*     _fs_table_init(const char* _tableName, cx_error_t* _err);
 
 static void         _fs_table_destroy(table_t* _table);
 
-static bool         _fs_table_blocked_guard(const char* _tableName, cx_error_t* _err, pthread_mutex_t* _mtx);
-
 /****************************************************************************************
  ***  PUBLIC FUNCTIONS
  ***************************************************************************************/
@@ -145,9 +143,7 @@ table_meta_t* fs_describe(uint16_t* _outTablesCount, cx_error_t* _err)
         while (cx_cdict_iter_next(g_ctx.tables, &key, (void**)&table))
         {
             if (!table->deleted)
-            {
                 memcpy(&(tables[i++]), &(table->meta), sizeof(tables[0]));
-            }
         }
 
         if ((*_outTablesCount) != i)
@@ -162,6 +158,25 @@ table_meta_t* fs_describe(uint16_t* _outTablesCount, cx_error_t* _err)
     return tables;
 }
 
+bool fs_table_blocked_guard(const char* _tableName, cx_error_t* _err, pthread_mutex_t* _mtx)
+{
+    table_t* table;
+    bool isBlocked = true
+        && cx_cdict_get(g_ctx.tables, _tableName, (void**)&table)
+        && (table->deleted || table->blocked);
+
+    if (isBlocked)
+    {
+        CX_ERROR_SET(_err, LFS_ERR_TABLE_BLOCKED, "Operation cannot be performed at this time since the table is blocked. Try agian later.");
+        if (NULL != _mtx)
+        {
+            pthread_mutex_unlock(_mtx);
+        }
+        return true;
+    }
+    return false;
+}
+
 bool fs_table_exists(const char* _tableName)
 {
     table_t* table;
@@ -171,22 +186,13 @@ bool fs_table_exists(const char* _tableName)
         && !table->deleted;
 }
 
-bool fs_table_is_blocked(const char* _tableName)
-{
-    table_t* table;
-
-    return true
-        && cx_cdict_get(g_ctx.tables, _tableName, (void**)&table)
-        && (table->deleted || table->blocked);
-}
-
 bool fs_table_create(const char* _tableName, uint8_t _consistency, uint16_t _partitions, uint32_t _compactionInterval, cx_error_t* _err)
 {
     CX_CHECK(strlen(_tableName) > 0, "invalid _tableName!");
     CX_MEM_ZERO(*_err);
 
     pthread_mutex_lock(&m_fsCtx->mtxCreateDrop);
-    if (_fs_table_blocked_guard(_tableName, _err, &m_fsCtx->mtxCreateDrop)) return false;
+    if (fs_table_blocked_guard(_tableName, _err, &m_fsCtx->mtxCreateDrop)) return false;
 
     cx_path_t path;
     t_config* meta = NULL;
@@ -269,7 +275,7 @@ bool fs_table_delete(const char* _tableName, cx_error_t* _err)
     CX_MEM_ZERO(*_err);
 
     pthread_mutex_lock(&m_fsCtx->mtxCreateDrop);
-    if (_fs_table_blocked_guard(_tableName, _err, &m_fsCtx->mtxCreateDrop)) return false;
+    if (fs_table_blocked_guard(_tableName, _err, &m_fsCtx->mtxCreateDrop)) return false;
 
     cx_path_t path;
     table_meta_t meta;
@@ -827,7 +833,7 @@ static table_t* _fs_table_init(const char* _tableName, cx_error_t* _err)
 
     if (fs_table_get_meta(_tableName, &(table->meta), _err))
     {
-        //_table->memtable = NULL; //TODO initialize memtable here
+        table->memtable = memtable_init(_tableName);
         return table;
     }
 
@@ -839,20 +845,8 @@ static void _fs_table_destroy(table_t* _table)
 {
     if (NULL == _table) return;
 
-    _table->memtable = NULL; //TODO destroy memtable here
-    free(_table);
-}
+    memtable_destroy(_table->memtable);
+    _table->memtable = NULL;
 
-static bool _fs_table_blocked_guard(const char* _tableName, cx_error_t* _err, pthread_mutex_t* _mtx)
-{
-    if (fs_table_is_blocked(_tableName))
-    {
-        CX_ERROR_SET(_err, LFS_ERR_TABLE_BLOCKED, "Operation cannot be performed at this time since the table is blocked. Try agian later.");
-        if (NULL != _mtx)
-        {
-            pthread_mutex_unlock(_mtx);
-        }
-        return true;
-    }
-    return false;
+    free(_table);
 }

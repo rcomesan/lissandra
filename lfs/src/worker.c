@@ -75,9 +75,21 @@ void worker_handle_select(request_t* _req)
 void worker_handle_insert(request_t* _req)
 {
     data_insert_t* data = _req->data;
-    sleep(1);
-    data->c.err.code = ERR_NONE;
-    _req->state = REQ_STATE_COMPLETED;
+
+    if (!fs_table_blocked_guard(data->name, &data->c.err, NULL))
+    {
+        table_t* table = NULL;
+        if (cx_cdict_get(g_ctx.tables, data->name, (void**)&table) && !table->deleted)
+        {
+            memtable_add(table->memtable, data->key, data->value, data->timestamp);
+        }
+        else
+        {
+            CX_ERROR_SET(&data->c.err, 1, "Table '%s' does not exist.", data->name);
+        }
+    }
+
+    _worker_parse_result(_req);
 }
 
 /****************************************************************************************

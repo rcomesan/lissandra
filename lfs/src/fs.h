@@ -55,7 +55,7 @@ table_meta_t*       fs_describe(uint16_t* _outTablesCount, cx_error_t* _err);
 
 bool                fs_table_exists(const char* _tableName);
 
-bool                fs_table_is_blocked(const char* _tableName);
+bool                fs_table_blocked_guard(const char* _tableName, cx_error_t* _err, pthread_mutex_t* _mtx);
 
 bool                fs_table_create(const char* _tableName, uint8_t _consistency, uint16_t _partitions, uint32_t _compactionInterval, cx_error_t* _err);
 

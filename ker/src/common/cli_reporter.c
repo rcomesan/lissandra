@@ -66,9 +66,9 @@ void cli_report_describe(const data_describe_t* _result)
     CLI_REPORT_BEGIN;
     if (ERR_NONE == _result->c.err.code)
     {
-        printf("+--------------------------------+---------------+----------------------------+\n");
+        printf("+--------------------------------+---------------+------------+---------------+\n");
         printf("| Name                           | Consistency   | Partitions | Compaction    |\n");
-        printf("+--------------------------------+---------------+----------------------------+\n");
+        printf("+--------------------------------+---------------+------------+---------------+\n");
 
         for (uint16_t i = 0; i < _result->tablesCount; i++)
         {
@@ -78,7 +78,7 @@ void cli_report_describe(const data_describe_t* _result)
                 _result->tables[i].partitionsCount,
                 _result->tables[i].compactionInterval);
         }
-        printf("+--------------------------------+---------------+----------------------------+\n");
+        printf("+--------------------------------+---------------+------------+---------------+\n");
     }
     else
     {
