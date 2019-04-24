@@ -59,31 +59,35 @@ void cx_mcq_destroy(cx_mcq_t* _mcq, cx_destroyer_cb _cb)
 
 void cx_mcq_push_first(cx_mcq_t* _mcq, void* _data)
 {
-    // push the new task to the head of the linked list used by the queue implementation
     pthread_mutex_lock(&_mcq->mutex);
+    
+        // push the new task to the head of the linked list used by the queue implementation
         list_add_in_index(_mcq->handle->elements, 0, _data);
-    pthread_mutex_unlock(&_mcq->mutex);
 
-    // let the workers know there're more tasks waiting to be processed
-    pthread_cond_signal(&_mcq->cond);
+        // let the workers know there're more tasks waiting to be processed
+        pthread_cond_signal(&_mcq->cond);
+
+    pthread_mutex_unlock(&_mcq->mutex);
 }
 
 void cx_mcq_push(cx_mcq_t* _mcq, void* _data)
 {
-    // push the new task to the queue
     pthread_mutex_lock(&_mcq->mutex);
-        queue_push(_mcq->handle, _data);
-    pthread_mutex_unlock(&_mcq->mutex);
     
-    // let the workers know there're more tasks waiting to be processed
-    pthread_cond_signal(&_mcq->cond);
+        // push the new task to the queue
+        queue_push(_mcq->handle, _data);
+
+        // let the workers know there're more tasks waiting to be processed
+        pthread_cond_signal(&_mcq->cond);
+
+    pthread_mutex_unlock(&_mcq->mutex);    
 }
 
 void cx_mcq_pop(cx_mcq_t* _mcq, void** _outData)
 {
     pthread_mutex_lock(&_mcq->mutex);
 
-        while (cx_mcq_is_empty(_mcq))
+        while (cx_mcq_is_empty(_mcq)) // avoids spurious wakeups
         {
             pthread_cond_wait(&_mcq->cond, &_mcq->mutex);
         }
