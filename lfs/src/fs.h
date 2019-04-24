@@ -15,6 +15,10 @@
 #define LFS_DIR_TABLES "tables"
 #define LFS_DIR_BLOCKS "blocks"
 #define LFS_FILE_BITMAP "bitmap.bin"
+#define LFS_PART_EXTENSION "bin"
+#define LFS_DUMP_EXTENSION "tmp"
+#define LFS_DUMP_PREFIX "D"
+
 
 typedef struct fs_meta_t
 {
@@ -65,9 +69,11 @@ bool                fs_table_get_meta(const char* _tableName, table_meta_t* _out
 
 bool                fs_table_get_part(const char* _tableName, uint16_t _partNumber, fs_file_t* _outFile, cx_error_t* _err);
 
-bool                fs_table_set_part(const char* _tableName, uint16_t _partNumber, fs_file_t* _inFile, cx_error_t* _err);
+bool                fs_table_set_part(const char* _tableName, uint16_t _partNumber, fs_file_t* _file, cx_error_t* _err);
 
-void                fs_table_get_dump(const char* _tableName, uint16_t _dumpNumber, fs_file_t* _outFile);
+bool                fs_table_get_dump(const char* _tableName, uint16_t _dumpNumber, fs_file_t* _outFile, cx_error_t* _err);
+
+bool                fs_table_set_dump(const char* _tableName, uint16_t _dumpNumber, fs_file_t* _file, cx_error_t* _err);
 
 uint32_t            fs_block_alloc(uint32_t _blocksCount, uint32_t* _outBlocksArr);
 
