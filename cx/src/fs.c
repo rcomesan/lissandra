@@ -34,7 +34,7 @@ void cx_fs_path(cx_path_t* _outPath, const char* _format, ...)
 {
     va_list args;
     va_start(args, _format);
-    vsnprintf(_outPath, sizeof(*_outPath), _format, args);
+    vsnprintf(*_outPath, sizeof(*_outPath), _format, args);
     va_end(args);
     _cx_fs_absolutize(_outPath);
 
@@ -50,13 +50,13 @@ void cx_fs_path(cx_path_t* _outPath, const char* _format, ...)
 bool cx_fs_exists(const cx_path_t* _path)
 {
     stat_t statBuf;
-    return 0 == stat(_path, &statBuf);
+    return 0 == stat(*_path, &statBuf);
 }
 
 bool cx_fs_is_folder(const cx_path_t* _path)
 {
     stat_t statBuf;
-    if (0 == stat(_path, &statBuf))
+    if (0 == stat(*_path, &statBuf))
     {
         return S_ISDIR(statBuf.st_mode);
     }
@@ -70,7 +70,7 @@ bool cx_fs_is_folder(const cx_path_t* _path)
 uint32_t cx_fs_get_size(const cx_path_t* _path)
 {
     stat_t statBuf;
-    if (0 == stat(_path, &statBuf))
+    if (0 == stat(*_path, &statBuf))
     {
         return statBuf.st_size;
     }
@@ -83,11 +83,11 @@ uint32_t cx_fs_get_size(const cx_path_t* _path)
 
 void cx_fs_get_name(const cx_path_t* _path, bool _stripExtension, cx_path_t* _outName)
 {
-    char* slash = strrchr(_path, '/');
+    char* slash = strrchr(*_path, '/');
     
     if (NULL == slash)
     {
-        cx_str_copy(*_outName, sizeof(*_outName), _path);
+        cx_str_copy(*_outName, sizeof(*_outName), *_path);
     }
     else if ((*_path) == slash)
     {
@@ -100,7 +100,7 @@ void cx_fs_get_name(const cx_path_t* _path, bool _stripExtension, cx_path_t* _ou
 
     if (_stripExtension)
     {
-        char* extension = strrchr(_outName, '.');
+        char* extension = strrchr(*_outName, '.');
         if (NULL != extension)
         {
             extension[0] = '\0';
@@ -110,7 +110,7 @@ void cx_fs_get_name(const cx_path_t* _path, bool _stripExtension, cx_path_t* _ou
 
 void cx_fs_get_path(const cx_path_t* _path, cx_path_t* _outPath)
 {
-    char* slash = strrchr(_path, '/');
+    char* slash = strrchr(*_path, '/');
 
     if (NULL == slash || (*_path) == slash)
     {
@@ -118,7 +118,7 @@ void cx_fs_get_path(const cx_path_t* _path, cx_path_t* _outPath)
     }
     else
     {
-        cx_str_copy(*_outPath, sizeof(*_outPath), _path);
+        cx_str_copy(*_outPath, sizeof(*_outPath), *_path);
         (*_outPath)[slash - (*_path)] = '\0';
     }
 }
@@ -133,14 +133,14 @@ bool cx_fs_touch(const cx_path_t* _filePath, cx_error_t* _err)
         cx_path_t parentFolderPath;
         cx_fs_get_path(_filePath, &parentFolderPath);
 
-        if (cx_fs_mkdir(parentFolderPath, _err))
+        if (cx_fs_mkdir(&parentFolderPath, _err))
         {
             // we'll stick to default privileges (664)
-            int32_t fd = open(_filePath, O_RDWR | O_CREAT, S_IRUSR | S_IWUSR | S_IRGRP | S_IWGRP | S_IROTH);
+            int32_t fd = open(*_filePath, O_RDWR | O_CREAT, S_IRUSR | S_IWUSR | S_IRGRP | S_IWGRP | S_IROTH);
 
             if (INVALID_DESCRIPTOR == fd)
             {
-                CX_ERROR_SET(_err, 1, "file '%s' creation failed.", _filePath);
+                CX_ERROR_SET(_err, 1, "file '%s' creation failed.", *_filePath);
             }
         }
         else
@@ -197,8 +197,8 @@ bool cx_fs_write(const cx_path_t* _path, const char* _buffer, uint32_t _bufferSi
 
     if (cx_fs_touch(_path, _err))
     {
-        FILE* fileHandle = fopen(_path, "w");
-        if (INVALID_DESCRIPTOR != fileHandle)
+        FILE* fileHandle = fopen(*_path, "w");
+        if (NULL != fileHandle)
         {
             if (NULL != _buffer)
             {
@@ -206,17 +206,17 @@ bool cx_fs_write(const cx_path_t* _path, const char* _buffer, uint32_t _bufferSi
 
                 if (_bufferSize > fwrite(_buffer, sizeof(char), _bufferSize, fileHandle))
                 {
-                    CX_ERROR_SET(_err, 1, "file '%s' could not be written. %s", _path, strerror(errno));
+                    CX_ERROR_SET(_err, 1, "file '%s' could not be written. %s", *_path, strerror(errno));
                 }
             }
             fflush(fileHandle);
-            close(fileHandle);
+            fclose(fileHandle);
 
             if (0 == _err->code) return true;
         }
         else
         {
-            CX_ERROR_SET(_err, 1, "file '%s' could not be opened for writing.", _path);
+            CX_ERROR_SET(_err, 1, "file '%s' could not be opened for writing.", *_path);
         }
     }
 
@@ -242,33 +242,33 @@ int32_t cx_fs_read(const cx_path_t* _path, char* _outBuffer, uint32_t _bufferSiz
             {
                 CX_CHECK(_bufferSize > 0, "_bufferSize must be greater than zero!");
                 
-                FILE* fileHandle = fopen(_path, "r");
-                if (INVALID_DESCRIPTOR != fileHandle)
+                FILE* fileHandle = fopen(*_path, "r");
+                if (NULL != fileHandle)
                 {
                     uint32_t bytesToRead = cx_math_min(size, _bufferSize);
 
                     if (bytesToRead > fread(_outBuffer, sizeof(char), bytesToRead, fileHandle))
                     {
-                        CX_ERROR_SET(_err, 1, "file '%s' could not be read. %s", _path, strerror(errno));
+                        CX_ERROR_SET(_err, 1, "file '%s' could not be read. %s", *_path, strerror(errno));
                     }
-                    close(fileHandle);
+                    fclose(fileHandle);
 
                     if (0 == _err->code) return bytesToRead;
                 }
                 else
                 {
-                    CX_ERROR_SET(_err, 1, "file '%s' could not be opened for reading.", _path);
+                    CX_ERROR_SET(_err, 1, "file '%s' could not be opened for reading.", *_path);
                 }
             }
         }
         else
         {
-            CX_ERROR_SET(_err, 1, "path '%' is a folder!", _path);
+            CX_ERROR_SET(_err, 1, "path '%s' is a folder!", *_path);
         }
     }
     else
     {
-        CX_ERROR_SET(_err, 1, "file '%' is missing or not readable.", _path);
+        CX_ERROR_SET(_err, 1, "file '%s' is missing or not readable.", *_path);
     }
 
     return -1;
@@ -287,12 +287,12 @@ cx_fs_explorer_t* cx_fs_explorer_init(const cx_path_t* _folderPath, cx_error_t* 
     if (NULL != dir)
     {
         explorer = CX_MEM_STRUCT_ALLOC(explorer);
-        cx_str_copy(explorer->path, sizeof(explorer->path), _folderPath);
+        cx_str_copy(explorer->path, sizeof(explorer->path), *_folderPath);
         explorer->dir = dir;
     }
     else
     {
-        CX_ERROR_SET(_err, 1, "failed to open folder '%s'.", _folderPath);
+        CX_ERROR_SET(_err, 1, "failed to open folder '%s'.", *_folderPath);
     }
 
     return explorer;
@@ -383,16 +383,16 @@ void _cx_fs_absolutize(cx_path_t* _inOutPath)
     if ('/' != (*_inOutPath)[0])
     {
         cx_path_t absPath;
-        int32_t result = getcwd(&absPath, sizeof(absPath));
+        char* result = getcwd(absPath, sizeof(absPath));
 
-        if (NULL != result)
+        if (absPath != result)
         {
             int32_t absPathLen = strlen(absPath) + 1;
             absPath[absPathLen - 1] = '/';
             cx_str_copy(&absPath[absPathLen], sizeof(absPath) - absPathLen, *_inOutPath);
             cx_str_copy(*_inOutPath, sizeof(*_inOutPath), absPath);
         }
-        CX_CHECK(NULL != result, "getcwd failed!");
+        CX_CHECK(absPath != result, "getcwd failed!");
     }
 }
 
@@ -426,7 +426,7 @@ static bool _cx_fs_mkdir(const cx_path_t* _folderPath, cx_error_t* _err)
 
 static bool _cx_fs_rm(const cx_path_t* _filePath, cx_error_t* _err)
 {
-    if (0 == remove(_filePath))
+    if (0 == remove(*_filePath))
         return true;
 
     CX_ERROR_SET(_err, 1, "not enough permissions to delete file '%s'.", *_filePath)
@@ -443,13 +443,13 @@ static bool _cx_fs_rmdir(const cx_path_t* _folderPath, cx_error_t* _err)
     
     while (cx_fs_explorer_next_file(brw, &path) && !failed)
     {
-        _cx_fs_rm(path, _err);
+        _cx_fs_rm(&path, _err);
         failed = (0 != _err->code);
     }
 
     while (cx_fs_explorer_next_folder(brw, &path) && !failed)
     {
-        _cx_fs_rmdir(path, _err);
+        _cx_fs_rmdir(&path, _err);
         failed = (0 != _err->code);
     }
 

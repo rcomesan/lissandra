@@ -52,7 +52,7 @@ struct cx_net_common_t
     uint16_t            port;               // port number on which this socket is either listening on / connected to
     int32_t             sock;               // file descriptor for either the listening socket or the server socket (on a client context)
     int32_t             errorNumber;        // number of the last error
-    cx_net_handler_cb*  msgHandlers[256];    // callback containing a message handler for each message header supported
+    cx_net_handler_cb   msgHandlers[256];    // callback containing a message handler for each message header supported
     int32_t             epollDescriptor;    // file descriptor to the epoll instance
     epoll_event*        epollEvents;        // pre-allocated buffer for retrieving epoll events when calling epoll_wait
 };

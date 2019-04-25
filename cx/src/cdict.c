@@ -1,6 +1,7 @@
 #include "cdict.h"
 #include "mem.h"
 
+#include <unistd.h>
 #include <sys/syscall.h>
 #include <sys/types.h>
 

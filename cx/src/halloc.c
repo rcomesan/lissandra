@@ -83,7 +83,7 @@ uint16_t cx_handle_alloc_key(cx_handle_alloc_t* _halloc, int32_t _key)
         if (INVALID_HANDLE != handle)
         {
             _halloc->handleToKey[handle] = _key;
-            dictionary_put(_halloc->keyToHandle, _halloc->tempKey, (void*)handle);
+            dictionary_put(_halloc->keyToHandle, _halloc->tempKey, (void*)((int32_t)handle));
             return handle;
         }
     }

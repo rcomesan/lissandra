@@ -52,7 +52,7 @@ cx_net_ctx_sv_t* cx_net_listen(cx_net_args_t* _args)
                 && -1 != fcntl(ctx->c.sock, F_SETFL, fcntl(ctx->c.sock, F_GETFL, 0) | O_NONBLOCK))
             {
                 CX_INFO("[%s<--] binding on port %d...", ctx->c.name, ctx->c.port);
-                if (-1 != bind(ctx->c.sock, &address, sizeof(address)))
+                if (-1 != bind(ctx->c.sock, (struct sockaddr*)&address, sizeof(address)))
                 {
                     CX_INFO("[%s<--] listening on %s:%d...", ctx->c.name, ctx->c.ip, ctx->c.port);
                     if (-1 != listen(ctx->c.sock, SOMAXCONN))
@@ -136,13 +136,13 @@ cx_net_ctx_cl_t* cx_net_connect(cx_net_args_t* _args)
                     event.data.fd = ctx->c.sock;
 
                     CX_INFO("[-->%s] connecting to %s:%d...", ctx->c.name, ctx->c.ip, ctx->c.port);
-                    if (-1 != connect(ctx->c.sock, &address, sizeof(address)))
+                    if (-1 != connect(ctx->c.sock, (struct sockaddr*)&address, sizeof(address)))
                     {
                         ctx->c.state &= ~CX_NET_STATE_ERROR;
                         ctx->c.state |= CX_NET_STATE_CONNECTED;
                         CX_INFO("[-->%s] connection established to server on %s:%d", ctx->c.name, ctx->c.ip, ctx->c.port);
                     }
-                    else if (EINPROGRESS == errno | EAGAIN == errno)
+                    else if (EINPROGRESS == errno || EAGAIN == errno)
                     {
                         // operation can't be performed right now, but epoll will let us know when it's done
                         event.events |= EPOLLOUT;
@@ -262,7 +262,6 @@ void cx_net_send(void* _ctx, uint8_t _header, const char* _payload, uint32_t _pa
         ctx.c = _ctx;
 
         uint32_t bytesRequired = MIN_PACKET_LEN + _payloadSize;
-        int32_t sock = 0;
         char* buffer = NULL;
         uint16_t bufferSize = 0;
         uint32_t* position = NULL;
@@ -272,7 +271,6 @@ void cx_net_send(void* _ctx, uint8_t _header, const char* _payload, uint32_t _pa
             CX_CHECK(cx_handle_is_valid(ctx.sv->clientsHalloc, _clientHandle),
                 "[%s<--] sending a packet to an invalid client! (handle: %d)", ctx.c->name, _clientHandle);
 
-            sock = ctx.sv->clients[_clientHandle].sock;
             buffer = ctx.sv->clients[_clientHandle].out;
             bufferSize = sizeof(ctx.sv->clients[_clientHandle].out);
             position = &(ctx.sv->clients[_clientHandle].outPos);
@@ -281,7 +279,6 @@ void cx_net_send(void* _ctx, uint8_t _header, const char* _payload, uint32_t _pa
         {
             CX_CHECK(CX_NET_STATE_CONNECTED & ctx.c->state, "[-->%s] this ctx is not connected! you must check CX_NET_STATE_CONNECTED flag before calling send", ctx.c->name);
 
-            sock = ctx.cl->c.sock;
             buffer = ctx.cl->out;
             bufferSize = sizeof(ctx.cl->out);
             position = &(ctx.cl->outPos);
@@ -334,7 +331,6 @@ bool cx_net_flush(void* _ctx, uint16_t _clientHandle)
     int32_t sock = 0;
     char* buffer = NULL;
     uint32_t* position = NULL;
-    char* name = NULL;
     bool reschedule = false;
 
     if (CX_NET_STATE_SERVER & ctx.c->state)
@@ -373,7 +369,7 @@ bool cx_net_flush(void* _ctx, uint16_t _clientHandle)
         }
         else if (-1 == bytesWritten)
         {
-            if (EWOULDBLOCK == errno | EAGAIN == errno)
+            if (EWOULDBLOCK == errno || EAGAIN == errno)
             {
                 // this write operation would block. we can't perform it now since it will
                 // block our main thread. we'll re-schedule it with epoll to do it later 
@@ -428,8 +424,6 @@ static bool _cx_net_parse_address(const char* _ipAddress, uint16_t _port, sockad
 
 static void _cx_net_poll_events_client(cx_net_ctx_cl_t* _ctx)
 {
-    epoll_event event;
-
     int32_t bytesRead = 0;
 
     int32_t eventsCount = epoll_wait(_ctx->c.epollDescriptor, _ctx->c.epollEvents, 1, 0);
@@ -526,7 +520,7 @@ static void _cx_net_poll_events_server(cx_net_ctx_sv_t* _ctx)
     CX_WARN(-1 != eventsCount, "[%s<--] epoll_wait failed", _ctx->c.name);
 
     // handle epoll events
-    for (uint32_t i = 0; i < eventsCount; i++)
+    for (int32_t i = 0; i < eventsCount; i++)
     {
         if (_ctx->c.epollEvents[i].data.fd == _ctx->c.sock)
         {
@@ -534,7 +528,7 @@ static void _cx_net_poll_events_server(cx_net_ctx_sv_t* _ctx)
             CX_MEM_ZERO(address);
             CX_MEM_ZERO(event);
 
-            clientSock = accept(_ctx->c.sock, &(address), &(socklen_t) { sizeof(address) });
+            clientSock = accept(_ctx->c.sock, (struct sockaddr * restrict)&address, &(socklen_t) { sizeof(address) });
             if (INVALID_DESCRIPTOR != clientSock)
             {
                 clientHandle = cx_handle_alloc_key(_ctx->clientsHalloc, clientSock);

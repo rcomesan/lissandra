@@ -25,7 +25,7 @@ cx_mcq_t* cx_mcq_init()
         return mcq;
     }
     
-    cx_mcq_destroy(&mcq, NULL);
+    cx_mcq_destroy(mcq, NULL);
     return NULL;
 }
 
@@ -45,15 +45,9 @@ void cx_mcq_destroy(cx_mcq_t* _mcq, cx_destroyer_cb _cb)
         _mcq->condInitialized = false;
     }
 
-    if (NULL != _cb)
-    {
-        queue_destroy_and_destroy_elements(_mcq->handle, _cb);
-    }
-    else
-    {
-        queue_destroy(_mcq->handle);
-    }
+    queue_destroy_and_destroy_elements(_mcq->handle, _cb);
     _mcq->handle = NULL;
+
     free(_mcq);
 }
 

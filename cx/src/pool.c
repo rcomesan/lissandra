@@ -130,6 +130,7 @@ void cx_pool_destroy(cx_pool_t* _pool)
 void cx_pool_resize(cx_pool_t* _pool, uint16_t _numWorkers)
 {
     CX_CHECK_NOT_NULL(_pool);
+    //TODO
 }
 
 void cx_pool_submit(cx_pool_t* _pool, void* _taskData)
@@ -147,7 +148,7 @@ void cx_pool_submit_first(cx_pool_t* _pool, void* _taskData)
 uint16_t cx_pool_size(cx_pool_t* _pool)
 {
     CX_CHECK_NOT_NULL(_pool);
-    _pool->workersCount;
+    return _pool->workersCount;
 }
 
 bool cx_pool_is_paused(cx_pool_t* _pool)

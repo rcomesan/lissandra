@@ -167,18 +167,19 @@ uint32_t cx_sort_uniquify(void* _data, uint32_t _size, uint32_t _num, cx_sort_co
 
     if (0 == _num) return 0;
 
+    char* data = (char*)_data;
     uint32_t count = 0;
 
     for (uint32_t i = 1; i < _num; i++)
     {
-        if (0 != _comp(&(_data[i * _size]), &(_data[count * _size])))
+        if (0 != _comp(&(data[i * _size]), &(data[count * _size])))
         {
             count++;
-            memcpy(&(_data[count * _size]), &(_data[i * _size]), _size);
+            memcpy(&(data[count * _size]), &(data[i * _size]), _size);
         }
         else if (NULL != _destroyer)
         {
-            _destroyer(&(_data[i * _size]));
+            _destroyer(&(data[i * _size]));
         }
     }
     return ++count;
