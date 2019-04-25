@@ -7,6 +7,7 @@
 #include <stdio.h>
 #include <stdint.h>
 #include <string.h>
+#include <strings.h>
 #include <stdarg.h>
 #include <inttypes.h>
 #include <ctype.h>
@@ -90,6 +91,41 @@ void cx_str_to_lower(char* _a)
     {
         (*s) = (char)tolower((int32_t)*s);
         s++;
+    }
+}
+
+bool cx_str_ends_with(const char* _a, const char* _end, bool _caseInsensitive)
+{
+    uint32_t aLen = strlen(_a);
+    uint32_t endLen = strlen(_end);
+
+    CX_CHECK(endLen > 0, "_end is an empty string!");
+    if (endLen > aLen || endLen == 0) return false;
+
+    if (_caseInsensitive)
+    {
+        return (0 == strncasecmp(&_a[aLen - endLen], _end, endLen));
+    }
+    else
+    {
+        return (0 == strncmp(&_a[aLen - endLen], _end, endLen));
+    }
+}
+
+bool cx_str_starts_with(const char* _a, const char* _start, bool _caseInsensitive)
+{
+    uint32_t startLen = strlen(_start);
+    
+    CX_CHECK(startLen > 0, "_start is an empty string!");
+    if (startLen == 0) return false;
+
+    if (_caseInsensitive)
+    {
+        return (0 == strncasecmp(_a, _start, startLen));
+    }
+    else
+    {
+        return (0 == strncmp(_a, _start, startLen));
     }
 }
 

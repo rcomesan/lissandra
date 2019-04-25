@@ -16,6 +16,10 @@ void        cx_str_to_upper(char* _a);
 
 void        cx_str_to_lower(char* _a);
 
+bool        cx_str_ends_with(const char* _a, const char* _end, bool _caseInsensitive);
+
+bool        cx_str_starts_with(const char* _a, const char* _start, bool _caseInsensitive);
+
 char*       cx_str_copy_d(const char* _src);
 
 bool        cx_str_to_int32(const char* _src, int32_t* _out);
