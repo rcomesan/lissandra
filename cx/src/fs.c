@@ -392,7 +392,7 @@ void _cx_fs_absolutize(cx_path_t* _inOutPath)
             cx_str_copy(&absPath[absPathLen], sizeof(absPath) - absPathLen, *_inOutPath);
             cx_str_copy(*_inOutPath, sizeof(*_inOutPath), absPath);
         }
-        CX_CHECK(absPath != result, "getcwd failed!");
+        CX_CHECK(absPath == result, "getcwd failed!");
     }
 }
 

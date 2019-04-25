@@ -7,7 +7,7 @@
  ***  PRIVATE DECLARATIONS
  ***************************************************************************************/
 
-static void _cx_sort(void* _data, uint32_t _size, uint32_t _num, cx_sort_comp_cb _comp, void* _pivot, void* _temp);
+static void _cx_sort(void* _data, uint32_t _size, uint32_t _num, cx_sort_comp_cb _comp, void* _userData, void* _pivot, void* _temp);
 
 static void _cx_swap(void* _a, void* _b, void* _temp, uint32_t _size);
 
@@ -15,7 +15,7 @@ static void _cx_swap(void* _a, void* _b, void* _temp, uint32_t _size);
  ***  PUBLIC FUNCTIONS
  ***************************************************************************************/
 
-void cx_sort_quick(void* _data, uint32_t _size, uint32_t _num, cx_sort_comp_cb _comp)
+void cx_sort_quick(void* _data, uint32_t _size, uint32_t _num, cx_sort_comp_cb _comp, void* _userData)
 {
     // sorts the _data array of _num elements of _size bytes each using quicksort algorithm.
     // comparisons are made using _comp callback which should return:
@@ -32,13 +32,13 @@ void cx_sort_quick(void* _data, uint32_t _size, uint32_t _num, cx_sort_comp_cb _
     void* pivot = malloc(_size);
     void* temp = malloc(_size);
 
-    _cx_sort(_data, _size, _num, _comp, pivot, temp);
+    _cx_sort(_data, _size, _num, _comp, _userData, pivot, temp);
 
     free(pivot);
     free(temp);
 }
 
-uint32_t cx_sort_find(void* _data, uint32_t _size, uint32_t _num, const void* _key, bool _firstMatch, cx_sort_comp_cb _comp)
+uint32_t cx_sort_find(void* _data, uint32_t _size, uint32_t _num, const void* _key, bool _firstMatch, cx_sort_comp_cb _comp, void* _userData)
 {
     // searches for an element that is greater than or equal to the _key parameter using binary search
     // in the given _data array of _num elements of _size bytes each which is assumed to be sorted.
@@ -62,7 +62,7 @@ uint32_t cx_sort_find(void* _data, uint32_t _size, uint32_t _num, const void* _k
     while (left < right)
     {
         mid = (left + right) / 2;
-        result = _comp(&data[mid * _size], _key);
+        result = _comp(&data[mid * _size], _key, _userData);
 
         if (result < 0)
         {
@@ -104,7 +104,7 @@ static void _cx_swap(void* _a, void* _b, void* _temp, uint32_t _size)
     memcpy(_b, _temp, _size);
 }
 
-static void _cx_sort(void* _data, uint32_t _size, uint32_t _num, cx_sort_comp_cb _comp, void* _pivot, void* _temp)
+static void _cx_sort(void* _data, uint32_t _size, uint32_t _num, cx_sort_comp_cb _comp, void* _userData, void* _pivot, void* _temp)
 {
     int32_t i = -1;
     int32_t j = _num;
@@ -120,13 +120,13 @@ static void _cx_sort(void* _data, uint32_t _size, uint32_t _num, cx_sort_comp_cb
         do
         {
             i++;
-        } while (i < last && _comp(&data[i * _size], _pivot) < 0);
+        } while (i < last && _comp(&data[i * _size], _pivot, _userData) < 0);
 
         // find a j lower than pivot
         do
         {
             j--;
-        } while (j > 0 && _comp(&data[j * _size], _pivot) > 0);
+        } while (j > 0 && _comp(&data[j * _size], _pivot, _userData) > 0);
 
         // if i and j didn't cross each other, swap them
         if (i < j)
@@ -141,18 +141,18 @@ static void _cx_sort(void* _data, uint32_t _size, uint32_t _num, cx_sort_comp_cb
         _cx_swap(data, &data[j * _size], _temp, _size);
 
         // sort the left partition
-        _cx_sort(data, _size, j + 1, _comp, _pivot, _temp);
+        _cx_sort(data, _size, j + 1, _comp, _userData, _pivot, _temp);
     }
 
     // sort the right partition (it must have at least 2 elements)
     _num = last - j;
     if (_num > 1)
     {
-        _cx_sort(&data[(j + 1) * _size], _size, _num, _comp, _pivot, _temp);
+        _cx_sort(&data[(j + 1) * _size], _size, _num, _comp, _userData, _pivot, _temp);
     }
 }
 
-uint32_t cx_sort_uniquify(void* _data, uint32_t _size, uint32_t _num, cx_sort_comp_cb _comp, cx_destroyer_cb _destroyer)
+uint32_t cx_sort_uniquify(void* _data, uint32_t _size, uint32_t _num, cx_sort_comp_cb _comp, void* _userData, cx_destroyer_cb _destroyer)
 {
     // removes duplicates in-place from the sorted _data array of _num elements of 
     // _size bytes each. comparisons are made using _comp callback, and only 
@@ -172,7 +172,7 @@ uint32_t cx_sort_uniquify(void* _data, uint32_t _size, uint32_t _num, cx_sort_co
 
     for (uint32_t i = 1; i < _num; i++)
     {
-        if (0 != _comp(&(data[i * _size]), &(data[count * _size])))
+        if (0 != _comp(&(data[i * _size]), &(data[count * _size]), _userData))
         {
             count++;
             memcpy(&(data[count * _size]), &(data[i * _size]), _size);
