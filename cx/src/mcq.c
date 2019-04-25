@@ -87,7 +87,7 @@ void cx_mcq_pop(cx_mcq_t* _mcq, void** _outData)
 {
     pthread_mutex_lock(&_mcq->mutex);
 
-        while (cx_mcq_is_empty(_mcq)) // avoids spurious wakeups
+        while (queue_is_empty(_mcq->handle)) // handles spurious wakeups
         {
             pthread_cond_wait(&_mcq->cond, &_mcq->mutex);
         }
@@ -99,10 +99,16 @@ void cx_mcq_pop(cx_mcq_t* _mcq, void** _outData)
 
 int32_t cx_mcq_size(cx_mcq_t* _mcq)
 {
-    return queue_size(_mcq->handle);
+    pthread_mutex_lock(&_mcq->mutex);
+    int32_t result = queue_size(_mcq->handle);
+    pthread_mutex_unlock(&_mcq->mutex);
+    return result;
 }
 
 bool cx_mcq_is_empty(cx_mcq_t* _mcq)
 {
-    return queue_is_empty(_mcq->handle);
+    pthread_mutex_lock(&_mcq->mutex);
+    bool result = queue_is_empty(_mcq->handle);
+    pthread_mutex_unlock(&_mcq->mutex);
+    return result;
 }

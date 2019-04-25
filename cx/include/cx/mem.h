@@ -10,14 +10,14 @@
     memset(_var, 0, sizeof(*(_var)));                       \
     CX_CHECK(_var, #_var " struct allocation failed!");
 
-#define CX_MEM_ARR_ALLOC(_var, _numElems)                   \
-    malloc((_numElems) * sizeof(*(_var)));                  \
-    memset((_var), 0, (_numElems) * sizeof(*(_var)));       \
-    CX_CHECK((_var), #_var " array of struct allocation failed! (%d bytes needed for %d elements)", (_numElems));
+#define CX_MEM_ARR_ALLOC(_arrPtr, _numElems)                \
+    malloc((_numElems) * sizeof(*(_arrPtr)));               \
+    memset((_arrPtr), 0, (_numElems) * sizeof(*(_arrPtr))); \
+    CX_CHECK((_arrPtr), #_arrPtr " array of struct allocation failed! (%d bytes needed for %d elements)", (_numElems));
 
-#define CX_MEM_ARR_REALLOC(_var, _numElems)                 \
-    realloc((_var), (_numElems) * sizeof(*(_var)));         \
-    CX_CHECK((_var), #_var " array of struct reallocation failed! (%d bytes needed for %d elements)", (_numElems) * sizeof(*(_var)), (_numElems));
+#define CX_MEM_ARR_REALLOC(_arrPtr, _numElems)              \
+    realloc((_arrPtr), (_numElems) * sizeof(*(_arrPtr)));   \
+    CX_CHECK((_arrPtr), #_arrPtr " array of struct reallocation failed! (%d bytes needed for %d elements)", (_numElems) * sizeof(*(_arrPtr)), (_numElems));
 
 #define CX_MEM_ZERO(_var)                                   \
     memset(&(_var), 0, sizeof((_var)));

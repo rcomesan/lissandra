@@ -100,13 +100,20 @@ bool cx_cdict_contains(cx_cdict_t* _cdict, const char* _key)
 bool cx_cdict_is_empty(cx_cdict_t* _cdict)
 {
     CX_CHECK_NOT_NULL(_cdict);
-    return dictionary_is_empty(_cdict->handle);
+    pthread_mutex_lock(&_cdict->mutex);
+    bool result = dictionary_is_empty(_cdict->handle);
+    pthread_mutex_unlock(&_cdict->mutex);
+    return result;
+
 }
 
 uint32_t cx_cdict_size(cx_cdict_t* _cdict)
 {
     CX_CHECK_NOT_NULL(_cdict);
-    return dictionary_size(_cdict->handle);
+    pthread_mutex_lock(&_cdict->mutex);
+    int32_t result = dictionary_size(_cdict->handle);
+    pthread_mutex_unlock(&_cdict->mutex);
+    return result;
 }
 
 void cx_cdict_clear(cx_cdict_t* _cdict, cx_destroyer_cb _cb)
