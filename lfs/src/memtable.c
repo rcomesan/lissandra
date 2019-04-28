@@ -29,15 +29,18 @@ static void         _memtable_record_destroyer(void* _data);
  ***  PUBLIC FUNCTIONS
  ***************************************************************************************/
 
-bool memtable_init(const char* _tableName, memtable_t* _outTable, cx_error_t* _err)
+bool memtable_init(const char* _tableName, bool _threadSafe, memtable_t* _outTable, cx_error_t* _err)
 {
     if (!_memtable_init(_tableName, _outTable, _err)) return false;
 
     _outTable->type = MEMTABLE_TYPE_MEM;
     _outTable->recordsSorted = false;
 
-    _outTable->mtxInitialized = (0 == pthread_mutex_init(&_outTable->mtx, NULL));
-    CX_CHECK(_outTable->mtxInitialized, "mutex initialization failed!");
+    if (_threadSafe)
+    {
+        _outTable->mtxInitialized = (0 == pthread_mutex_init(&_outTable->mtx, NULL));
+        CX_CHECK(_outTable->mtxInitialized, "mutex initialization failed!");
+    }
 
     return true;
 }

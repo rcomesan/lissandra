@@ -14,7 +14,7 @@
  ***  PUBLIC FUNCTIONS
  ***************************************************************************************/
 
-bool                memtable_init(const char* _tableName, memtable_t* _outTable, cx_error_t* _err);
+bool                memtable_init(const char* _tableName, bool _threadSafe, memtable_t* _outTable, cx_error_t* _err);
 
 bool                memtable_init_from_dump(const char* _tableName, uint16_t _dumpNumber, bool _isDuringCompaction, memtable_t* _outTable, cx_error_t* _err);
 

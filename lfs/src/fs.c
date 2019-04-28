@@ -903,7 +903,7 @@ static bool _fs_table_init(table_t* _table, const char* _tableName, cx_error_t* 
 
     return true
         && fs_table_get_meta(_tableName, &_table->meta, _err)
-        && memtable_init(_tableName, &_table->memtable, _err);
+        && memtable_init(_tableName, true, &_table->memtable, _err);
 }
 
 static bool _fs_file_read(cx_path_t* _filePath, fs_file_t* _outFile, cx_error_t* _err)
