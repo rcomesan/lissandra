@@ -74,6 +74,13 @@ void lfs_handle_create(const cx_net_common_t* _common, void* _passThrou, const c
         cx_binr_uint8(_data, _size, &pos, &data->consistency);
         cx_binr_uint16(_data, _size, &pos, &data->numPartitions);
         cx_binr_uint32(_data, _size, &pos, &data->compactionInterval);
+        data->tableHandle = cx_handle_alloc(g_ctx.tablesHalloc);
+        if (INVALID_HANDLE == data->tableHandle)
+        {
+            CX_WARN(CX_ALW, "we ran out of table handles! %d is not enough!", MAX_TABLES);
+            CX_ERROR_SET(&data->c.err, 1, "Table creation cannot be performed at this time (out of memory).");
+            req->state = REQ_STATE_COMPLETED;
+        }
     LFS_REQ_END;
 }
 
@@ -121,7 +128,7 @@ void lfs_handle_select(const cx_net_common_t* _common, void* _passThrou, const c
         req->data = data;
         cx_binr_uint16(_data, _size, &pos, &data->c.remoteId);
         cx_binr_str(_data, _size, &pos, data->name, sizeof(data->name));
-        cx_binr_uint16(_data, _size, &pos, &data->key);
+        cx_binr_uint16(_data, _size, &pos, &data->record.key);
     LFS_REQ_END;
 }
 
@@ -133,13 +140,13 @@ void lfs_handle_insert(const cx_net_common_t* _common, void* _passThrou, const c
         req->data = data;
         cx_binr_uint16(_data, _size, &pos, &data->c.remoteId);
         cx_binr_str(_data, _size, &pos, data->name, sizeof(data->name));
-        cx_binr_uint16(_data, _size, &pos, &data->key);
+        cx_binr_uint16(_data, _size, &pos, &data->record.key);
 
         uint16_t valueLen = cx_binr_str(_data, _size, &pos, NULL, 0) + 1;
-        data->value = malloc(valueLen);
-        cx_binr_str(_data, _size, &pos, data->value, valueLen);
+        data->record.value = malloc(valueLen);
+        cx_binr_str(_data, _size, &pos, data->record.value, valueLen);
 
-        cx_binr_uint32(_data, _size, &pos, &data->timestamp);
+        cx_binr_uint32(_data, _size, &pos, &data->record.timestamp);
     LFS_REQ_END;
 }
 

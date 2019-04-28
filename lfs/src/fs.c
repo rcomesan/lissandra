@@ -1,5 +1,7 @@
 #include "fs.h"
 
+#include "memtable.h"
+
 #include <cx/mem.h>
 #include <cx/fs.h>
 #include <cx/str.h>
@@ -32,9 +34,7 @@ static bool         _fs_load_tables(cx_error_t* _err);
 
 static bool         _fs_load_blocks(cx_error_t* _err);
 
-static table_t*     _fs_table_init(const char* _tableName, cx_error_t* _err);
-
-static void         _fs_table_destroy(table_t* _table);
+static bool         _fs_table_init(table_t* _table, const char* _tableName, cx_error_t* _err);
 
 static bool         _fs_file_write(cx_path_t* _filePath, fs_file_t* _outFile, cx_error_t* _err);
 
@@ -111,8 +111,8 @@ void fs_destroy()
     free(m_fsCtx->blocksMap);
     m_fsCtx->blocksMap = NULL;
     
-    // destroy tables
-    cx_cdict_clear(g_ctx.tables, (cx_destroyer_cb)_fs_table_destroy);
+    // destroy tablesMap
+    cx_cdict_destroy(m_fsCtx->tablesMap, NULL);
 
     // mutexes
     if (m_fsCtx->mtxCreateDropInit)
@@ -137,37 +137,37 @@ table_meta_t* fs_describe(uint16_t* _outTablesCount, cx_error_t* _err)
     uint16_t i = 0;
 
     pthread_mutex_lock(&m_fsCtx->mtxCreateDrop);
-    cx_cdict_iter_begin(g_ctx.tables);
 
-    (*_outTablesCount) = (uint16_t)cx_cdict_size(g_ctx.tables);
+    (*_outTablesCount) = (uint16_t)cx_cdict_size(m_fsCtx->tablesMap);
 
+    cx_cdict_iter_begin(m_fsCtx->tablesMap);
     if (0 < (*_outTablesCount))
     {
         tables = CX_MEM_ARR_ALLOC(tables, (*_outTablesCount));
 
-        while (cx_cdict_iter_next(g_ctx.tables, &key, (void**)&table))
+        while (cx_cdict_iter_next(m_fsCtx->tablesMap, &key, (void**)&table))
         {
             if (!table->deleted)
                 memcpy(&(tables[i++]), &(table->meta), sizeof(tables[0]));
         }
+    }
+    cx_cdict_iter_end(m_fsCtx->tablesMap);
 
-        if ((*_outTablesCount) != i)
+    if ((*_outTablesCount) != i)
+    {
+        (*_outTablesCount) = i;
+
+        if (i > 0)
         {
-            (*_outTablesCount) = i;
-
-            if (i > 0)
-            {
-                tables = CX_MEM_ARR_REALLOC(tables, (*_outTablesCount));
-            }
-            else
-            {
-                free(tables);
-                tables = NULL;
-            }
+            tables = CX_MEM_ARR_REALLOC(tables, (*_outTablesCount));
+        }
+        else
+        {
+            free(tables);
+            tables = NULL;
         }
     }
 
-    cx_cdict_iter_end(g_ctx.tables);
     pthread_mutex_unlock(&m_fsCtx->mtxCreateDrop);
     return tables;
 }
@@ -175,9 +175,10 @@ table_meta_t* fs_describe(uint16_t* _outTablesCount, cx_error_t* _err)
 bool fs_table_blocked_guard(const char* _tableName, cx_error_t* _err, pthread_mutex_t* _mtx)
 {
     table_t* table;
+
     bool isBlocked = true
-        && cx_cdict_get(g_ctx.tables, _tableName, (void**)&table)
-        && (table->deleted || table->blocked);
+        && fs_table_exists(_tableName, &table)
+        && table->blocked;
 
     if (isBlocked)
     {
@@ -191,16 +192,22 @@ bool fs_table_blocked_guard(const char* _tableName, cx_error_t* _err, pthread_mu
     return false;
 }
 
-bool fs_table_exists(const char* _tableName)
+bool fs_table_exists(const char* _tableName, table_t** _outTable)
 {
     table_t* table;
 
-    return true
-        && cx_cdict_get(g_ctx.tables, _tableName, (void**)&table)
-        && !table->deleted;
+    if (cx_cdict_get(m_fsCtx->tablesMap, _tableName, (void**)&table) && !table->deleted)
+    {
+        if (NULL != _outTable)
+        {
+            (*_outTable) = table;
+        }
+        return true;
+    }
+    return false;
 }
 
-bool fs_table_create(const char* _tableName, uint8_t _consistency, uint16_t _partitions, uint32_t _compactionInterval, cx_error_t* _err)
+bool fs_table_create(table_t* _table, const char* _tableName, uint8_t _consistency, uint16_t _partitions, uint32_t _compactionInterval, cx_error_t* _err)
 {
     CX_CHECK(strlen(_tableName) > 0, "invalid _tableName!");
     CX_MEM_ZERO(*_err);
@@ -210,9 +217,8 @@ bool fs_table_create(const char* _tableName, uint8_t _consistency, uint16_t _par
 
     cx_path_t path;
     t_config* meta = NULL;
-    table_t* table = NULL;
 
-    if (!fs_table_exists(_tableName))
+    if (!fs_table_exists(_tableName, NULL))
     {
         cx_fs_path(&path, "%s/%s/%s", m_fsCtx->rootDir, LFS_DIR_TABLES, _tableName);
         if (cx_fs_mkdir(&path, _err))
@@ -236,11 +242,10 @@ bool fs_table_create(const char* _tableName, uint8_t _consistency, uint16_t _par
 
                     config_save(meta);
 
-                    table = _fs_table_init(_tableName, _err);
-                    if (NULL != table)
+                    if (_fs_table_init(_table, _tableName, _err))
                     {
                         fs_file_t partFile;
-                        for (uint16_t i = 0; i < table->meta.partitionsCount && ERR_NONE == _err->code; i++)
+                        for (uint16_t i = 0; i < _table->meta.partitionsCount && ERR_NONE == _err->code; i++)
                         {
                             CX_MEM_ZERO(partFile);
                             partFile.size = 0;
@@ -261,7 +266,7 @@ bool fs_table_create(const char* _tableName, uint8_t _consistency, uint16_t _par
                         }
 
                         if (ERR_NONE == _err->code)
-                            cx_cdict_set(g_ctx.tables, _tableName, table);
+                            cx_cdict_set(m_fsCtx->tablesMap, _tableName, _table);
                     }
                 }
                 else
@@ -277,7 +282,9 @@ bool fs_table_create(const char* _tableName, uint8_t _consistency, uint16_t _par
     }
     
     if (NULL != meta) config_destroy(meta);
-    if (NULL != table && ERR_NONE != _err->code) _fs_table_destroy(table);
+
+    // if failed, mark table as deleted so that it gets wiped out in the main loop
+    if (ERR_NONE != _err->code) _table->deleted = true; 
 
     pthread_mutex_unlock(&m_fsCtx->mtxCreateDrop);
     return (ERR_NONE == _err->code);
@@ -296,8 +303,11 @@ bool fs_table_delete(const char* _tableName, cx_error_t* _err)
     fs_file_t part;
     table_t* table;
 
-    if (cx_cdict_get(g_ctx.tables, _tableName, (void**)&table))
+    if (fs_table_exists(_tableName, &table))
     {
+        // remove from dict
+        cx_cdict_erase(m_fsCtx->tablesMap, _tableName, NULL);
+        // mark the table slot as deleted, so that it gets freed up safely in the main loop
         table->deleted = true;
 
         // free the blocks in use
@@ -311,7 +321,8 @@ bool fs_table_delete(const char* _tableName, cx_error_t* _err)
                 }
                 else
                 {
-                    CX_WARN(CX_ALW, "Partition #%d from table '%s' could not be retrieved and some blocks may have just been leaked!", i, _tableName);
+                    CX_WARN(CX_ALW, "Partition #%d from table '%s' could not be retrieved and some blocks may have just been leaked!"
+                        "Reason: %s", i, _tableName, _err->desc);
                 }
             }
         }
@@ -395,7 +406,8 @@ bool fs_table_get_meta(const char* _tableName, table_meta_t* _outMeta, cx_error_
 bool fs_table_get_part(const char* _tableName, uint16_t _partNumber, fs_file_t* _outFile, cx_error_t* _err)
 {
     cx_path_t path;
-    cx_fs_path(&path, "%s/%s/%s/%d." LFS_PART_EXTENSION, m_fsCtx->rootDir, LFS_DIR_TABLES, _tableName, _partNumber);
+    cx_fs_path(&path, "%s/%s/%s/%s%d." LFS_PART_EXTENSION, m_fsCtx->rootDir, LFS_DIR_TABLES,
+        _tableName, LFS_PART_PREFIX, _partNumber);
 
     return _fs_file_read(&path, _outFile, _err);
 }
@@ -403,15 +415,18 @@ bool fs_table_get_part(const char* _tableName, uint16_t _partNumber, fs_file_t* 
 bool fs_table_set_part(const char* _tableName, uint16_t _partNumber, fs_file_t* _file, cx_error_t* _err)
 {
     cx_path_t path;
-    cx_fs_path(&path, "%s/%s/%s/%d." LFS_PART_EXTENSION, m_fsCtx->rootDir, LFS_DIR_TABLES, _tableName, _partNumber);
+    cx_fs_path(&path, "%s/%s/%s/%s%d." LFS_PART_EXTENSION, m_fsCtx->rootDir, LFS_DIR_TABLES,
+        _tableName, LFS_PART_PREFIX, _partNumber);
 
     return _fs_file_write(&path, _file, _err);
 }
 
-bool fs_table_get_dump(const char* _tableName, uint16_t _dumpNumber, fs_file_t* _outFile, cx_error_t* _err)
+bool fs_table_get_dump(const char* _tableName, uint16_t _dumpNumber, bool _isDuringCompaction, fs_file_t* _outFile, cx_error_t* _err)
 {
     cx_path_t path;
-    cx_fs_path(&path, "%s/%s/%s/%s%d." LFS_DUMP_EXTENSION, m_fsCtx->rootDir, LFS_DIR_TABLES, _tableName, LFS_DUMP_PREFIX, _dumpNumber);
+    cx_fs_path(&path, "%s/%s/%s/%s%d.%s", m_fsCtx->rootDir, LFS_DIR_TABLES,  
+        _tableName, LFS_DUMP_PREFIX, _dumpNumber,
+        _isDuringCompaction ? LFS_DUMP_EXTENSION_COMPACTION : LFS_DUMP_EXTENSION);
 
     return _fs_file_read(&path, _outFile, _err);
 }
@@ -419,10 +434,48 @@ bool fs_table_get_dump(const char* _tableName, uint16_t _dumpNumber, fs_file_t* 
 bool fs_table_set_dump(const char* _tableName, uint16_t _dumpNumber, fs_file_t* _file, cx_error_t* _err)
 {
     cx_path_t path;
-    cx_fs_path(&path, "%s/%s/%s/%d." LFS_DUMP_EXTENSION, m_fsCtx->rootDir, LFS_DIR_TABLES, _tableName, _dumpNumber);
+    cx_fs_path(&path, "%s/%s/%s/%s%d." LFS_DUMP_EXTENSION, m_fsCtx->rootDir, LFS_DIR_TABLES, 
+        _tableName, LFS_DUMP_PREFIX, _dumpNumber);
 
     return _fs_file_write(&path, _file, _err);
 }
+
+uint16_t fs_table_get_dump_number_next(const char* _tableName)
+{
+    cx_error_t err;
+    uint16_t   dumpNumber = 0;
+    uint16_t   dumpNumberLast = 0;
+    bool       dumpCompacted = false;
+    cx_path_t  filePath;
+    cx_path_t  fileName;
+
+    cx_fs_explorer_t* explorer = fs_table_explorer(_tableName, &err);
+    if (NULL != explorer)
+    {
+        while (cx_fs_explorer_next_file(explorer, &filePath))
+        {
+            if (fs_is_dump(&filePath, &dumpNumber, &dumpCompacted) && !dumpCompacted && dumpNumber > dumpNumberLast)
+                dumpNumberLast = dumpNumber;
+        }
+        cx_fs_explorer_destroy(explorer);
+
+        return dumpNumberLast + 1;
+    }
+
+    return 0;
+}
+
+cx_fs_explorer_t* fs_table_explorer(const char* _tableName, cx_error_t* _err)
+{
+    cx_path_t path;
+    cx_fs_path(&path, "%s/%s/%s", m_fsCtx->rootDir, LFS_DIR_TABLES, _tableName);
+
+    cx_fs_explorer_t* explorer = cx_fs_explorer_init(&path, _err);
+
+    CX_WARN(NULL != explorer, "table directory can't be explored: %s", _err->desc);
+    return explorer;
+}
+
 
 uint32_t fs_block_alloc(uint32_t _blocksCount, uint32_t* _outBlocksArr)
 {
@@ -441,7 +494,7 @@ uint32_t fs_block_alloc(uint32_t _blocksCount, uint32_t* _outBlocksArr)
         // we'll be basically checking 4 bytes (32 bits) at once and comparing the 
         // value against UINT32_MAX (integer in which all the bits are set). 
         // a matching value means that 4-bytes segment of our bit array
-        // is full (meaning there're no fs blocks available there for us to use, 
+        // is full (meaning there're no fs blocks available in there for us to use, 
         // in that case, we'll just continue iterating and checking the next segment
         // until we're able to find a free one). 
         // if the value does not match, that means there's at least 1 bit that is not set
@@ -537,10 +590,70 @@ int32_t fs_block_read(uint32_t _blockNumber, char* _buffer, cx_error_t* _err)
 
 bool fs_block_write(uint32_t _blockNumber, char* _buffer, uint32_t _bufferSize, cx_error_t* _err)
 {
+    CX_CHECK(_bufferSize <= m_fsCtx->meta.blocksSize, "_bufferSize must be less than or equal to blocksSize (%d bytes)!", 
+        m_fsCtx->meta.blocksSize);
+
     cx_path_t blockFilePath;
     cx_fs_path(&blockFilePath, "%s/%s/%d.bin", m_fsCtx->rootDir, LFS_DIR_BLOCKS, _blockNumber);
 
     return cx_fs_write(&blockFilePath, _buffer, _bufferSize, _err);
+}
+
+uint32_t fs_block_size()
+{
+    return m_fsCtx->meta.blocksSize;
+}
+
+bool fs_file_load(fs_file_t* _file, char* _buffer, cx_error_t* _err)
+{
+    uint32_t buffPos = 0;
+    int32_t bytesRead = 0;
+
+    for (uint32_t i = 0; i < _file->blocksCount; i++)
+    {
+        bytesRead = fs_block_read(_file->blocks[i], &_buffer[buffPos], _err);
+        if (-1 == bytesRead)
+        {
+            CX_ERROR_SET(_err, 1, "block #%d could not be read!", _file->blocks[i]);
+            return false;
+        }
+
+        buffPos += bytesRead;
+    }
+
+    if (buffPos != _file->size)
+    {
+        CX_ERROR_SET(_err, 1, "file is not fully loaded! (size is %d but we read %d)", _file->size, buffPos);
+        return false;
+    }
+
+    return true;
+}
+
+bool fs_is_dump(cx_path_t* _filePath, uint16_t* _outDumpNumber, bool* _outDuringCompaction)
+{
+    uint16_t dumpNumber = 0;
+    bool     duringCompaction = false;
+    
+    cx_path_t fileName;
+    cx_fs_get_name(_filePath, false, &fileName);
+
+    if (cx_str_starts_with(fileName, LFS_DUMP_PREFIX, true))
+    {
+        duringCompaction = cx_str_ends_with(fileName, "." LFS_DUMP_EXTENSION_COMPACTION, true);
+
+        if (!duringCompaction && !cx_str_ends_with(fileName, "." LFS_DUMP_EXTENSION, true))
+            return false;
+
+        (*strchr(fileName, '.')) = '\0'; // get rid of the extension truncating at char '.'
+        if (cx_str_to_uint16(&fileName[sizeof(LFS_DUMP_PREFIX) - 1], &dumpNumber))
+        {
+            if (NULL != _outDumpNumber) (*_outDumpNumber) = dumpNumber;
+            if (NULL != _outDuringCompaction) (*_outDuringCompaction) = duringCompaction;
+            return true;
+        }
+    }
+    return false;
 }
 
  /****************************************************************************************
@@ -699,18 +812,24 @@ static bool _fs_load_tables(cx_error_t* _err)
 {
     CX_MEM_ZERO(*_err);
 
-    uint32_t count = 0;
+    m_fsCtx->tablesMap = cx_cdict_init();
+    if (NULL == m_fsCtx->tablesMap)
+    {
+        CX_ERROR_SET(_err, 1, "tablesMap concurrent dictionary creation failed.");
+        return false;
+    }
 
     cx_path_t tablesPath;
     cx_fs_path(&tablesPath, "%s/%s", m_fsCtx->rootDir, LFS_DIR_TABLES);
-
     // not really needed, but just in case the tables folder is deleted, we can recover
     cx_fs_mkdir(&tablesPath, _err);
-
+    
     cx_fs_explorer_t* explorer = cx_fs_explorer_init(&tablesPath, _err);
     cx_path_t tableFolderPath;
     cx_path_t tableName;
+    uint16_t tableHandle = INVALID_HANDLE;
     table_t* table = NULL;
+    uint32_t count = 0;
 
     if (NULL != explorer)
     {
@@ -718,16 +837,23 @@ static bool _fs_load_tables(cx_error_t* _err)
         {
             cx_fs_get_name(&tableFolderPath, false, &tableName);
             
-            table = _fs_table_init(tableName, _err);
-            if (NULL != table)
+            tableHandle = cx_handle_alloc(g_ctx.tablesHalloc);
+            if (INVALID_HANDLE != tableHandle)
             {
-                cx_cdict_set(g_ctx.tables, tableName, table);
-                count++;
+                table = &(g_ctx.tables[tableHandle]);
+                if (_fs_table_init(table, tableName, _err))
+                {
+                    cx_cdict_set(m_fsCtx->tablesMap, tableName, table);
+                    count++;
+                }
+                else
+                {
+                    CX_WARN(CX_ALW, "Table '%s' skipped. %s", _err->desc);
+                }
             }
             else
             {
-                _fs_table_destroy(table);
-                CX_WARN(CX_ALW, "table '%s' skipped. %s", _err->desc);
+                CX_WARN(CX_ALW, "Table '%s' skipped, we ran out of table handles!", _err->desc);
             }
         }
 
@@ -738,7 +864,7 @@ static bool _fs_load_tables(cx_error_t* _err)
     }
 
     CX_ERROR_SET(_err, LFS_ERR_INIT_FS_TABLES,
-        "tables directory '%s' is not accessible.", tablesPath);
+        "Tables directory '%s' is not accessible.", tablesPath);
     return false;
 }
 
@@ -771,35 +897,19 @@ static bool _fs_load_blocks(cx_error_t* _err)
     return false;
 }
 
-static table_t* _fs_table_init(const char* _tableName, cx_error_t* _err)
+static bool _fs_table_init(table_t* _table, const char* _tableName, cx_error_t* _err)
 {
     CX_CHECK(strlen(_tableName) > 0, "invalid table name!");
 
-    table_t* table = CX_MEM_STRUCT_ALLOC(table);
-
-    if (fs_table_get_meta(_tableName, &table->meta, _err))
-    {
-        if (memtable_init(_tableName, &table->memtable, _err))
-        {
-            return table;
-        }
-    }
-
-    free(table);
-    return NULL;
-}
-
-static void _fs_table_destroy(table_t* _table)
-{
-    if (NULL == _table) return;
-
-    memtable_destroy(&_table->memtable);
-
-    free(_table);
+    return true
+        && fs_table_get_meta(_tableName, &_table->meta, _err)
+        && memtable_init(_tableName, &_table->memtable, _err);
 }
 
 static bool _fs_file_read(cx_path_t* _filePath, fs_file_t* _outFile, cx_error_t* _err)
 {
+    char* key = NULL;
+    bool keyMissing = false;
     t_config* file = NULL;
     CX_MEM_ZERO(*_err);
 
@@ -808,26 +918,60 @@ static bool _fs_file_read(cx_path_t* _filePath, fs_file_t* _outFile, cx_error_t*
         file = config_create(*_filePath);
         if (NULL != file)
         {
-            _outFile->size = (uint32_t)config_get_int_value(file, "size");
-            _outFile->blocksCount = (uint32_t)config_get_int_value(file, "blocksCount");
-
-            char** blocks = config_get_array_value(file, "blocks");
-
-            uint32_t i = 0, j = 0;
-            bool finished = (NULL == blocks[i]);
-            while (!finished && j < sizeof(_outFile->blocks))
+            key = "size";
+            if (config_has_property(file, key))
             {
-                cx_str_to_uint32(blocks[i], &(_outFile->blocks[j++]));
-                free(blocks[i++]);
-                finished = (NULL == blocks[i]);
+                _outFile->size = (uint32_t)config_get_int_value(file, key);
             }
-            free(blocks);
+            else
+            {
+                keyMissing = true;
+                goto key_missing;
+            }
 
-            CX_CHECK(finished, "there're still pending blocks to read! static buffer of %d elements is not enough!",
-                sizeof(_outFile->blocks));
+            key = "blocksCount";
+            if (config_has_property(file, key))
+            {
+                _outFile->blocksCount = (uint32_t)config_get_int_value(file, key);
+            }
+            else
+            {
+                keyMissing = true;
+                goto key_missing;
+            }
 
-            CX_CHECK(_outFile->blocksCount == j, "blocksCount (%d) and actual amount of blocks read from the array (%d) do not match!",
-                _outFile->blocksCount, j);
+            key = "blocks";
+            if (config_has_property(file, key))
+            {
+                char** blocks = config_get_array_value(file, key);
+
+                uint32_t i = 0, j = 0;
+                bool finished = (NULL == blocks[i]);
+                while (!finished && j < sizeof(_outFile->blocks))
+                {
+                    cx_str_to_uint32(blocks[i], &(_outFile->blocks[j++]));
+                    free(blocks[i++]);
+                    finished = (NULL == blocks[i]);
+                }
+                free(blocks);
+
+                CX_CHECK(finished, "there're still pending blocks to read! static buffer of %d elements is not enough!",
+                    sizeof(_outFile->blocks));
+
+                CX_CHECK(_outFile->blocksCount == j, "blocksCount (%d) and actual amount of blocks read from the array (%d) do not match!",
+                    _outFile->blocksCount, j);
+            }
+            else
+            {
+                keyMissing = true;
+                goto key_missing;
+            }
+
+        key_missing:
+            if (keyMissing)
+            {
+                CX_ERROR_SET(_err, 1, "File '%s' is corrupt. Key '%s' is missing.", *_filePath, key);
+            }
         }
         else
         {

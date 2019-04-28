@@ -15,6 +15,8 @@
 
 static bool     valid_key(const char* _str);
 
+static bool     valid_value(const char* _value);
+
 static bool     valid_table(const char* _str);
 
 static bool     valid_timestamp(const char* _str);
@@ -57,6 +59,7 @@ bool cli_parse_insert(const cx_cli_cmd_t* _cmd, cx_error_t* _err, char** _outTab
         && _cmd->argsCount >= 3
         && valid_table(_cmd->args[0])
         && valid_key(_cmd->args[1])
+        && valid_value(_cmd->args[2])
         && (_cmd->argsCount >= 4 ? valid_timestamp(_cmd->args[3]) : true))
     {
         (*_outTableName) = _cmd->args[0];
@@ -186,6 +189,11 @@ static bool valid_key(const char* _str)
 {
     uint16_t ui16 = 0;
     return cx_str_to_uint16(_str, &ui16);
+}
+
+static bool valid_value(const char* _value)
+{
+    return NULL == strrchr(_value, ';');
 }
 
 static bool valid_timestamp(const char* _str)

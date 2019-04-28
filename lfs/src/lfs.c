@@ -50,6 +50,8 @@ static void         requests_update();
 static void         request_completed(const request_t* _req);
 static void         request_free(request_t* _req);
 
+static void         tables_update();
+
 static void         api_response_create(const data_create_t* _data);
 static void         api_response_drop(const data_drop_t* _data);
 static void         api_response_describe(const data_describe_t* _data);
@@ -64,6 +66,7 @@ int main(int _argc, char** _argv)
 {
     cx_init(PROJECT_NAME);
     CX_MEM_ZERO(g_ctx);
+
 
     cx_error_t err;
 
@@ -90,9 +93,10 @@ int main(int _argc, char** _argv)
 
             // poll socket events
             cx_net_poll_events(g_ctx.sv);
-
+            
             // update containers
             requests_update();
+            tables_update();
         }
     }
     else if (NULL != g_ctx.log)
@@ -294,9 +298,18 @@ static bool lfs_init(cx_error_t* _err)
     uint8_t stage = 0;
 
     g_ctx.requestsHalloc = cx_halloc_init(MAX_CONCURRENT_REQUESTS);
+    CX_MEM_ZERO(g_ctx.requests);
     if (NULL == g_ctx.requestsHalloc)
     {
         CX_ERROR_SET(_err, LFS_ERR_INIT_HALLOC, "requests handle allocator creation failed.");
+        return false;
+    }
+
+    g_ctx.tablesHalloc = cx_halloc_init(MAX_TABLES);
+    CX_MEM_ZERO(g_ctx.tables);
+    if (NULL == g_ctx.tablesHalloc)
+    {
+        CX_ERROR_SET(_err, LFS_ERR_INIT_HALLOC, "tables handle allocator creation failed.");
         return false;
     }
 
@@ -306,33 +319,41 @@ static bool lfs_init(cx_error_t* _err)
         CX_ERROR_SET(_err, LFS_ERR_INIT_THREADPOOL, "thread pool creation failed.");
         return false;
     }
-
-    g_ctx.tables = cx_cdict_init();
-    if (NULL == g_ctx.tables)
-    {
-        CX_ERROR_SET(_err, LFS_ERR_INIT_FS_TABLES, "tables cdict creation failed.");
-        return false;
-    }
-    else
-    {
-        if (!fs_init(_err)) return false;
-    }
-
-    return true;
+    
+    return fs_init(_err);
 }
 
 static void lfs_destroy()
 {
     fs_destroy();
 
+    uint16_t max = 0; 
+    uint16_t handle = INVALID_HANDLE;
+    request_t* request = NULL;
+    table_t* table = NULL;
+
+    max = cx_handle_count(g_ctx.requestsHalloc);
+    for (uint16_t i = 0; i < max; i++)
+    {
+        handle = cx_handle_at(g_ctx.requestsHalloc, i);
+        request = &(g_ctx.requests[handle]);
+        request_free(request);
+    }
     cx_halloc_destroy(g_ctx.requestsHalloc);
     g_ctx.requestsHalloc = NULL;
 
+    max = cx_handle_count(g_ctx.tablesHalloc);
+    for (uint16_t i = 0; i < max; i++)
+    {
+        handle = cx_handle_at(g_ctx.tablesHalloc, i);
+        table = &(g_ctx.tables[handle]);
+        memtable_destroy(&table->memtable);
+    }
+    cx_halloc_destroy(g_ctx.tablesHalloc);
+    g_ctx.tablesHalloc = NULL;
+
     cx_pool_destroy(g_ctx.pool);
     g_ctx.pool = NULL;
-
-    cx_cdict_destroy(g_ctx.tables, NULL);
-    g_ctx.tables = NULL;
 }
 
 static bool net_init(cx_error_t* _err)
@@ -435,6 +456,26 @@ static void handle_cli_command(const cx_cli_cmd_t* _cmd)
             lfs_handle_insert(g_ctx.sv, NULL, g_ctx.buffer, packetSize);
         }
     }
+    else if (strcmp("PAUSE", _cmd->header) == 0)
+    {
+        cx_pool_pause(g_ctx.pool);
+        cx_cli_command_end();
+    }
+    else if (strcmp("RESUME", _cmd->header) == 0)
+    {
+        cx_pool_resume(g_ctx.pool);
+        cx_cli_command_end();
+    }
+    else if (strcmp("DUMP", _cmd->header) == 0)
+    {
+        cx_error_t err;
+        table_t* table;
+        if (fs_table_exists(_cmd->args[0], &table))
+            memtable_dump(&table->memtable, &err);
+
+        printf("Dump result: %s (%d)\n", err.desc, err.code);
+        cx_cli_command_end();
+    }
     else
     {
         CX_ERROR_SET(&err, 1, "Unknown command '%s'.", _cmd->header);
@@ -475,15 +516,15 @@ static void handle_worker_task(request_t* _req)
         break;
 
     default:
-        CX_WARN(CX_ALW, "undefined worker behaviour for request type #%d.", _req->type);
+        CX_WARN(CX_ALW, "undefined <worker> behaviour for request type #%d.", _req->type);
         break;
     }
 }
 
 void dump_memtables()
 {
-    //dictionary_iterator(g_ctx.tables, memtable_dump);
-    //dictionary_clean_and_destroy_elements(g_ctx.tables, memtable_destroy);
+    //dictionary_iterator(m_fsCtx->tablesMap, memtable_dump);
+    //dictionary_clean_and_destroy_elements(m_fsCtx->tablesMap, memtable_destroy);
 }
 
 void requests_update()
@@ -605,16 +646,16 @@ static void request_free(request_t* _req)
     case REQ_TYPE_SELECT:
     {
         data_select_t* data = (data_select_t*)_req->data;
-        free(data->value);
-        data->value = NULL;
+        free(data->record.value);
+        data->record.value = NULL;
         break;
     }
 
     case REQ_TYPE_INSERT:
     {
         data_insert_t* data = (data_insert_t*)_req->data;
-        free(data->value);
-        data->value = NULL;
+        free(data->record.value);
+        data->record.value = NULL;
         break;
     }
 
@@ -628,6 +669,35 @@ static void request_free(request_t* _req)
     // note that requests are statically allocated. we don't want to free them
     // here since we'll keep reusing them in subsequent requests.
     CX_MEM_ZERO(*_req)
+}
+
+static void tables_update()
+{
+    uint16_t max = cx_handle_count(g_ctx.tablesHalloc);
+    uint16_t handle = INVALID_HANDLE;
+    table_t* table = NULL;
+    uint16_t removeCount = 0;
+
+    for (uint16_t i = 0; i < max; i++)
+    {
+        handle = cx_handle_at(g_ctx.tablesHalloc, i);
+        table = &(g_ctx.tables[handle]);
+
+        if (table->deleted)
+        {
+            memtable_destroy(&table->memtable);
+            CX_MEM_ZERO(*table);
+            m_auxHandles[removeCount++] = handle;
+        }
+
+    }
+
+    for (uint16_t i = 0; i < removeCount; i++)
+    {
+        handle = m_auxHandles[i];
+        table = &(g_ctx.tables[handle]);
+        cx_handle_free(g_ctx.tablesHalloc, handle);
+    }
 }
 
 static void api_response_create(const data_create_t* _result)

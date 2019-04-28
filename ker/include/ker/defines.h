@@ -10,10 +10,8 @@
 #define TABLE_NAME_LEN_MAX NAME_MAX
 
 #define MEMTABLE_INITIAL_CAPACITY 256
-
 #define MAX_CONCURRENT_REQUESTS 4096
-
-// defines the maximum number of blocks in which a file from our filesystem can be fragmentated.
+#define MAX_TABLES 4096
 #define MAX_FILE_FRAG 1024
 
 #define ERR_NONE 0
@@ -65,6 +63,13 @@ typedef struct table_meta_t
     uint32_t                compactionInterval;             // interval in ms to perform table compaction.
 } table_meta_t;
 
+typedef struct table_record_t
+{
+    uint16_t            key;
+    uint32_t            timestamp;
+    char*               value;
+} table_record_t;
+
 typedef struct data_common_t
 {
     cx_error_t      err;
@@ -79,6 +84,7 @@ typedef struct data_create_t
     uint8_t         consistency;
     uint16_t        numPartitions;
     uint32_t        compactionInterval;
+    uint16_t        tableHandle;
 } data_create_t;
 
 typedef struct data_drop_t
@@ -98,17 +104,14 @@ typedef struct data_select_t
 {
     data_common_t   c;
     table_name_t    name;
-    uint16_t        key;
-    char*           value;
+    table_record_t  record;
 } data_select_t;
 
 typedef struct data_insert_t
 {
     data_common_t   c;
     table_name_t    name;
-    uint16_t        key;
-    char*           value;
-    uint32_t        timestamp;
+    table_record_t  record;
 } data_insert_t;
 
 typedef struct data_run_t

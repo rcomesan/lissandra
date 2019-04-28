@@ -59,7 +59,7 @@ uint32_t cx_sort_find(void* _data, uint32_t _size, uint32_t _num, const void* _k
     bool found = false;
     char* data = (char*)_data;
 
-    while (left < right)
+    while (left <= right)
     {
         mid = (left + right) / 2;
         result = _comp(&data[mid * _size], _key, _userData);

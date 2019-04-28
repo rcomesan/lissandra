@@ -24,7 +24,7 @@ void cli_report_select(const data_select_t* _result)
     CLI_REPORT_BEGIN;
     if (ERR_NONE == _result->c.err.code)
     {
-        printf("%d: \"%s\".\n", _result->key, _result->value);
+        printf("%d: \"%s\".\n", _result->record.key, _result->record.value);
     }
     else
     {
@@ -38,7 +38,7 @@ void cli_report_insert(const data_insert_t* _result)
     CLI_REPORT_BEGIN;
     if (ERR_NONE == _result->c.err.code)
     {
-        printf("%d: \"%s\".\n", _result->key, _result->value);
+        printf("%d: \"%s\".\n", _result->record.key, _result->record.value);
     }
     else
     {
