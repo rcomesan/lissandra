@@ -111,13 +111,13 @@ void memtable_destroy(memtable_t* _table)
     }
 }
 
-void memtable_add(memtable_t* _table, const table_record_t* _record)
+void memtable_add(memtable_t* _table, const table_record_t* _record, uint32_t _numRecords)
 {
     CX_CHECK_NOT_NULL(_table);
 
     if (_table->mtxInitialized) pthread_mutex_lock(&_table->mtx);
 
-    if (_table->recordsCount == _table->recordsCapacity)
+    while (_table->recordsCount + _numRecords > _table->recordsCapacity)
     {
         // we need more extra space, reallocate our records array doubling its capacity
         _table->recordsCapacity *= 2;
@@ -125,11 +125,14 @@ void memtable_add(memtable_t* _table, const table_record_t* _record)
         if (NULL == _table->records) return; // oom. ignore the request.
     }
 
-    _table->records[_table->recordsCount].timestamp = _record->timestamp;
-    _table->records[_table->recordsCount].key = _record->key;
-    _table->records[_table->recordsCount].value = cx_str_copy_d(_record->value);
+    for (uint32_t i = 0; i < _numRecords; i++)
+    {
+        _table->records[_table->recordsCount + i].timestamp = _record[i].timestamp;
+        _table->records[_table->recordsCount + i].key = _record[i].key;
+        _table->records[_table->recordsCount + i].value = cx_str_copy_d(_record[i].value);
+    }
 
-    _table->recordsCount++;
+    _table->recordsCount += _numRecords;
 
     if (_table->mtxInitialized) pthread_mutex_unlock(&_table->mtx);
 }

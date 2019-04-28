@@ -164,7 +164,7 @@ void worker_handle_insert(request_t* _req)
         table_t* table = NULL;
         if (fs_table_exists(data->name, &table))
         {           
-            memtable_add(&table->memtable, &data->record);
+            memtable_add(&table->memtable, &data->record, 1);
         }
         else
         {
@@ -174,6 +174,8 @@ void worker_handle_insert(request_t* _req)
 
     _worker_parse_result(_req);
 }
+
+
 
 /****************************************************************************************
 ***  PRIVATE FUNCTIONS

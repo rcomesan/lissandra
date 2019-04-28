@@ -22,7 +22,7 @@ bool                memtable_init_from_part(const char* _tableName, uint16_t _pa
 
 void                memtable_destroy(memtable_t* _table);
 
-void                memtable_add(memtable_t* _table, const table_record_t* _record);
+void                memtable_add(memtable_t* _table, const table_record_t* _record, uint32_t _numRecords);
 
 bool                memtable_dump(memtable_t* _table, cx_error_t* _err);
 
