@@ -21,7 +21,7 @@ void cx_sort_quick(void* _data, uint32_t _size, uint32_t _num, cx_sort_comp_cb _
     // comparisons are made using _comp callback which should return:
     // a value lesss than zero      if _a should be placed to the left of _b.
     // a value greater than zero    if _a should be placed to the right of _b.
-    // a value equal to zero        if _a and b are equal.
+    // a value equal to zero        if _a and _b are equal.
 
     CX_CHECK(_size > 0, "_size must be greater than zero!");
     CX_CHECK_NOT_NULL(_data);

@@ -75,6 +75,7 @@
     <ClCompile Include="src\mem.c" />
     <ClCompile Include="src\net.c" />
     <ClCompile Include="src\pool.c" />
+    <ClCompile Include="src\sort.c" />
     <ClCompile Include="src\str.c" />
   </ItemGroup>
   <ItemGroup>
@@ -95,6 +96,7 @@
     <ClInclude Include="include\cx\mem.h" />
     <ClInclude Include="include\cx\net.h" />
     <ClInclude Include="include\cx\pool.h" />
+    <ClInclude Include="include\cx\sort.h" />
     <ClInclude Include="include\cx\str.h" />
   </ItemGroup>
   <ItemDefinitionGroup Condition="'$(Configuration)|$(Platform)'=='Debug|x86'">

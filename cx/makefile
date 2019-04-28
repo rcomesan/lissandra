@@ -14,7 +14,12 @@ LIB_COMMONS := libcommons.so
 
 # Gcc
 CC := gcc
-CFLAGS ?= -I/usr/include -L/usr/lib -Iinclude/cx/ -g3 -fPIC -Wall -Wextra
+CFLAGS ?=                                 \
+	-I/usr/include                        \
+	-L/usr/lib                            \
+	-Iinclude/cx/                         \
+	-g3 -fPIC -Wall -Wextra               \
+	-Wno-type-limits
 
 # Paths
 PATH_SRC   ?= src/
