@@ -334,11 +334,19 @@ cx_fs_explorer_t* cx_fs_explorer_init(const cx_path_t* _folderPath, cx_error_t* 
     return explorer;
 }
 
+void cx_fs_explorer_reset(cx_fs_explorer_t* _explorer)
+{
+    CX_CHECK_NOT_NULL(_explorer);
+    rewinddir(_explorer->dir);
+}
+
 bool cx_fs_explorer_next_file(cx_fs_explorer_t* _explorer, cx_path_t* _outFile)
 {
+    CX_CHECK_NOT_NULL(_explorer);
+
     if (!_explorer->readingFiles)
     {
-        rewinddir(_explorer->dir);
+        cx_fs_explorer_reset(_explorer);
         _explorer->readingFiles = true;
     }
 
@@ -364,9 +372,11 @@ bool cx_fs_explorer_next_file(cx_fs_explorer_t* _explorer, cx_path_t* _outFile)
 
 bool cx_fs_explorer_next_folder(cx_fs_explorer_t* _explorer, cx_path_t* _outFolder)
 {
+    CX_CHECK_NOT_NULL(_explorer);
+
     if (_explorer->readingFiles)
     {
-        rewinddir(_explorer->dir);
+        cx_fs_explorer_reset(_explorer);
         _explorer->readingFiles = false;
     }
 

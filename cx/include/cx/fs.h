@@ -46,6 +46,8 @@ int32_t             cx_fs_read(const cx_path_t* _path, char* _outBuffer, uint32_
 
 cx_fs_explorer_t*   cx_fs_explorer_init(const cx_path_t* _folderPath, cx_error_t* _err);
 
+void                cx_fs_explorer_reset(cx_fs_explorer_t* _explorer);
+
 bool                cx_fs_explorer_next_file(cx_fs_explorer_t* _explorer, cx_path_t* _outFile);
 
 bool                cx_fs_explorer_next_folder(cx_fs_explorer_t* _explorer, cx_path_t* _outFolder);
