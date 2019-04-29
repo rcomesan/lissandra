@@ -471,7 +471,7 @@ static void handle_cli_command(const cx_cli_cmd_t* _cmd)
         cx_error_t err;
         table_t* table;
         if (fs_table_exists(_cmd->args[0], &table))
-            memtable_dump(&table->memtable, &err);
+            memtable_make_dump(&table->memtable, &err);
 
         printf("Dump result: %s (%d)\n", err.desc, err.code);
         cx_cli_command_end();

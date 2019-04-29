@@ -24,13 +24,10 @@ void                memtable_destroy(memtable_t* _table);
 
 void                memtable_add(memtable_t* _table, const table_record_t* _record, uint32_t _numRecords);
 
-bool                memtable_dump(memtable_t* _table, cx_error_t* _err);
+void                memtable_preprocess(memtable_t* _table);
 
 bool                memtable_find(memtable_t* _table, uint16_t _key, table_record_t* _outRecord);
 
-/****************************************************************************************
- ***  PRIVATE FUNCTIONS
- ***************************************************************************************/
-
+bool                memtable_make_dump(memtable_t* _table, cx_error_t* _err);
 
 #endif // LFS_MEMTABLE_H_

@@ -118,6 +118,8 @@ void memtable_add(memtable_t* _table, const table_record_t* _record, uint32_t _n
 {
     CX_CHECK_NOT_NULL(_table);
 
+    if (_numRecords <= 0) return;
+
     if (_table->mtxInitialized) pthread_mutex_lock(&_table->mtx);
 
     while (_table->recordsCount + _numRecords > _table->recordsCapacity)
@@ -136,29 +138,43 @@ void memtable_add(memtable_t* _table, const table_record_t* _record, uint32_t _n
     }
 
     _table->recordsCount += _numRecords;
+    _table->recordsSorted = false;
 
     if (_table->mtxInitialized) pthread_mutex_unlock(&_table->mtx);
 }
 
-bool memtable_dump(memtable_t* _table, cx_error_t* _err)
+void memtable_preprocess(memtable_t* _table)
 {
     CX_CHECK_NOT_NULL(_table);
-    CX_CHECK(MEMTABLE_TYPE_MEM == _table->type, "you can only dump memtables of type MEM!")
 
-    pthread_mutex_lock(&_table->mtx);
-    
     // we want to pre-process our memtable in a way that we end up with a set of unique values
     // sorted by partition number (asc), key (asc) and timestamp (desc).
     // this will allow us to do binary searches during select and compaction operations.
 
     table_t* table = NULL;
     if (fs_table_exists(_table->name, &table))
-    {        
+    {
         cx_sort_quick(_table->records, sizeof(_table->records[0]),
             _table->recordsCount, _memtable_comp_full, table);
 
-        _table->recordsCount = cx_sort_uniquify(_table->records, sizeof(_table->records[0]), 
+        _table->recordsCount = cx_sort_uniquify(_table->records, sizeof(_table->records[0]),
             _table->recordsCount, _memtable_comp_basic, table, _memtable_record_destroyer);
+
+        _table->recordsSorted = true;
+    }
+}
+
+bool memtable_make_dump(memtable_t* _table, cx_error_t* _err)
+{
+    CX_CHECK_NOT_NULL(_table);
+    CX_CHECK(MEMTABLE_TYPE_MEM == _table->type, "you can only dump memtables of type MEM!")
+
+    if (_table->mtxInitialized) pthread_mutex_lock(&_table->mtx);
+
+    table_t* table = NULL;
+    if (fs_table_exists(_table->name, &table))
+    {        
+        memtable_preprocess(_table);
 
         fs_file_t dumpFile;
         CX_MEM_ZERO(dumpFile);
@@ -181,7 +197,7 @@ bool memtable_dump(memtable_t* _table, cx_error_t* _err)
         CX_ERROR_SET(_err, 1, "Table '%s' does not exist.", _table->name);
     }
        
-    pthread_mutex_unlock(&_table->mtx);
+    if (_table->mtxInitialized) pthread_mutex_unlock(&_table->mtx);
     return (ERR_NONE == _err->code);
 }
 
@@ -192,7 +208,7 @@ bool memtable_find(memtable_t* _table, uint16_t _key, table_record_t* _outRecord
     int32_t pos = -1;
     bool found = false;
 
-    if (MEMTABLE_TYPE_DISK == _table->type)
+    if (MEMTABLE_TYPE_DISK == _table->type || _table->recordsSorted)
     {
         // binary search. (assume the entries in our files are sorted and contain no duplicates)
         table_t* table = NULL;
