@@ -38,6 +38,8 @@ bool                cx_fs_mkdir(const cx_path_t* _folderPath, cx_error_t* _err);
 
 bool                cx_fs_remove(const cx_path_t* _path, cx_error_t* _err);
 
+bool                cx_fs_move(const cx_path_t* _path, const cx_path_t* _newPath, cx_error_t* _err);
+
 bool                cx_fs_write(const cx_path_t* _path, const char* _buffer, uint32_t _bufferSize, cx_error_t* _err);
 
 int32_t             cx_fs_read(const cx_path_t* _path, char* _outBuffer, uint32_t _bufferSize, cx_error_t* _err);

@@ -54,12 +54,23 @@ void            cx_time_stamp(cx_timestamp_t* _outTimestamp);
 #define CX_MACRO_BLOCK_END } while (0);
 #define CX_NOOP(...) CX_MACRO_BLOCK_BEGIN CX_MACRO_BLOCK_END
 
+#define CX_ERROR_CLEAR(_errPtr)                                                         \
+    if (NULL != (_errPtr))                                                              \
+    {                                                                                   \
+        memset((_errPtr), 0, sizeof((*_errPtr)));                                       \
+    }
+
 #define CX_ERROR_SET(_err, _code, _format, ...)                                         \
     if (NULL != (_err))                                                                 \
     {                                                                                   \
         (_err)->code = _code;                                                           \
         snprintf((_err)->desc, sizeof((_err)->desc), _format, ##__VA_ARGS__);           \
     }
+
+#define CX_ERROR_OK(_errPtr)                                                            \
+    (NULL != (_errPtr))                                                                 \
+    ? 0 == (_errPtr)->code                                                              \
+    : true
 
 #if CX_DEBUG
     #define CX_INFO(_format, ...)                                                        \
