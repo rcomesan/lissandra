@@ -67,7 +67,7 @@ bool memtable_init_from_dump(const char* _tableName, uint16_t _dumpNumber, bool 
     return (ERR_NONE == _err->code);
 }
 
-bool memtable_init_from_part(const char* _tableName, uint16_t _partNumber, memtable_t* _outTable, cx_error_t* _err)
+bool memtable_init_from_part(const char* _tableName, uint16_t _partNumber, bool _isDuringCompaction, memtable_t* _outTable, cx_error_t* _err)
 {
     if (!_memtable_init(_tableName, _outTable, _err)) return false;   
 
@@ -75,7 +75,7 @@ bool memtable_init_from_part(const char* _tableName, uint16_t _partNumber, memta
     _outTable->recordsSorted = true;
 
     fs_file_t partFile;
-    if (fs_table_get_part(_tableName, _partNumber, &partFile, _err))
+    if (fs_table_get_part(_tableName, _partNumber, _isDuringCompaction, &partFile, _err))
     {
         char* buff = malloc(partFile.size);
         if (fs_file_load(&partFile, buff, _err))
@@ -181,7 +181,7 @@ bool memtable_make_dump(memtable_t* _table, cx_error_t* _err)
         if (_memtable_save(_table, &dumpFile, _err))
         {
             uint16_t dumpNumber = fs_table_get_dump_number_next(_table->name);
-            if (fs_table_set_dump(_table->name, dumpNumber, &dumpFile, _err))
+            if (fs_table_set_dump(_table->name, dumpNumber, false, &dumpFile, _err))
             {
                 // clear the memtable
                 for (uint32_t i = 0; i < _table->recordsCount; i++)
@@ -197,6 +197,34 @@ bool memtable_make_dump(memtable_t* _table, cx_error_t* _err)
         CX_ERROR_SET(_err, 1, "Table '%s' does not exist.", _table->name);
     }
        
+    if (_table->mtxInitialized) pthread_mutex_unlock(&_table->mtx);
+    return (ERR_NONE == _err->code);
+}
+
+bool memtable_make_part(memtable_t* _table, uint16_t _partNumber, cx_error_t* _err)
+{
+    CX_CHECK_NOT_NULL(_table);
+    CX_CHECK(MEMTABLE_TYPE_MEM == _table->type, "you can only dump memtables of type MEM!")
+
+    if (_table->mtxInitialized) pthread_mutex_lock(&_table->mtx);
+
+    table_t* table = NULL;
+    if (fs_table_exists(_table->name, &table))
+    {
+        memtable_preprocess(_table);
+
+        fs_file_t partFile;
+        CX_MEM_ZERO(partFile);
+        if (_memtable_save(_table, &partFile, _err))
+        {
+            fs_table_set_part(_table->name, _partNumber, true, &partFile, _err);
+        }
+    }
+    else
+    {
+        CX_ERROR_SET(_err, 1, "Table '%s' does not exist.", _table->name);
+    }
+
     if (_table->mtxInitialized) pthread_mutex_unlock(&_table->mtx);
     return (ERR_NONE == _err->code);
 }
@@ -316,8 +344,8 @@ static int32_t _memtable_comp_full(const void* _a, const void* _b, void* _userDa
 
     // 3) keys are equal. now compare timestamps.
     result = b->timestamp - a->timestamp;
-    if (result > 0) return  1;  // _b has _a timestamp greater than _a (is more recent)
-    if (result < 0) return -1;  // _b has _a timestamp lower   than _a (is less recent)
+    if (result > 0) return  1;  // _b has a timestamp greater than _a (is more recent)
+    if (result < 0) return -1;  // _b has a timestamp lower   than _a (is less recent)
 
     // a and b are considered to be equal
     return 0;
