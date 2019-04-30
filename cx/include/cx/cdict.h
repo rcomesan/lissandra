@@ -28,6 +28,10 @@ bool                    cx_cdict_get(cx_cdict_t* _cdict, const char* _key, void*
 
 void                    cx_cdict_set(cx_cdict_t* _cdict, const char* _key, void* _data);
 
+bool                    cx_cdict_tryadd(cx_cdict_t* _cdict, const char* _key, void* _data);
+
+bool                    cx_cdict_tryremove(cx_cdict_t* _cdict, const char* _key, void** _outData);
+
 void*                   cx_cdict_erase(cx_cdict_t* _cdict, const char* _key, cx_destroyer_cb _cb);
 
 bool                    cx_cdict_contains(cx_cdict_t* _cdict, const char* _key);

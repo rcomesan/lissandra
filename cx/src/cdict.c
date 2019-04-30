@@ -65,6 +65,42 @@ void cx_cdict_set(cx_cdict_t* _cdict, const char* _key, void* _data)
     pthread_mutex_unlock(&_cdict->mutex);
 }
 
+bool cx_cdict_tryadd(cx_cdict_t* _cdict, const char* _key, void* _data)
+{
+    CX_CHECK_NOT_NULL(_cdict);
+
+    bool result = false;
+
+    pthread_mutex_lock(&_cdict->mutex);
+    if (!dictionary_has_key(_cdict->handle, _key))
+    {
+        dictionary_put(_cdict->handle, _key, _data);
+        result = true;
+    }
+    pthread_mutex_unlock(&_cdict->mutex);
+
+    return result;
+}
+
+bool cx_cdict_tryremove(cx_cdict_t* _cdict, const char* _key, void** _outData)
+{
+    CX_CHECK_NOT_NULL(_cdict);
+    
+    void* data = NULL;
+    bool result = false;
+
+    pthread_mutex_lock(&_cdict->mutex);
+    if (dictionary_has_key(_cdict->handle, _key))
+    {
+        data = dictionary_remove(_cdict->handle, _key);
+        result = true;
+    }
+    pthread_mutex_unlock(&_cdict->mutex);
+
+    if (NULL != (*_outData)) (*_outData) = data;
+    return result;
+}
+
 void* cx_cdict_erase(cx_cdict_t* _cdict, const char* _key, cx_destroyer_cb _cb)
 {
     CX_CHECK_NOT_NULL(_cdict);
