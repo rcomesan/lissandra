@@ -98,8 +98,8 @@ typedef struct memtable_t
 
 typedef struct table_t
 {
-    table_meta_t        meta;                   // table metadata
-    memtable_t          memtable;               // memtable for this table
+    table_meta_t        meta;                   // table metadata.
+    memtable_t          memtable;               // memtable for this table.
     bool                deleted;                // true if this table is marked as deleted (pending to be removed).
     bool                blocked;                // true if this table is marked as blocked (pending to be compacted).
 } table_t;

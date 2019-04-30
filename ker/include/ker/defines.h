@@ -41,6 +41,7 @@ typedef enum REQ_TYPE
     REQ_TYPE_DESCRIBE,
     REQ_TYPE_SELECT,
     REQ_TYPE_INSERT,
+    REQ_TYPE_COMPACT,
 } REQ_TYPE;
 
 typedef enum REQ_STATE
@@ -113,6 +114,12 @@ typedef struct data_insert_t
     table_name_t    name;
     table_record_t  record;
 } data_insert_t;
+
+typedef struct data_compact_t
+{
+    data_common_t   c;
+    table_name_t    name;
+} data_compact_t;
 
 typedef struct data_run_t
 {

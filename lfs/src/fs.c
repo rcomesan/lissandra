@@ -50,7 +50,7 @@ bool fs_init(cx_error_t* _err)
     CX_CHECK(NULL == m_fsCtx, "fs is already initialized!");
 
     m_fsCtx = CX_MEM_STRUCT_ALLOC(m_fsCtx);
-    CX_MEM_ZERO(*_err);
+    CX_ERROR_CLEAR(_err);
 
     bool rootDirOk = false;
     cx_path_t rootDir;
@@ -210,7 +210,7 @@ bool fs_table_exists(const char* _tableName, table_t** _outTable)
 bool fs_table_create(table_t* _table, const char* _tableName, uint8_t _consistency, uint16_t _partitions, uint32_t _compactionInterval, cx_error_t* _err)
 {
     CX_CHECK(strlen(_tableName) > 0, "invalid _tableName!");
-    CX_MEM_ZERO(*_err);
+    CX_ERROR_CLEAR(_err);
 
     pthread_mutex_lock(&m_fsCtx->mtxCreateDrop);
     if (fs_table_blocked_guard(_tableName, _err, &m_fsCtx->mtxCreateDrop)) return false;
@@ -253,7 +253,7 @@ bool fs_table_create(table_t* _table, const char* _tableName, uint8_t _consisten
 
                             if (1 == partFile.blocksCount)
                             {
-                                if (!fs_table_set_part(_tableName, i, &partFile, _err))
+                                if (!fs_table_set_part(_tableName, i, false, &partFile, _err))
                                 {
                                     CX_ERROR_SET(_err, 1, "partition #%d for table '%s' could not be written!", i, _tableName);
                                 }
@@ -293,7 +293,7 @@ bool fs_table_create(table_t* _table, const char* _tableName, uint8_t _consisten
 bool fs_table_delete(const char* _tableName, cx_error_t* _err)
 {
     CX_CHECK(strlen(_tableName) > 0, "invalid _tableName!");
-    CX_MEM_ZERO(*_err);
+    CX_ERROR_CLEAR(_err);
 
     pthread_mutex_lock(&m_fsCtx->mtxCreateDrop);
     if (fs_table_blocked_guard(_tableName, _err, &m_fsCtx->mtxCreateDrop)) return false;
@@ -315,7 +315,7 @@ bool fs_table_delete(const char* _tableName, cx_error_t* _err)
         {
             for (uint32_t i = 0; i < meta.partitionsCount; i++)
             {
-                if (fs_table_get_part(_tableName, i, &part, _err))
+                if (fs_table_get_part(_tableName, i, false, &part, _err))
                 {
                     fs_block_free(part.blocks, part.blocksCount);
                 }
@@ -346,7 +346,7 @@ bool fs_table_delete(const char* _tableName, cx_error_t* _err)
 
 bool fs_table_get_meta(const char* _tableName, table_meta_t* _outMeta, cx_error_t* _err)
 {
-    CX_MEM_ZERO(*_err);
+    CX_ERROR_CLEAR(_err);
     CX_CHECK_NOT_NULL(_outMeta);
     CX_MEM_ZERO(*_outMeta);
 
@@ -397,26 +397,29 @@ bool fs_table_get_meta(const char* _tableName, table_meta_t* _outMeta, cx_error_
     key_missing:
         CX_ERROR_SET(_err, 1, "key '%s' is missing in table '%s' metadata file.", key, _tableName);
         config_destroy(meta);
+        return false;
     }
 
     CX_ERROR_SET(_err, 1, "table metadata file '%s' is missing or not readable.", metadataPath);
     return false;
 }
 
-bool fs_table_get_part(const char* _tableName, uint16_t _partNumber, fs_file_t* _outFile, cx_error_t* _err)
+bool fs_table_get_part(const char* _tableName, uint16_t _partNumber, bool _isDuringCompaction, fs_file_t* _outFile, cx_error_t* _err)
 {
     cx_path_t path;
-    cx_fs_path(&path, "%s/%s/%s/%s%d." LFS_PART_EXTENSION, m_fsCtx->rootDir, LFS_DIR_TABLES,
-        _tableName, LFS_PART_PREFIX, _partNumber);
+    cx_fs_path(&path, "%s/%s/%s/%s%d.%s", m_fsCtx->rootDir, LFS_DIR_TABLES,
+        _tableName, LFS_PART_PREFIX, _partNumber,
+        _isDuringCompaction ? LFS_PART_EXTENSION_COMPACTION : LFS_PART_EXTENSION);
 
     return _fs_file_read(&path, _outFile, _err);
 }
 
-bool fs_table_set_part(const char* _tableName, uint16_t _partNumber, fs_file_t* _file, cx_error_t* _err)
+bool fs_table_set_part(const char* _tableName, uint16_t _partNumber, bool _isDuringCompaction, fs_file_t* _file, cx_error_t* _err)
 {
     cx_path_t path;
-    cx_fs_path(&path, "%s/%s/%s/%s%d." LFS_PART_EXTENSION, m_fsCtx->rootDir, LFS_DIR_TABLES,
-        _tableName, LFS_PART_PREFIX, _partNumber);
+    cx_fs_path(&path, "%s/%s/%s/%s%d.%s", m_fsCtx->rootDir, LFS_DIR_TABLES,
+        _tableName, LFS_PART_PREFIX, _partNumber,
+        _isDuringCompaction ? LFS_PART_EXTENSION_COMPACTION : LFS_PART_EXTENSION);
 
     return _fs_file_write(&path, _file, _err);
 }
@@ -431,11 +434,12 @@ bool fs_table_get_dump(const char* _tableName, uint16_t _dumpNumber, bool _isDur
     return _fs_file_read(&path, _outFile, _err);
 }
 
-bool fs_table_set_dump(const char* _tableName, uint16_t _dumpNumber, fs_file_t* _file, cx_error_t* _err)
+bool fs_table_set_dump(const char* _tableName, uint16_t _dumpNumber, bool _isDuringCompaction, fs_file_t* _file, cx_error_t* _err)
 {
     cx_path_t path;
-    cx_fs_path(&path, "%s/%s/%s/%s%d." LFS_DUMP_EXTENSION, m_fsCtx->rootDir, LFS_DIR_TABLES, 
-        _tableName, LFS_DUMP_PREFIX, _dumpNumber);
+    cx_fs_path(&path, "%s/%s/%s/%s%d.%s", m_fsCtx->rootDir, LFS_DIR_TABLES, 
+        _tableName, LFS_DUMP_PREFIX, _dumpNumber,
+        _isDuringCompaction ? LFS_DUMP_EXTENSION_COMPACTION : LFS_DUMP_EXTENSION);
 
     return _fs_file_write(&path, _file, _err);
 }
@@ -750,7 +754,7 @@ static bool _fs_bootstrap(cx_path_t* _rootDir, uint32_t _maxBlocks, uint32_t _bl
 
 static bool _fs_load_meta(cx_error_t* _err)
 {
-    CX_MEM_ZERO(*_err);
+    CX_ERROR_CLEAR(_err);
 
     char* temp = NULL;
     char* key = "";
@@ -810,7 +814,7 @@ static bool _fs_load_meta(cx_error_t* _err)
 
 static bool _fs_load_tables(cx_error_t* _err)
 {
-    CX_MEM_ZERO(*_err);
+    CX_ERROR_CLEAR(_err);
 
     m_fsCtx->tablesMap = cx_cdict_init();
     if (NULL == m_fsCtx->tablesMap)
@@ -911,7 +915,7 @@ static bool _fs_file_read(cx_path_t* _filePath, fs_file_t* _outFile, cx_error_t*
     char* key = NULL;
     bool keyMissing = false;
     t_config* file = NULL;
-    CX_MEM_ZERO(*_err);
+    CX_ERROR_CLEAR(_err);
 
     if (cx_fs_exists(_filePath))
     {
@@ -990,7 +994,7 @@ static bool _fs_file_read(cx_path_t* _filePath, fs_file_t* _outFile, cx_error_t*
 static bool _fs_file_write(cx_path_t* _filePath, fs_file_t* _file, cx_error_t* _err)
 {
     t_config* file = NULL;
-    CX_MEM_ZERO(*_err);
+    CX_ERROR_CLEAR(_err);
     char temp[32];
 
     if (cx_fs_remove(_filePath, _err) && cx_fs_touch(_filePath, _err))

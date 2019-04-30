@@ -18,6 +18,7 @@
 #define LFS_FILE_BITMAP "bitmap.bin"
 #define LFS_PART_PREFIX "P"
 #define LFS_PART_EXTENSION "bin"
+#define LFS_PART_EXTENSION_COMPACTION "binc"
 #define LFS_DUMP_EXTENSION "tmp"
 #define LFS_DUMP_EXTENSION_COMPACTION "tmpc"
 #define LFS_DUMP_PREFIX "D"
@@ -42,13 +43,13 @@ bool                fs_table_delete(const char* _tableName, cx_error_t* _err);
 
 bool                fs_table_get_meta(const char* _tableName, table_meta_t* _outMeta, cx_error_t* _err);
 
-bool                fs_table_get_part(const char* _tableName, uint16_t _partNumber, fs_file_t* _outFile, cx_error_t* _err);
+bool                fs_table_get_part(const char* _tableName, uint16_t _partNumber, bool _isDuringCompaction, fs_file_t* _outFile, cx_error_t* _err);
 
-bool                fs_table_set_part(const char* _tableName, uint16_t _partNumber, fs_file_t* _file, cx_error_t* _err);
+bool                fs_table_set_part(const char* _tableName, uint16_t _partNumber, bool _isDuringCompaction, fs_file_t* _file, cx_error_t* _err);
 
 bool                fs_table_get_dump(const char* _tableName, uint16_t _dumpNumber, bool _isDuringCompaction, fs_file_t* _outFile, cx_error_t* _err);
 
-bool                fs_table_set_dump(const char* _tableName, uint16_t _dumpNumber, fs_file_t* _file, cx_error_t* _err);
+bool                fs_table_set_dump(const char* _tableName, uint16_t _dumpNumber, bool _isDuringCompaction, fs_file_t* _file, cx_error_t* _err);
 
 uint16_t            fs_table_get_dump_number_next(const char* _tableName);
 
