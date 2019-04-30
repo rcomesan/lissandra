@@ -347,7 +347,7 @@ static void lfs_destroy()
     {
         handle = cx_handle_at(g_ctx.tablesHalloc, i);
         table = &(g_ctx.tables[handle]);
-        memtable_destroy(&table->memtable);
+        fs_table_destroy(table);
     }
     cx_halloc_destroy(g_ctx.tablesHalloc);
     g_ctx.tablesHalloc = NULL;
@@ -471,9 +471,16 @@ static void handle_cli_command(const cx_cli_cmd_t* _cmd)
         cx_error_t err;
         table_t* table;
         if (fs_table_exists(_cmd->args[0], &table))
-            memtable_make_dump(&table->memtable, &err);
-
-        printf("Dump result: %s (%d)\n", err.desc, err.code);
+        {
+            if (memtable_make_dump(&table->memtable, &err))
+            {
+                CX_INFO("Memtable dump for table '%s' completed successfully.", _cmd->args[0]);
+            }
+            else
+            {
+                CX_INFO("Memtable dump for table '%s' failed: %s", _cmd->args[0], err.desc);
+            }
+        }
         cx_cli_command_end();
     }
     else
@@ -523,12 +530,6 @@ static void handle_worker_task(request_t* _req)
         CX_WARN(CX_ALW, "undefined <worker> behaviour for request type #%d.", _req->type);
         break;
     }
-}
-
-void dump_memtables()
-{
-    //dictionary_iterator(m_fsCtx->tablesMap, memtable_dump);
-    //dictionary_clean_and_destroy_elements(m_fsCtx->tablesMap, memtable_destroy);
 }
 
 void requests_update()
@@ -689,11 +690,10 @@ static void tables_update()
 
         if (table->deleted)
         {
-            memtable_destroy(&table->memtable);
+            fs_table_destroy(table);
             CX_MEM_ZERO(*table);
             m_auxHandles[removeCount++] = handle;
         }
-
     }
 
     for (uint16_t i = 0; i < removeCount; i++)

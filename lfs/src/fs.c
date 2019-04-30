@@ -34,8 +34,6 @@ static bool         _fs_load_tables(cx_error_t* _err);
 
 static bool         _fs_load_blocks(cx_error_t* _err);
 
-static bool         _fs_table_init(table_t* _table, const char* _tableName, cx_error_t* _err);
-
 static bool         _fs_file_write(cx_path_t* _filePath, fs_file_t* _outFile, cx_error_t* _err);
 
 static bool         _fs_file_read(cx_path_t* _filePath, fs_file_t* _file, cx_error_t* _err);
@@ -84,16 +82,14 @@ bool fs_init(cx_error_t* _err)
         cx_str_copy(m_fsCtx->rootDir, sizeof(m_fsCtx->rootDir), rootDir);
         CX_INFO("filesystem mount point: %s", m_fsCtx->rootDir);
         
-        m_fsCtx->mtxCreateDropInit = (0 == pthread_mutex_init(&m_fsCtx->mtxCreateDrop, NULL));
         m_fsCtx->mtxBlocksInit = (0 == pthread_mutex_init(&m_fsCtx->mtxBlocks, NULL));
 
-        if (!m_fsCtx->mtxCreateDropInit || !m_fsCtx->mtxBlocksInit)
+        if (!m_fsCtx->mtxBlocksInit)
         {
             CX_ERROR_SET(_err, 1, "pthread mutex initialization failed!");
         }
 
         return true
-            && m_fsCtx->mtxCreateDropInit
             && m_fsCtx->mtxBlocksInit
             && _fs_load_meta(_err)
             && _fs_load_tables(_err)
@@ -115,11 +111,6 @@ void fs_destroy()
     cx_cdict_destroy(m_fsCtx->tablesMap, NULL);
 
     // mutexes
-    if (m_fsCtx->mtxCreateDropInit)
-    {
-        pthread_mutex_destroy(&m_fsCtx->mtxCreateDrop);
-        m_fsCtx->mtxCreateDropInit = false;
-    }
     if (m_fsCtx->mtxBlocksInit)
     {
         pthread_mutex_destroy(&m_fsCtx->mtxBlocks);
@@ -136,11 +127,8 @@ table_meta_t* fs_describe(uint16_t* _outTablesCount, cx_error_t* _err)
     table_t* table;
     uint16_t i = 0;
 
-    pthread_mutex_lock(&m_fsCtx->mtxCreateDrop);
-
-    (*_outTablesCount) = (uint16_t)cx_cdict_size(m_fsCtx->tablesMap);
-
     cx_cdict_iter_begin(m_fsCtx->tablesMap);
+    (*_outTablesCount) = (uint16_t)cx_cdict_size(m_fsCtx->tablesMap);
     if (0 < (*_outTablesCount))
     {
         tables = CX_MEM_ARR_ALLOC(tables, (*_outTablesCount));
@@ -168,28 +156,38 @@ table_meta_t* fs_describe(uint16_t* _outTablesCount, cx_error_t* _err)
         }
     }
 
-    pthread_mutex_unlock(&m_fsCtx->mtxCreateDrop);
     return tables;
 }
 
-bool fs_table_blocked_guard(const char* _tableName, cx_error_t* _err, pthread_mutex_t* _mtx)
+bool fs_table_avail_guard_begin(table_t* _table, cx_error_t* _err, pthread_mutex_t* _mtx)
 {
-    table_t* table;
-
-    bool isBlocked = true
-        && fs_table_exists(_tableName, &table)
-        && table->blocked;
-
-    if (isBlocked)
+    if (_table->blocked)
     {
         CX_ERROR_SET(_err, LFS_ERR_TABLE_BLOCKED, "Operation cannot be performed at this time since the table is blocked. Try agian later.");
         if (NULL != _mtx)
         {
             pthread_mutex_unlock(_mtx);
         }
+        return false;
+    }
+    else
+    {
+        // increment the amount of running jobs that depend on this table availability (not blocked)
+        pthread_mutex_lock(&_table->mtxOperations);
+        _table->operations++;
+        pthread_mutex_unlock(&_table->mtxOperations);
+
         return true;
     }
-    return false;
+}
+
+void fs_table_avail_guard_end(table_t* _table)
+{
+    // decrement the amount of running jobs that depend on this table availability (not blocked)
+    pthread_mutex_lock(&_table->mtxOperations);
+    _table->operations--;
+    CX_CHECK(_table->operations >= 0, "something is wrong here...");
+    pthread_mutex_unlock(&_table->mtxOperations);
 }
 
 bool fs_table_exists(const char* _tableName, table_t** _outTable)
@@ -212,13 +210,12 @@ bool fs_table_create(table_t* _table, const char* _tableName, uint8_t _consisten
     CX_CHECK(strlen(_tableName) > 0, "invalid _tableName!");
     CX_ERROR_CLEAR(_err);
 
-    pthread_mutex_lock(&m_fsCtx->mtxCreateDrop);
-    if (fs_table_blocked_guard(_tableName, _err, &m_fsCtx->mtxCreateDrop)) return false;
-
     cx_path_t path;
     t_config* meta = NULL;
 
-    if (!fs_table_exists(_tableName, NULL))
+    _table->blocked = false; //TODO i think we should block the table until it's fully created
+
+    if (cx_cdict_tryadd(m_fsCtx->tablesMap, _tableName, _table))
     {
         cx_fs_path(&path, "%s/%s/%s", m_fsCtx->rootDir, LFS_DIR_TABLES, _tableName);
         if (cx_fs_mkdir(&path, _err))
@@ -242,7 +239,7 @@ bool fs_table_create(table_t* _table, const char* _tableName, uint8_t _consisten
 
                     config_save(meta);
 
-                    if (_fs_table_init(_table, _tableName, _err))
+                    if (fs_table_init(_table, _tableName, _err))
                     {
                         fs_file_t partFile;
                         for (uint16_t i = 0; i < _table->meta.partitionsCount && ERR_NONE == _err->code; i++)
@@ -264,9 +261,6 @@ bool fs_table_create(table_t* _table, const char* _tableName, uint8_t _consisten
                                     "we may have ran out of blocks!", _tableName, i);
                             }
                         }
-
-                        if (ERR_NONE == _err->code)
-                            cx_cdict_set(m_fsCtx->tablesMap, _tableName, _table);
                     }
                 }
                 else
@@ -286,7 +280,6 @@ bool fs_table_create(table_t* _table, const char* _tableName, uint8_t _consisten
     // if failed, mark table as deleted so that it gets wiped out in the main loop
     if (ERR_NONE != _err->code) _table->deleted = true; 
 
-    pthread_mutex_unlock(&m_fsCtx->mtxCreateDrop);
     return (ERR_NONE == _err->code);
 }
 
@@ -295,18 +288,13 @@ bool fs_table_delete(const char* _tableName, cx_error_t* _err)
     CX_CHECK(strlen(_tableName) > 0, "invalid _tableName!");
     CX_ERROR_CLEAR(_err);
 
-    pthread_mutex_lock(&m_fsCtx->mtxCreateDrop);
-    if (fs_table_blocked_guard(_tableName, _err, &m_fsCtx->mtxCreateDrop)) return false;
-
-    cx_path_t path;
+    cx_path_t    path;
     table_meta_t meta;
-    fs_file_t part;
-    table_t* table;
+    fs_file_t    part;
+    table_t*     table;
 
-    if (fs_table_exists(_tableName, &table))
+    if (cx_cdict_tryremove(m_fsCtx->tablesMap, _tableName, (void**)&table))
     {
-        // remove from dict
-        cx_cdict_erase(m_fsCtx->tablesMap, _tableName, NULL);
         // mark the table slot as deleted, so that it gets freed up safely in the main loop
         table->deleted = true;
 
@@ -340,7 +328,6 @@ bool fs_table_delete(const char* _tableName, cx_error_t* _err)
         CX_ERROR_SET(_err, 1, "Table '%s' does not exist.", _tableName);
     }
 
-    pthread_mutex_unlock(&m_fsCtx->mtxCreateDrop);
     return (ERR_NONE == _err->code);
 }
 
@@ -845,7 +832,7 @@ static bool _fs_load_tables(cx_error_t* _err)
             if (INVALID_HANDLE != tableHandle)
             {
                 table = &(g_ctx.tables[tableHandle]);
-                if (_fs_table_init(table, tableName, _err))
+                if (fs_table_init(table, tableName, _err))
                 {
                     cx_cdict_set(m_fsCtx->tablesMap, tableName, table);
                     count++;
@@ -901,13 +888,30 @@ static bool _fs_load_blocks(cx_error_t* _err)
     return false;
 }
 
-static bool _fs_table_init(table_t* _table, const char* _tableName, cx_error_t* _err)
+bool fs_table_init(table_t* _outTable, const char* _tableName, cx_error_t* _err)
 {
     CX_CHECK(strlen(_tableName) > 0, "invalid table name!");
 
+    _outTable->operations = 0;
+
     return true
-        && fs_table_get_meta(_tableName, &_table->meta, _err)
-        && memtable_init(_tableName, true, &_table->memtable, _err);
+        && fs_table_get_meta(_tableName, &_outTable->meta, _err)
+        && memtable_init(_tableName, true, &_outTable->memtable, _err)
+        && (0 == pthread_mutex_init(&_outTable->mtxOperations, NULL));
+}
+
+void fs_table_destroy(table_t* _table)
+{
+    if (NULL != _table)
+    {
+        memtable_destroy(&_table->memtable);
+
+        pthread_mutex_destroy(&_table->mtxOperations);
+
+        _table->operations = 0;
+        _table->blocked = false;
+        _table->deleted = false;
+    }
 }
 
 static bool _fs_file_read(cx_path_t* _filePath, fs_file_t* _outFile, cx_error_t* _err)

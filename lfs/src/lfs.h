@@ -72,8 +72,6 @@ typedef struct fs_ctx_t
     char*               blocksMap;              // buffer for storing our bit array containing blocks status (unset bit mean the block is free to use).
                                                 // must be large enough to hold at least meta.blocksCount amount of bits.
     cx_cdict_t*         tablesMap;              // container for indexing table_t entries by table name.
-    pthread_mutex_t     mtxCreateDrop;          // mutex for syncing create/drop queries.
-    bool                mtxCreateDropInit;      // true if mtxCreateDrop was successfully initialized and therefore needs to be destroyed.
     pthread_mutex_t     mtxBlocks;              // mutex for syncing blocks alloc/free operations;
     bool                mtxBlocksInit;          // true if mtxBlocks was successfully initialized and therefore needs to be destroyed.
 } fs_ctx_t;
@@ -102,6 +100,8 @@ typedef struct table_t
     memtable_t          memtable;               // memtable for this table.
     bool                deleted;                // true if this table is marked as deleted (pending to be removed).
     bool                blocked;                // true if this table is marked as blocked (pending to be compacted).
+    uint16_t            operations;             // number of operations being performed on this table (number of current jobs which depend on its availability).
+    pthread_mutex_t     mtxOperations;          // mutex to protect operations variable when accessed/modified by multiple threads.
 } table_t;
 
 typedef struct lfs_ctx_t
@@ -115,7 +115,6 @@ typedef struct lfs_ctx_t
     cx_handle_alloc_t*  requestsHalloc;                             // handle allocator for requests container.
     table_t             tables[MAX_TABLES];                         // container for storing tables.
     cx_handle_alloc_t*  tablesHalloc;                               // handle allocator for tables container;
-    bool                pendingSync;                                // true if we need to sync in the main loop to perform table operations.
     cx_pool_t*          pool;                                       // main pool of worker threads to process incoming requests.
 } lfs_ctx_t;
 
