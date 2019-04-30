@@ -515,6 +515,10 @@ static void handle_worker_task(request_t* _req)
         worker_handle_insert(_req);
         break;
 
+    case REQ_TYPE_COMPACT:
+        worker_handle_compact(_req);
+        break;
+
     default:
         CX_WARN(CX_ALW, "undefined <worker> behaviour for request type #%d.", _req->type);
         break;

@@ -89,10 +89,9 @@ void worker_handle_select(request_t* _req)
 
             // search it in the corresponding partition
             uint16_t partNumber = rec->key % table->meta.partitionsCount;
-            if (memtable_init_from_part(data->name, partNumber, &memt, &err))
+            if (memtable_init_from_part(data->name, partNumber, false, &memt, &err))
             {
-                if (memtable_find(&memt, rec->key, &recTmp)
-                    && recTmp.timestamp >= rec->timestamp)
+                if (memtable_find(&memt, rec->key, &recTmp) && recTmp.timestamp >= rec->timestamp)
                 {
                     rec->timestamp = recTmp.timestamp;
                     rec->value = cx_str_copy_d(recTmp.value);
@@ -105,34 +104,30 @@ void worker_handle_select(request_t* _req)
             uint16_t  dumpNumber = 0;
             bool      dumpDuringCompaction = false;
             cx_path_t filePath;
+
             cx_fs_explorer_t* exp = fs_table_explorer(data->name, &err);
             if (NULL != exp)
             {
-                while (cx_fs_explorer_next_file(exp, &filePath))
+                while (cx_fs_explorer_next_file(exp, &filePath) && fs_is_dump(&filePath, &dumpNumber, &dumpDuringCompaction))
                 {
-                    if (fs_is_dump(&filePath, &dumpNumber, &dumpDuringCompaction))
+                    if (memtable_init_from_dump(data->name, dumpNumber, dumpDuringCompaction, &memt, &err))
                     {
-                        if (memtable_init_from_dump(data->name, dumpNumber, dumpDuringCompaction, &memt, &err))
+                        if (memtable_find(&memt, rec->key, &recTmp) && recTmp.timestamp >= rec->timestamp)
                         {
-                            if (memtable_find(&memt, rec->key, &recTmp)
-                                && recTmp.timestamp >= rec->timestamp)
-                            {
-                                rec->timestamp = recTmp.timestamp;
+                            rec->timestamp = recTmp.timestamp;
 
-                                if (NULL != rec->value) free(rec->value);
-                                rec->value = cx_str_copy_d(recTmp.value);
-                            }
-
-                            memtable_destroy(&memt);
+                            if (NULL != rec->value) free(rec->value);
+                            rec->value = cx_str_copy_d(recTmp.value);
                         }
+
+                        memtable_destroy(&memt);
                     }
                 }
                 cx_fs_explorer_destroy(exp);
             }
             
             // search it in our current memtable
-            if (memtable_find(&table->memtable, rec->key, &recTmp)
-                && recTmp.timestamp >= rec->timestamp)
+            if (memtable_find(&table->memtable, rec->key, &recTmp) && recTmp.timestamp >= rec->timestamp)
             {
                 rec->timestamp = recTmp.timestamp;
 
@@ -175,7 +170,104 @@ void worker_handle_insert(request_t* _req)
     _worker_parse_result(_req);
 }
 
+void worker_handle_compact(request_t* _req)
+{
+    data_compact_t* data = _req->data;
+    table_t* table = NULL;
+    cx_fs_explorer_t* exp = NULL;
+    uint16_t*   dumpNumbers = NULL;
+    uint32_t    dumpCount = 0;
+    memtable_t* dumpsMem = NULL;
+    memtable_t* tempMem = NULL;
 
+    if (fs_table_exists(data->name, &table))
+    {
+        // define the scope of our compaction renaming .tmp files to .tmpc
+        pthread_mutex_lock(&table->memtable.mtx);
+        {
+            exp = fs_table_explorer(data->name, &data->c.err);
+            if (NULL != exp)
+            {
+                uint16_t   dumpNumberMax = fs_table_get_dump_number_next(data->name);
+                cx_path_t  dumpPath;
+                cx_path_t  dumpNewPath;
+                dumpNumbers = CX_MEM_ARR_ALLOC(dumpNumbers, dumpNumberMax);
+
+                while (cx_fs_explorer_next_file(exp, &dumpPath) && fs_is_dump(&dumpPath, &dumpNumbers[dumpCount], NULL))
+                {
+                    dumpCount++;
+                }
+
+                for (uint32_t i = 0; i < dumpCount; i++)
+                {
+                    cx_str_copy(dumpNewPath, sizeof(dumpNewPath), dumpPath);
+                    cx_str_copy(dumpNewPath[strlen(dumpNewPath) - sizeof(LFS_DUMP_EXTENSION)], 5, LFS_DUMP_EXTENSION_COMPACTION);
+                    if (!cx_fs_move(&dumpPath, &dumpNewPath, &data->c.err))
+                        goto failed;
+                }
+            }
+        }
+        pthread_mutex_unlock(&table->memtable.mtx);
+
+        // load .tmpc files into a temporary memtable, sort the entries and remove duplicates.
+        if (memtable_init(data->name, false, dumpsMem, &data->c.err))
+        {
+            for (uint32_t i = 0; i < dumpCount; i++)
+            {
+                if (memtable_init_from_dump(data->name, dumpNumbers[i], true, tempMem, &data->c.err))
+                {
+                    memtable_add(dumpsMem, tempMem->records, tempMem->recordsCount);
+                    memtable_destroy(tempMem);
+                    tempMem = NULL;
+                }
+            }
+            memtable_preprocess(dumpsMem);
+        }
+
+        // make the new partitions.
+        uint32_t dumpsEntries = 0;
+        uint32_t dumpsPos = 0;
+        for (uint16_t i = 0; i < table->meta.partitionsCount; i++)
+        {
+            // figure our how many records exist in our dumps memtable that fit in the current partition number.
+            dumpsEntries = 0;
+            while (i == (dumpsMem->records[dumpsPos + dumpsEntries].key % table->meta.partitionsCount))
+            {
+                dumpsEntries++;
+            }
+
+            if (dumpsEntries > 0)
+            {
+                // initialize the partition, add records, preprocess and save to a temporary (new) .binc partition file.
+                if (memtable_init_from_part(data->name, i, false, tempMem, &data->c.err))
+                {
+                    memtable_add(tempMem, &dumpsMem->records[dumpsPos], dumpsEntries);
+                    memtable_preprocess(tempMem);
+
+                    if (!memtable_make_part(tempMem, i, &data->c.err))
+                        goto failed;
+
+                    memtable_destroy(tempMem);
+                    tempMem = NULL;
+                }
+
+                dumpsPos += dumpsEntries;
+            }
+        }
+    }
+    else
+    {
+        CX_ERROR_SET(&data->c.err, 1, "Table '%s' does not exist.", data->name);
+    }
+
+failed:
+    if (NULL != exp) cx_fs_explorer_destroy(exp);
+    if (NULL != dumpNumbers) free(dumpNumbers);
+    if (NULL != dumpsMem) memtable_destroy(dumpsMem);
+    if (NULL != tempMem) memtable_destroy(tempMem);
+
+    _worker_parse_result(_req);
+}
 
 /****************************************************************************************
 ***  PRIVATE FUNCTIONS
