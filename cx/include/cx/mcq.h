@@ -30,6 +30,8 @@ void                    cx_mcq_push(cx_mcq_t* _mcq, void* _data);
 
 void                    cx_mcq_pop(cx_mcq_t* _mcq, void** _outData);
 
+bool                    cx_mcq_trypop(cx_mcq_t* _mcq, void** _outData);
+
 int32_t                 cx_mcq_size(cx_mcq_t* _mcq);
 
 bool                    cx_mcq_is_empty(cx_mcq_t* _mcq);

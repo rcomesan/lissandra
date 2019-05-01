@@ -91,6 +91,21 @@ void cx_mcq_pop(cx_mcq_t* _mcq, void** _outData)
     pthread_mutex_unlock(&_mcq->mutex);
 }
 
+bool cx_mcq_trypop(cx_mcq_t* _mcq, void** _outData)
+{
+    bool result = false;
+
+    pthread_mutex_lock(&_mcq->mutex);
+    if (!queue_is_empty(_mcq->handle))
+    {
+        (*_outData) = queue_pop(_mcq->handle);
+        result = true;
+    }
+    pthread_mutex_unlock(&_mcq->mutex);
+
+    return result;
+}
+
 int32_t cx_mcq_size(cx_mcq_t* _mcq)
 {
     pthread_mutex_lock(&_mcq->mutex);
