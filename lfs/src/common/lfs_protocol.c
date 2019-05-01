@@ -67,7 +67,7 @@ void lfs_handle_create(const cx_net_common_t* _common, void* _passThrou, const c
 {
     LFS_REQ_BEGIN;
         data_create_t* data = CX_MEM_STRUCT_ALLOC(data);
-        req->type = REQ_TYPE_CREATE;
+        req->type = TASK_W_CREATE;
         req->data = data;
         cx_binr_uint16(_data, _size, &pos, &data->c.remoteId);
         cx_binr_str(_data, _size, &pos, data->name, sizeof(data->name));
@@ -78,7 +78,7 @@ void lfs_handle_create(const cx_net_common_t* _common, void* _passThrou, const c
         if (INVALID_HANDLE == data->tableHandle)
         {
             CX_WARN(CX_ALW, "we ran out of table handles! %d is not enough!", MAX_TABLES);
-            CX_ERROR_SET(&data->c.err, 1, "Table creation cannot be performed at this time (out of memory).");
+            CX_ERR_SET(&data->c.err, 1, "Table creation cannot be performed at this time (out of memory).");
             req->state = REQ_STATE_COMPLETED;
         }
     LFS_REQ_END;
@@ -88,7 +88,7 @@ void lfs_handle_drop(const cx_net_common_t* _common, void* _passThrou, const cha
 {
     LFS_REQ_BEGIN;
         data_drop_t* data = CX_MEM_STRUCT_ALLOC(data);
-        req->type = REQ_TYPE_DROP;
+        req->type = TASK_W_DROP;
         req->data = data;
         cx_binr_uint16(_data, _size, &pos, &data->c.remoteId);
         cx_binr_str(_data, _size, &pos, data->name, sizeof(data->name));
@@ -99,7 +99,7 @@ void lfs_handle_describe(const cx_net_common_t* _common, void* _passThrou, const
 {
     LFS_REQ_BEGIN;
         data_describe_t* data = CX_MEM_STRUCT_ALLOC(data);
-        req->type = REQ_TYPE_DESCRIBE;
+        req->type = TASK_W_DESCRIBE;
         req->data = data;
         cx_binr_uint16(_data, _size, &pos, &data->c.remoteId);
         
@@ -124,7 +124,7 @@ void lfs_handle_select(const cx_net_common_t* _common, void* _passThrou, const c
 {
     LFS_REQ_BEGIN;
         data_select_t* data = CX_MEM_STRUCT_ALLOC(data);
-        req->type = REQ_TYPE_SELECT;
+        req->type = TASK_W_SELECT;
         req->data = data;
         cx_binr_uint16(_data, _size, &pos, &data->c.remoteId);
         cx_binr_str(_data, _size, &pos, data->name, sizeof(data->name));
@@ -136,7 +136,7 @@ void lfs_handle_insert(const cx_net_common_t* _common, void* _passThrou, const c
 {
     LFS_REQ_BEGIN;
         data_insert_t* data = CX_MEM_STRUCT_ALLOC(data);
-        req->type = REQ_TYPE_INSERT;
+        req->type = TASK_W_INSERT;
         req->data = data;
         cx_binr_uint16(_data, _size, &pos, &data->c.remoteId);
         cx_binr_str(_data, _size, &pos, data->name, sizeof(data->name));

@@ -1,4 +1,5 @@
 #include <cx/cx.h>
+#include <cx/timer.h>
 #include <ker/cli_reporter.h>
 
 #include <stdio.h>
@@ -14,7 +15,7 @@
     printf("(%.3f sec)\n", duration);                                       \
     printf("\n");
 
-void cli_report_error(cx_error_t* err)
+void cli_report_error(cx_err_t* err)
 {
     printf("%s\n\n", err->desc);
 }

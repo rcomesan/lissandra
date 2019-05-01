@@ -12,15 +12,15 @@
  ***  PRIVATE DECLARATIONS
  ***************************************************************************************/
 
-static bool         _memtable_init(const char* _tableName, memtable_t* _outTable, cx_error_t* _err);
+static bool         _memtable_init(const char* _tableName, memtable_t* _outTable, cx_err_t* _err);
 
 static int32_t      _memtable_comp_full(const void* _a, const void* _b, void* _userData);
 
 static int32_t      _memtable_comp_basic(const void* _a, const void* _b, void* _userData);
 
-static bool         _memtable_save(memtable_t* _table, fs_file_t* _outFile, cx_error_t* _err);
+static bool         _memtable_save(memtable_t* _table, fs_file_t* _outFile, cx_err_t* _err);
 
-static bool         _memtable_load(memtable_t* _table, char* _buff, uint32_t _buffSize, cx_error_t* _err);
+static bool         _memtable_load(memtable_t* _table, char* _buff, uint32_t _buffSize, cx_err_t* _err);
 
 static void         _memtable_record_destroyer(void* _data);
 
@@ -29,7 +29,7 @@ static void         _memtable_record_destroyer(void* _data);
  ***  PUBLIC FUNCTIONS
  ***************************************************************************************/
 
-bool memtable_init(const char* _tableName, bool _threadSafe, memtable_t* _outTable, cx_error_t* _err)
+bool memtable_init(const char* _tableName, bool _threadSafe, memtable_t* _outTable, cx_err_t* _err)
 {
     if (!_memtable_init(_tableName, _outTable, _err)) return false;
 
@@ -45,7 +45,7 @@ bool memtable_init(const char* _tableName, bool _threadSafe, memtable_t* _outTab
     return true;
 }
 
-bool memtable_init_from_dump(const char* _tableName, uint16_t _dumpNumber, bool _isDuringCompaction, memtable_t* _outTable, cx_error_t* _err)
+bool memtable_init_from_dump(const char* _tableName, uint16_t _dumpNumber, bool _isDuringCompaction, memtable_t* _outTable, cx_err_t* _err)
 {
     if (!_memtable_init(_tableName, _outTable, _err)) return false;
     
@@ -67,7 +67,7 @@ bool memtable_init_from_dump(const char* _tableName, uint16_t _dumpNumber, bool 
     return (ERR_NONE == _err->code);
 }
 
-bool memtable_init_from_part(const char* _tableName, uint16_t _partNumber, bool _isDuringCompaction, memtable_t* _outTable, cx_error_t* _err)
+bool memtable_init_from_part(const char* _tableName, uint16_t _partNumber, bool _isDuringCompaction, memtable_t* _outTable, cx_err_t* _err)
 {
     if (!_memtable_init(_tableName, _outTable, _err)) return false;   
 
@@ -164,7 +164,7 @@ void memtable_preprocess(memtable_t* _table)
     }
 }
 
-bool memtable_make_dump(memtable_t* _table, cx_error_t* _err)
+bool memtable_make_dump(memtable_t* _table, cx_err_t* _err)
 {
     CX_CHECK_NOT_NULL(_table);
     CX_CHECK(MEMTABLE_TYPE_MEM == _table->type, "you can only dump memtables of type MEM!")
@@ -194,14 +194,14 @@ bool memtable_make_dump(memtable_t* _table, cx_error_t* _err)
     }
     else
     {
-        CX_ERROR_SET(_err, 1, "Table '%s' does not exist.", _table->name);
+        CX_ERR_SET(_err, 1, "Table '%s' does not exist.", _table->name);
     }
        
     if (_table->mtxInitialized) pthread_mutex_unlock(&_table->mtx);
     return (ERR_NONE == _err->code);
 }
 
-bool memtable_make_part(memtable_t* _table, uint16_t _partNumber, cx_error_t* _err)
+bool memtable_make_part(memtable_t* _table, uint16_t _partNumber, cx_err_t* _err)
 {
     CX_CHECK_NOT_NULL(_table);
     CX_CHECK(MEMTABLE_TYPE_MEM == _table->type, "you can only dump memtables of type MEM!")
@@ -222,7 +222,7 @@ bool memtable_make_part(memtable_t* _table, uint16_t _partNumber, cx_error_t* _e
     }
     else
     {
-        CX_ERROR_SET(_err, 1, "Table '%s' does not exist.", _table->name);
+        CX_ERR_SET(_err, 1, "Table '%s' does not exist.", _table->name);
     }
 
     if (_table->mtxInitialized) pthread_mutex_unlock(&_table->mtx);
@@ -281,7 +281,7 @@ bool memtable_find(memtable_t* _table, uint16_t _key, table_record_t* _outRecord
  ***  PRIVATE FUNCTIONS
  ***************************************************************************************/
 
-static bool _memtable_init(const char* _tableName, memtable_t* _outTable, cx_error_t* _err)
+static bool _memtable_init(const char* _tableName, memtable_t* _outTable, cx_err_t* _err)
 {
     CX_CHECK_NOT_NULL(_outTable);
     int32_t tableNameLen = strlen(_tableName);
@@ -289,7 +289,7 @@ static bool _memtable_init(const char* _tableName, memtable_t* _outTable, cx_err
     CX_WARN(tableNameLen >= TABLE_NAME_LEN_MIN, "memtable_create ignored. the table name must have at least %d characters", TABLE_NAME_LEN_MIN);
     if (tableNameLen < TABLE_NAME_LEN_MIN)
     {
-        CX_ERROR_SET(_err, 1, "Invalid table name '%s'.", _tableName);
+        CX_ERR_SET(_err, 1, "Invalid table name '%s'.", _tableName);
         return false;
     }
 
@@ -379,7 +379,7 @@ static void _memtable_record_destroyer(void* _data)
     record->value = NULL;
 }
 
-static bool _memtable_save(memtable_t* _table, fs_file_t* _outFile, cx_error_t* _err)
+static bool _memtable_save(memtable_t* _table, fs_file_t* _outFile, cx_err_t* _err)
 {
     // serializes and stores the serialized representation of the given 
     // memtable with the format [TIMESTAMP];[KEY];[VALUE] in the LFS.
@@ -461,7 +461,7 @@ static bool _memtable_save(memtable_t* _table, fs_file_t* _outFile, cx_error_t* 
                 }
                 else
                 {
-                    CX_ERROR_SET(_err, 1, "lfs block allocation failed!");
+                    CX_ERR_SET(_err, 1, "lfs block allocation failed!");
                     goto failed;
                 }
             }
@@ -482,7 +482,7 @@ static bool _memtable_save(memtable_t* _table, fs_file_t* _outFile, cx_error_t* 
     }
     else
     {
-        CX_ERROR_SET(_err, 1, "lfs block allocation failed!");
+        CX_ERR_SET(_err, 1, "lfs block allocation failed!");
     }
 
 failed:
@@ -497,7 +497,7 @@ failed:
     return (ERR_NONE == _err->code);
 }
 
-static bool _memtable_load(memtable_t* _table, char* _buff, uint32_t _buffSize, cx_error_t* _err)
+static bool _memtable_load(memtable_t* _table, char* _buff, uint32_t _buffSize, cx_err_t* _err)
 {
     CX_CHECK(MEMTABLE_TYPE_DISK == _table->type, "you can only parse buffers from memtables of type DISK!");
     
@@ -528,7 +528,7 @@ static bool _memtable_load(memtable_t* _table, char* _buff, uint32_t _buffSize, 
                     _table->records = CX_MEM_ARR_REALLOC(_table->records, _table->recordsCapacity);
                     if (NULL == _table->records)
                     {
-                        CX_ERROR_SET(_err, 1, "oom. records array reallocation with %d elements failed!", _table->recordsCapacity);
+                        CX_ERR_SET(_err, 1, "oom. records array reallocation with %d elements failed!", _table->recordsCapacity);
                         break; // we're in trouble.
                     }
                 }

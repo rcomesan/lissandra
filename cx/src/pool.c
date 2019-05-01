@@ -101,7 +101,7 @@ void cx_pool_destroy(cx_pool_t* _pool)
         pthread_join(_pool->workers[i].thread, NULL);
     }
 
-    CX_INFO("[pool: %s] terminated successfully with %d tasks pending in the queue.", _pool->name, cx_mcq_size(_pool->queue));
+    CX_INFO("[pool: %s] terminated gracefully with %d tasks pending in the queue.", _pool->name, cx_mcq_size(_pool->queue));
     _pool->state = CX_POOL_STATE_TERMINATED;
 
     if (_pool->mtxPauseInit)
@@ -125,12 +125,6 @@ void cx_pool_destroy(cx_pool_t* _pool)
     cx_mcq_destroy(_pool->queue, NULL);
     free(_pool->workers);
     free(_pool);
-}
-
-void cx_pool_resize(cx_pool_t* _pool, uint16_t _numWorkers)
-{
-    CX_CHECK_NOT_NULL(_pool);
-    //TODO
 }
 
 void cx_pool_submit(cx_pool_t* _pool, void* _taskData)

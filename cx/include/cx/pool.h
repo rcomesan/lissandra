@@ -63,8 +63,6 @@ cx_pool_t*              cx_pool_init(const char* name, uint16_t _numWorkers, cx_
 
 void                    cx_pool_destroy(cx_pool_t* _pool);
 
-void                    cx_pool_resize(cx_pool_t* _pool, uint16_t _numWorkers);
-
 void                    cx_pool_submit(cx_pool_t* _pool, void* _taskData);
 
 void                    cx_pool_submit_first(cx_pool_t* _pool, void* _taskData);

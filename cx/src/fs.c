@@ -20,11 +20,11 @@ typedef struct stat stat_t;
 
 static void _cx_fs_absolutize(cx_path_t* _inOutPath);
 
-static bool _cx_fs_mkdir(const cx_path_t* _folderPath, cx_error_t* _err);
+static bool _cx_fs_mkdir(const cx_path_t* _folderPath, cx_err_t* _err);
 
-static bool _cx_fs_rmdir(const cx_path_t* _folderPath, cx_error_t* _err);
+static bool _cx_fs_rmdir(const cx_path_t* _folderPath, cx_err_t* _err);
 
-static bool _cx_fs_rm(const cx_path_t* _filePath, cx_error_t* _err);
+static bool _cx_fs_rm(const cx_path_t* _filePath, cx_err_t* _err);
 
  /****************************************************************************************
  ***  PUBLIC FUNCTIONS
@@ -123,10 +123,10 @@ void cx_fs_get_path(const cx_path_t* _path, cx_path_t* _outPath)
     }
 }
 
-bool cx_fs_touch(const cx_path_t* _filePath, cx_error_t* _err)
+bool cx_fs_touch(const cx_path_t* _filePath, cx_err_t* _err)
 {
     CX_CHECK(strlen(*_filePath) > 0, "invalid file path!");
-    CX_ERROR_CLEAR(_err);
+    CX_ERR_CLEAR(_err);
 
     if (!cx_fs_exists(_filePath))
     {
@@ -140,7 +140,7 @@ bool cx_fs_touch(const cx_path_t* _filePath, cx_error_t* _err)
 
             if (INVALID_DESCRIPTOR == fd)
             {
-                CX_ERROR_SET(_err, 1, "file '%s' creation failed.", *_filePath);
+                CX_ERR_SET(_err, 1, "file '%s' creation failed.", *_filePath);
             }
         }
         else
@@ -151,10 +151,10 @@ bool cx_fs_touch(const cx_path_t* _filePath, cx_error_t* _err)
     return true;
 }
 
-bool cx_fs_mkdir(const cx_path_t* _folderPath, cx_error_t* _err)
+bool cx_fs_mkdir(const cx_path_t* _folderPath, cx_err_t* _err)
 {
     CX_CHECK(strlen(*_folderPath) > 0, "invalid folder path!");
-    CX_ERROR_CLEAR(_err);
+    CX_ERR_CLEAR(_err);
     
     if (cx_fs_exists(_folderPath) && cx_fs_is_folder(_folderPath)) return true;
 
@@ -170,10 +170,10 @@ bool cx_fs_mkdir(const cx_path_t* _folderPath, cx_error_t* _err)
     return _cx_fs_mkdir(_folderPath, _err);
 }
 
-bool cx_fs_remove(const cx_path_t* _path, cx_error_t* _err)
+bool cx_fs_remove(const cx_path_t* _path, cx_err_t* _err)
 {
     CX_CHECK(strlen(*_path) > 0, "invalid folder path!");
-    CX_ERROR_CLEAR(_err);
+    CX_ERR_CLEAR(_err);
     
     if (cx_fs_exists(_path))
     {
@@ -186,10 +186,10 @@ bool cx_fs_remove(const cx_path_t* _path, cx_error_t* _err)
             _cx_fs_rm(_path, _err);
         }
     }
-    return CX_ERROR_OK(_err);
+    return CX_ERR_OK(_err);
 }
 
-bool cx_fs_move(const cx_path_t* _path, const cx_path_t* _newPath, cx_error_t* _err)
+bool cx_fs_move(const cx_path_t* _path, const cx_path_t* _newPath, cx_err_t* _err)
 {
     CX_CHECK(strlen(*_path) > 0, "invalid _path!");
     CX_CHECK(strlen(*_newPath) > 0, "invalid _newPath!");
@@ -206,30 +206,30 @@ bool cx_fs_move(const cx_path_t* _path, const cx_path_t* _newPath, cx_error_t* _
                 errno = 0;
                 if (-1 == rename(*_path, *_newPath))
                 {
-                    CX_ERROR_SET(_err, 1, "Move failed. %s.", strerror(errno));
+                    CX_ERR_SET(_err, 1, "Move failed. %s.", strerror(errno));
                 }
             }
             else
             {
-                CX_ERROR_SET(_err, 1, "Path '%s' could not be created.", *_newPath);
+                CX_ERR_SET(_err, 1, "Path '%s' could not be created.", *_newPath);
             }
         }
         else
         {
-            CX_ERROR_SET(_err, 1, "File '%s' already exists.", *_newPath);
+            CX_ERR_SET(_err, 1, "File '%s' already exists.", *_newPath);
         }
     }
     else
     {
-        CX_ERROR_SET(_err, 1, "File '%s' does not exist.", *_path);
+        CX_ERR_SET(_err, 1, "File '%s' does not exist.", *_path);
     }
-    return CX_ERROR_OK(_err);
+    return CX_ERR_OK(_err);
 }
 
-bool cx_fs_write(const cx_path_t* _path, const char* _buffer, uint32_t _bufferSize, cx_error_t* _err)
+bool cx_fs_write(const cx_path_t* _path, const char* _buffer, uint32_t _bufferSize, cx_err_t* _err)
 {
     CX_CHECK(strlen(*_path) > 0, "invalid file path!");
-    CX_ERROR_CLEAR(_err);
+    CX_ERR_CLEAR(_err);
 
     if (cx_fs_touch(_path, _err))
     {
@@ -242,7 +242,7 @@ bool cx_fs_write(const cx_path_t* _path, const char* _buffer, uint32_t _bufferSi
 
                 if (_bufferSize > fwrite(_buffer, sizeof(char), _bufferSize, fileHandle))
                 {
-                    CX_ERROR_SET(_err, 1, "file '%s' could not be written. %s", *_path, strerror(errno));
+                    CX_ERR_SET(_err, 1, "file '%s' could not be written. %s", *_path, strerror(errno));
                 }
             }
             fflush(fileHandle);
@@ -252,17 +252,17 @@ bool cx_fs_write(const cx_path_t* _path, const char* _buffer, uint32_t _bufferSi
         }
         else
         {
-            CX_ERROR_SET(_err, 1, "file '%s' could not be opened for writing.", *_path);
+            CX_ERR_SET(_err, 1, "file '%s' could not be opened for writing.", *_path);
         }
     }
 
     return false;
 }
 
-int32_t cx_fs_read(const cx_path_t* _path, char* _outBuffer, uint32_t _bufferSize, cx_error_t* _err)
+int32_t cx_fs_read(const cx_path_t* _path, char* _outBuffer, uint32_t _bufferSize, cx_err_t* _err)
 {
     CX_CHECK(strlen(*_path) > 0, "invalid file path!");
-    CX_ERROR_CLEAR(_err);
+    CX_ERR_CLEAR(_err);
 
     if (cx_fs_exists(_path))
     {
@@ -285,7 +285,7 @@ int32_t cx_fs_read(const cx_path_t* _path, char* _outBuffer, uint32_t _bufferSiz
 
                     if (bytesToRead > fread(_outBuffer, sizeof(char), bytesToRead, fileHandle))
                     {
-                        CX_ERROR_SET(_err, 1, "file '%s' could not be read. %s", *_path, strerror(errno));
+                        CX_ERR_SET(_err, 1, "file '%s' could not be read. %s", *_path, strerror(errno));
                     }
                     fclose(fileHandle);
 
@@ -293,27 +293,27 @@ int32_t cx_fs_read(const cx_path_t* _path, char* _outBuffer, uint32_t _bufferSiz
                 }
                 else
                 {
-                    CX_ERROR_SET(_err, 1, "file '%s' could not be opened for reading.", *_path);
+                    CX_ERR_SET(_err, 1, "file '%s' could not be opened for reading.", *_path);
                 }
             }
         }
         else
         {
-            CX_ERROR_SET(_err, 1, "path '%s' is a folder!", *_path);
+            CX_ERR_SET(_err, 1, "path '%s' is a folder!", *_path);
         }
     }
     else
     {
-        CX_ERROR_SET(_err, 1, "file '%s' is missing or not readable.", *_path);
+        CX_ERR_SET(_err, 1, "file '%s' is missing or not readable.", *_path);
     }
 
     return -1;
 }
 
-cx_fs_explorer_t* cx_fs_explorer_init(const cx_path_t* _folderPath, cx_error_t* _err)
+cx_fs_explorer_t* cx_fs_explorer_init(const cx_path_t* _folderPath, cx_err_t* _err)
 {
     CX_CHECK(strlen(*_folderPath) > 0, "invalid folder path!");
-    CX_ERROR_CLEAR(_err);
+    CX_ERR_CLEAR(_err);
 
     DIR* dir = NULL;
     cx_fs_explorer_t* explorer = NULL;
@@ -328,7 +328,7 @@ cx_fs_explorer_t* cx_fs_explorer_init(const cx_path_t* _folderPath, cx_error_t* 
     }
     else
     {
-        CX_ERROR_SET(_err, 1, "failed to open folder '%s'.", *_folderPath);
+        CX_ERR_SET(_err, 1, "failed to open folder '%s'.", *_folderPath);
     }
 
     return explorer;
@@ -442,7 +442,7 @@ void _cx_fs_absolutize(cx_path_t* _inOutPath)
     }
 }
 
-static bool _cx_fs_mkdir(const cx_path_t* _folderPath, cx_error_t* _err)
+static bool _cx_fs_mkdir(const cx_path_t* _folderPath, cx_err_t* _err)
 {
     CX_CHECK(strlen(*_folderPath) > 0, "invalid folder path!");
 
@@ -454,7 +454,7 @@ static bool _cx_fs_mkdir(const cx_path_t* _folderPath, cx_error_t* _err)
         }
         else
         {
-            CX_ERROR_SET(_err, 1, "a file already exists with the given path '%s'.", *_folderPath);
+            CX_ERR_SET(_err, 1, "a file already exists with the given path '%s'.", *_folderPath);
             return false;
         }
     }
@@ -463,23 +463,23 @@ static bool _cx_fs_mkdir(const cx_path_t* _folderPath, cx_error_t* _err)
 
     if (0 != result)
     {
-        CX_ERROR_SET(_err, 1, "you do not have permissions to create the folder '%s'.", *_folderPath)
+        CX_ERR_SET(_err, 1, "you do not have permissions to create the folder '%s'.", *_folderPath)
         return false;
     }
 
     return true;
 }
 
-static bool _cx_fs_rm(const cx_path_t* _filePath, cx_error_t* _err)
+static bool _cx_fs_rm(const cx_path_t* _filePath, cx_err_t* _err)
 {
     if (0 == remove(*_filePath))
         return true;
 
-    CX_ERROR_SET(_err, 1, "not enough permissions to delete file '%s'.", *_filePath)
+    CX_ERR_SET(_err, 1, "not enough permissions to delete file '%s'.", *_filePath)
     return false;
 }
 
-static bool _cx_fs_rmdir(const cx_path_t* _folderPath, cx_error_t* _err)
+static bool _cx_fs_rmdir(const cx_path_t* _folderPath, cx_err_t* _err)
 {
     cx_path_t path;
     cx_fs_explorer_t* brw = cx_fs_explorer_init(_folderPath, _err);

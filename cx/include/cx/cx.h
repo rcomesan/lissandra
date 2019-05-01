@@ -19,12 +19,12 @@
 #define CX_TIMESTAMP_LEN 14
 typedef char cx_timestamp_t[CX_TIMESTAMP_LEN + 1];
 
-#define CX_ERROR_LEN 4095
-typedef struct cx_error_t
+#define CX_ERR_LEN 4095
+typedef struct cx_err_t
 {
     uint32_t    code;
-    char        desc[CX_ERROR_LEN + 1];
-} cx_error_t;
+    char        desc[CX_ERR_LEN + 1];
+} cx_err_t;
 
 typedef void(*cx_destroyer_cb)(void* _data);
 
@@ -44,20 +44,22 @@ void            cx_trace(const char* _filePath, uint16_t _lineNumber, const char
 #define CX_MACRO_BLOCK_END } while (0);
 #define CX_NOOP(...) CX_MACRO_BLOCK_BEGIN CX_MACRO_BLOCK_END
 
-#define CX_ERROR_CLEAR(_errPtr)                                                         \
+#define ERR_NONE 0
+
+#define CX_ERR_CLEAR(_errPtr)                                                           \
     if (NULL != (_errPtr))                                                              \
     {                                                                                   \
         memset((_errPtr), 0, sizeof((*_errPtr)));                                       \
     }
 
-#define CX_ERROR_SET(_err, _code, _format, ...)                                         \
+#define CX_ERR_SET(_err, _code, _format, ...)                                           \
     if (NULL != (_err))                                                                 \
     {                                                                                   \
         (_err)->code = _code;                                                           \
         snprintf((_err)->desc, sizeof((_err)->desc), _format, ##__VA_ARGS__);           \
     }
 
-#define CX_ERROR_OK(_errPtr)                                                            \
+#define CX_ERR_OK(_errPtr)                                                            \
     (NULL != (_errPtr))                                                                 \
     ? 0 == (_errPtr)->code                                                              \
     : true

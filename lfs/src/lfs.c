@@ -7,6 +7,7 @@
 #include <ker/cli_reporter.h>
 
 #include <cx/cx.h>
+#include <cx/timer.h>
 #include <cx/mem.h>
 #include <cx/file.h>
 #include <cx/str.h>
@@ -28,16 +29,16 @@ static uint16_t     m_auxHandles[MAX_CONCURRENT_REQUESTS];  // statically alloca
  ***  PRIVATE DECLARATIONS
  ***************************************************************************************/
 
-static bool         logger_init(cx_error_t* _err);
+static bool         logger_init(cx_err_t* _err);
 static void         logger_destroy();
 
-static bool         cfg_init(const char* _cfgFilePath, cx_error_t* _err);
+static bool         cfg_init(const char* _cfgFilePath, cx_err_t* _err);
 static void         cfg_destroy();
 
-static bool         lfs_init(cx_error_t* _err);
+static bool         lfs_init(cx_err_t* _err);
 static void         lfs_destroy();
 
-static bool         net_init(cx_error_t* _err);
+static bool         net_init(cx_err_t* _err);
 static void         net_destroy();
 
 static bool         cli_init();
@@ -45,12 +46,11 @@ static void         cli_destroy();
 
 static void         handle_cli_command(const cx_cli_cmd_t* _cmd);
 static void         handle_worker_task(request_t* _req);
+static bool         handle_timer_tick(uint64_t _expirations, uint32_t _id, void* _userData);
 
 static void         requests_update();
 static void         request_completed(const request_t* _req);
 static void         request_free(request_t* _req);
-
-static void         tables_update();
 
 static void         api_response_create(const data_create_t* _data);
 static void         api_response_drop(const data_drop_t* _data);
@@ -67,10 +67,10 @@ int main(int _argc, char** _argv)
     cx_init(PROJECT_NAME);
     CX_MEM_ZERO(g_ctx);
 
-
-    cx_error_t err;
+    cx_err_t err;
 
     g_ctx.isRunning = true
+        && cx_timer_init(MAX_TABLES + 1, handle_timer_tick, &err)
         && logger_init(&err)
         && cfg_init("res/lfs.cfg", &err)
         && lfs_init(&err)
@@ -94,14 +94,16 @@ int main(int _argc, char** _argv)
             // poll socket events
             cx_net_poll_events(g_ctx.sv);
             
-            // update containers
+            // update requests
             requests_update();
-            tables_update();
+
+            // poll timer events
+            cx_timer_poll_events();
         }
     }
     else if (NULL != g_ctx.log)
     {
-        log_error(g_ctx.log, "Initialization failed (errcode %d). %s", err.code, err.desc);
+        log_error(g_ctx.log, "initialization failed (errcode %d). %s", err.code, err.desc);
     }
     else
     {
@@ -113,9 +115,10 @@ int main(int _argc, char** _argv)
     net_destroy();
     lfs_destroy();
     cfg_destroy();
+    cx_timer_destroy();
 
     if (0 == err.code)
-        CX_INFO("node terminated successfully.");
+        CX_INFO("node terminated gracefully.");
     else
         CX_INFO("node terminated with error %d.", err.code);
     
@@ -127,7 +130,7 @@ int main(int _argc, char** _argv)
  ***  PRIVATE FUNCTIONS
  ***************************************************************************************/
 
-static bool logger_init(cx_error_t* _err)
+static bool logger_init(cx_err_t* _err)
 {
     cx_timestamp_t timestamp;
     cx_time_stamp(&timestamp);
@@ -145,11 +148,11 @@ static bool logger_init(cx_error_t* _err)
             return true;
         }
 
-        CX_ERROR_SET(_err, LFS_ERR_LOGGER_FAILED, "%s log initialization failed (%s).", PROJECT_NAME, path);
+        CX_ERR_SET(_err, LFS_ERR_LOGGER_FAILED, "%s log initialization failed (%s).", PROJECT_NAME, path);
     }
     else
     {
-        CX_ERROR_SET(_err, LFS_ERR_LOGGER_FAILED, "%s logs folder creation failed (%s).", PROJECT_NAME, path);
+        CX_ERR_SET(_err, LFS_ERR_LOGGER_FAILED, "%s logs folder creation failed (%s).", PROJECT_NAME, path);
     }
     return false;
 }
@@ -164,7 +167,7 @@ static void logger_destroy()
     }
 }
 
-static bool cfg_init(const char* _cfgFilePath, cx_error_t* _err)
+static bool cfg_init(const char* _cfgFilePath, cx_err_t* _err)
 {
     char* temp = NULL;
     char* key = "";
@@ -274,11 +277,11 @@ static bool cfg_init(const char* _cfgFilePath, cx_error_t* _err)
          return true;
 
      key_missing:
-         CX_ERROR_SET(_err, LFS_ERR_CFG_MISSINGKEY, "key '%s' is missing in the configuration file.", key);
+         CX_ERR_SET(_err, LFS_ERR_CFG_MISSINGKEY, "key '%s' is missing in the configuration file.", key);
     }
     else
     {
-        CX_ERROR_SET(_err, LFS_ERR_CFG_NOTFOUND, "configuration file '%s' is missing or not readable.", cfgPath);
+        CX_ERR_SET(_err, LFS_ERR_CFG_NOTFOUND, "configuration file '%s' is missing or not readable.", cfgPath);
     }
 
     return false;
@@ -293,7 +296,7 @@ static void cfg_destroy()
     }
 }
 
-static bool lfs_init(cx_error_t* _err)
+static bool lfs_init(cx_err_t* _err)
 {
     uint8_t stage = 0;
 
@@ -301,7 +304,7 @@ static bool lfs_init(cx_error_t* _err)
     CX_MEM_ZERO(g_ctx.requests);
     if (NULL == g_ctx.requestsHalloc)
     {
-        CX_ERROR_SET(_err, LFS_ERR_INIT_HALLOC, "requests handle allocator creation failed.");
+        CX_ERR_SET(_err, LFS_ERR_INIT_HALLOC, "requests handle allocator creation failed.");
         return false;
     }
 
@@ -309,17 +312,24 @@ static bool lfs_init(cx_error_t* _err)
     CX_MEM_ZERO(g_ctx.tables);
     if (NULL == g_ctx.tablesHalloc)
     {
-        CX_ERROR_SET(_err, LFS_ERR_INIT_HALLOC, "tables handle allocator creation failed.");
+        CX_ERR_SET(_err, LFS_ERR_INIT_HALLOC, "tables handle allocator creation failed.");
         return false;
     }
 
     g_ctx.pool = cx_pool_init("worker", g_ctx.cfg.workers, (cx_pool_handler_cb)handle_worker_task);
     if (NULL == g_ctx.pool)
     {
-        CX_ERROR_SET(_err, LFS_ERR_INIT_THREADPOOL, "thread pool creation failed.");
+        CX_ERR_SET(_err, LFS_ERR_INIT_THREADPOOL, "thread pool creation failed.");
         return false;
     }
     
+    g_ctx.timerDump = cx_timer_add(g_ctx.cfg.dumpInterval, LFS_TIMER_DUMP, NULL);
+    if (INVALID_HANDLE == g_ctx.timerDump)
+    {
+        CX_ERR_SET(_err, LFS_ERR_INIT_TIMER, "thread pool creation failed.");
+        return false;
+    }
+
     return fs_init(_err);
 }
 
@@ -354,9 +364,15 @@ static void lfs_destroy()
 
     cx_pool_destroy(g_ctx.pool);
     g_ctx.pool = NULL;
+
+    if (INVALID_HANDLE != g_ctx.timerDump)
+    {
+        cx_timer_remove(g_ctx.timerDump);
+        g_ctx.timerDump = INVALID_HANDLE;
+    }
 }
 
-static bool net_init(cx_error_t* _err)
+static bool net_init(cx_err_t* _err)
 {
     cx_net_args_t svCtxArgs;
     CX_MEM_ZERO(svCtxArgs);
@@ -376,7 +392,7 @@ static bool net_init(cx_error_t* _err)
     }
     else
     {
-        CX_ERROR_SET(_err, LFS_ERR_NET_FAILED, "could not start a listening server context on %s:%d.",
+        CX_ERR_SET(_err, LFS_ERR_NET_FAILED, "could not start a listening server context on %s:%d.",
             svCtxArgs.ip, svCtxArgs.port);
         return false;
     }
@@ -400,7 +416,7 @@ static void cli_destroy()
 
 static void handle_cli_command(const cx_cli_cmd_t* _cmd)
 {
-    cx_error_t  err;
+    cx_err_t  err;
     CX_MEM_ZERO(err);
 
     char*       tableName = NULL;
@@ -468,24 +484,24 @@ static void handle_cli_command(const cx_cli_cmd_t* _cmd)
     }
     else if (strcmp("DUMP", _cmd->header) == 0)
     {
-        cx_error_t err;
+        cx_err_t err;
         table_t* table;
         if (fs_table_exists(_cmd->args[0], &table))
         {
             if (memtable_make_dump(&table->memtable, &err))
             {
-                CX_INFO("Memtable dump for table '%s' completed successfully.", _cmd->args[0]);
+                CX_INFO("memtable dump for table '%s' completed successfully.", _cmd->args[0]);
             }
             else
             {
-                CX_INFO("Memtable dump for table '%s' failed: %s", _cmd->args[0], err.desc);
+                CX_INFO("memtable dump for table '%s' failed: %s.", _cmd->args[0], err.desc);
             }
         }
         cx_cli_command_end();
     }
     else
     {
-        CX_ERROR_SET(&err, 1, "Unknown command '%s'.", _cmd->header);
+        CX_ERR_SET(&err, 1, "Unknown command '%s'.", _cmd->header);
     }
 
     if (0 != err.code)
@@ -502,27 +518,27 @@ static void handle_worker_task(request_t* _req)
 
     switch (_req->type)
     {
-    case REQ_TYPE_CREATE:
+    case TASK_W_CREATE:
         worker_handle_create(_req);
         break;
 
-    case REQ_TYPE_DROP:
+    case TASK_W_DROP:
         worker_handle_drop(_req);
         break;
 
-    case REQ_TYPE_DESCRIBE:
+    case TASK_W_DESCRIBE:
         worker_handle_describe(_req);
         break;
 
-    case REQ_TYPE_SELECT:
+    case TASK_W_SELECT:
         worker_handle_select(_req);
         break;
 
-    case REQ_TYPE_INSERT:
+    case TASK_W_INSERT:
         worker_handle_insert(_req);
         break;
 
-    case REQ_TYPE_COMPACT:
+    case TASK_W_COMPACT:
         worker_handle_compact(_req);
         break;
 
@@ -530,6 +546,27 @@ static void handle_worker_task(request_t* _req)
         CX_WARN(CX_ALW, "undefined <worker> behaviour for request type #%d.", _req->type);
         break;
     }
+}
+
+static bool handle_timer_tick(uint64_t _expirations, uint32_t _type, void* _userData)
+{
+    bool stopTimer = false;
+
+    switch (_type)
+    {
+    case LFS_TIMER_DUMP:
+        CX_INFO("dumping shit...");
+        break;
+
+    case LFS_TIMER_COMPACT:
+        break;
+
+    default:
+        CX_WARN(CX_ALW, "undefined <tick> behaviour for timer of type #%d.", _type);
+        break;
+    }
+
+    return !stopTimer;
 }
 
 void requests_update()
@@ -576,35 +613,35 @@ static void request_completed(const request_t* _req)
 {
     switch (_req->type)
     {
-    case REQ_TYPE_CREATE:
+    case TASK_W_CREATE:
         if (REQ_ORIGIN_API == _req->origin)
             api_response_create((data_create_t*)_req->data);
         else
             cli_report_create((data_create_t*)_req->data);
         break;
 
-    case REQ_TYPE_DROP:
+    case TASK_W_DROP:
         if (REQ_ORIGIN_API == _req->origin)
             api_response_drop((data_drop_t*)_req->data);
         else
             cli_report_drop((data_drop_t*)_req->data);
         break;
 
-    case REQ_TYPE_DESCRIBE:
+    case TASK_W_DESCRIBE:
         if (REQ_ORIGIN_API == _req->origin)
             api_response_describe((data_describe_t*)_req->data);
         else
             cli_report_describe((data_describe_t*)_req->data);
         break;
 
-    case REQ_TYPE_SELECT:
+    case TASK_W_SELECT:
         if (REQ_ORIGIN_API == _req->origin)
             api_response_select((data_select_t*)_req->data);
         else
             cli_report_select((data_select_t*)_req->data);
         break;
 
-    case REQ_TYPE_INSERT:
+    case TASK_W_INSERT:
         if (REQ_ORIGIN_API == _req->origin)
             api_response_insert((data_insert_t*)_req->data);
         else
@@ -612,7 +649,7 @@ static void request_completed(const request_t* _req)
         break;
 
     default:
-        CX_WARN(CX_ALW, "undefined <completed> behaviour for request type #%d", _req->type);
+        CX_WARN(CX_ALW, "undefined <completed> behaviour for request type #%d.", _req->type);
         break;
     }
 
@@ -627,19 +664,19 @@ static void request_free(request_t* _req)
 {
     switch (_req->type)
     {
-    case REQ_TYPE_CREATE:
+    case TASK_W_CREATE:
     {
         data_create_t* data = (data_create_t*)_req->data;
         break;
     }
 
-    case REQ_TYPE_DROP:
+    case TASK_W_DROP:
     {
         data_drop_t* data = (data_drop_t*)_req->data;
         break;
     }
 
-    case REQ_TYPE_DESCRIBE:
+    case TASK_W_DESCRIBE:
     {
         data_describe_t* data = (data_describe_t*)_req->data;
         free(data->tables);
@@ -648,7 +685,7 @@ static void request_free(request_t* _req)
         break;
     }
 
-    case REQ_TYPE_SELECT:
+    case TASK_W_SELECT:
     {
         data_select_t* data = (data_select_t*)_req->data;
         free(data->record.value);
@@ -656,7 +693,7 @@ static void request_free(request_t* _req)
         break;
     }
 
-    case REQ_TYPE_INSERT:
+    case TASK_W_INSERT:
     {
         data_insert_t* data = (data_insert_t*)_req->data;
         free(data->record.value);
@@ -665,7 +702,7 @@ static void request_free(request_t* _req)
     }
 
     default:
-        CX_WARN(CX_ALW, "undefined <free> behaviour for request type #%d", _req->type);
+        CX_WARN(CX_ALW, "undefined <free> behaviour for request type #%d.", _req->type);
         break;
     }
 
@@ -674,34 +711,6 @@ static void request_free(request_t* _req)
     // note that requests are statically allocated. we don't want to free them
     // here since we'll keep reusing them in subsequent requests.
     CX_MEM_ZERO(*_req)
-}
-
-static void tables_update()
-{
-    uint16_t max = cx_handle_count(g_ctx.tablesHalloc);
-    uint16_t handle = INVALID_HANDLE;
-    table_t* table = NULL;
-    uint16_t removeCount = 0;
-
-    for (uint16_t i = 0; i < max; i++)
-    {
-        handle = cx_handle_at(g_ctx.tablesHalloc, i);
-        table = &(g_ctx.tables[handle]);
-
-        if (table->deleted)
-        {
-            fs_table_destroy(table);
-            CX_MEM_ZERO(*table);
-            m_auxHandles[removeCount++] = handle;
-        }
-    }
-
-    for (uint16_t i = 0; i < removeCount; i++)
-    {
-        handle = m_auxHandles[i];
-        table = &(g_ctx.tables[handle]);
-        cx_handle_free(g_ctx.tablesHalloc, handle);
-    }
 }
 
 static void api_response_create(const data_create_t* _result)

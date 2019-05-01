@@ -8,6 +8,7 @@
 #include <errno.h>
 #include <sys/time.h>
 #include <time.h>
+#include <unistd.h>
 
 static cx_timer_ctx_t       m_timerCtx;        // private timer context
 
@@ -23,12 +24,12 @@ static void                 _cx_timer_free(cx_timer_instance_t* _timer);
  ***  PUBLIC FUNCTIONS
  ***************************************************************************************/
 
-bool cx_timer_init(uint16_t _maxTimers, cx_timer_handler_cb _handler, cx_error_t* _err)
+bool cx_timer_init(uint16_t _maxTimers, cx_timer_handler_cb _handler, cx_err_t* _err)
 {
     CX_MEM_ZERO(m_timerCtx);
     bool success = false;
 
-    CX_INFO("Initializing timer module...");
+    CX_INFO("initializing timer module...");
 
     struct timeval now;
     gettimeofday(&now, 0);
@@ -47,17 +48,17 @@ bool cx_timer_init(uint16_t _maxTimers, cx_timer_handler_cb _handler, cx_error_t
             m_timerCtx.timersHalloc = cx_halloc_init(_maxTimers);
             if (NULL != m_timerCtx.timersHalloc)
             {
-                CX_INFO("Timer module initialization succeeded.");
+                CX_INFO("timer module initialization succeeded.");
                 success = true;
             }
             else
             {
-                CX_ERROR_SET(_err, 1, "Timers handle allocator creation failed.");
+                CX_ERR_SET(_err, 1, "timers handle allocator creation failed.");
             }
         }
         else
         {
-            CX_ERROR_SET(_err, 1, "Timers epoll_create failed. %s.", strerror(errno));
+            CX_ERR_SET(_err, 1, "timers epoll_create failed. %s.", strerror(errno));
         }
     }
     else
@@ -65,7 +66,7 @@ bool cx_timer_init(uint16_t _maxTimers, cx_timer_handler_cb _handler, cx_error_t
         m_timerCtx.epollDescriptor = INVALID_DESCRIPTOR;
         m_timerCtx.epollEvents = NULL;
         m_timerCtx.timers = NULL;
-        m_timerCtx.timersHalloc = INVALID_HANDLE;
+        m_timerCtx.timersHalloc = NULL;
         success = true;
     }
 
@@ -75,7 +76,7 @@ bool cx_timer_init(uint16_t _maxTimers, cx_timer_handler_cb _handler, cx_error_t
 
 void cx_timer_destroy()
 {
-    CX_INFO("Terminating timer module...");
+    CX_INFO("terminating timer module...");
 
     uint16_t max = cx_handle_count(m_timerCtx.timersHalloc);
     uint16_t handle = INVALID_HANDLE;
@@ -113,7 +114,7 @@ void cx_timer_destroy()
         m_timerCtx.timers = NULL;
     }
     
-    CX_INFO("Timer module terminated gracefully.");
+    CX_INFO("timer module terminated gracefully.");
 }
 
 uint16_t cx_timer_count()
@@ -129,7 +130,7 @@ uint16_t cx_timer_add(uint32_t _interval, uint32_t _id, void* _userData)
 
     if (cx_handle_count(m_timerCtx.timersHalloc) == m_timerCtx.maxTimers)
     {
-        CX_CHECK(CX_ALW, "Timers container is full!");
+        CX_CHECK(CX_ALW, "timers container is full!");
         return INVALID_HANDLE;
     }
 
@@ -156,17 +157,17 @@ uint16_t cx_timer_add(uint32_t _interval, uint32_t _id, void* _userData)
                     timer->userData = _userData;
                     success = true;
                 }
-                CX_CHECK(INVALID_HANDLE != timerHandle, "Timer handle allocation failed!");
+                CX_CHECK(INVALID_HANDLE != timerHandle, "timer handle allocation failed!");
             }
         }
         else
         {
-            CX_WARN(CX_ALW, "Timers timerfd_settime failed. %s.", strerror(errno));
+            CX_WARN(CX_ALW, "timers timerfd_settime failed. %s.", strerror(errno));
         }
     }
     else
     {
-        CX_WARN(CX_ALW, "Timers timerfd_create failed. %s.", strerror(errno));
+        CX_WARN(CX_ALW, "timers timerfd_create failed. %s.", strerror(errno));
     }
 
     if (!success && INVALID_DESCRIPTOR != fd) close(fd);
@@ -202,7 +203,7 @@ void cx_timer_modify(uint16_t _timerHandle, uint32_t _newInterval)
     ts.it_interval.tv_nsec = (_newInterval % 1000) * 1000000;
 
     bool success = (0 == timerfd_settime(timer->fd, 0, &ts, NULL));
-    CX_CHECK(success, "TimerHandle %d modification failed!", _timerHandle);
+    CX_CHECK(success, "timer handle %d modification failed!", _timerHandle);
 }
 
 void cx_timer_poll_events()
@@ -214,7 +215,7 @@ void cx_timer_poll_events()
     int32_t bytesRead = 0;
 
     int32_t eventsCount = epoll_wait(m_timerCtx.epollDescriptor, m_timerCtx.epollEvents, m_timerCtx.maxTimers, 0);
-    CX_WARN(-1 != eventsCount, "Timer epoll_wait failed. %s.", strerror(errno));
+    CX_WARN(-1 != eventsCount, "timer epoll_wait failed. %s.", strerror(errno));
 
     // handle epoll events
     for (int32_t i = 0; i < eventsCount; i++)
@@ -233,9 +234,9 @@ void cx_timer_poll_events()
                     cx_timer_remove(timerHandle);
                 }
             }
-            CX_WARN(sizeof(expirations) == bytesRead, "Timer read didn't return the expected amount of bytes!");
+            CX_WARN(sizeof(expirations) == bytesRead, "timer read didn't return the expected amount of bytes!");
         }
-        CX_CHECK(INVALID_HANDLE != timerHandle, "Something's wrong with timer module event polling!");
+        CX_CHECK(INVALID_HANDLE != timerHandle, "something's wrong with timer module event polling!");
     }
 }
 
@@ -250,13 +251,13 @@ static bool _cx_timer_epoll_mod(int32_t _fd, bool _set)
         event.events = EPOLLIN;
         event.data.fd = _fd;
         success = (0 == epoll_ctl(m_timerCtx.epollDescriptor, EPOLL_CTL_ADD, _fd, &event));
-        CX_WARN(success, "Timers epoll_ctl add failed. %s.", strerror(errno));
+        CX_WARN(success, "timers epoll_ctl add failed. %s.", strerror(errno));
     }
     else
     {
         // unset
         success = (0 == epoll_ctl(m_timerCtx.epollDescriptor, EPOLL_CTL_DEL, _fd, NULL));
-        CX_WARN(success, "Timers epoll_ctl del failed. %s.", strerror(errno));
+        CX_WARN(success, "timers epoll_ctl del failed. %s.", strerror(errno));
     }
 
     return success;

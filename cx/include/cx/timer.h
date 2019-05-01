@@ -43,7 +43,7 @@ typedef struct cx_timer_ctx_t
 
 // Asynchronous timers.
 
-bool            cx_timer_init(uint16_t _maxTimers, cx_timer_handler_cb _handler, cx_error_t* _err);
+bool            cx_timer_init(uint16_t _maxTimers, cx_timer_handler_cb _handler, cx_err_t* _err);
 
 void            cx_timer_destroy();
 

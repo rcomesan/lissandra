@@ -17,6 +17,7 @@ typedef enum LFS_ERR_CODE
     LFS_ERR_LOGGER_FAILED,
     LFS_ERR_INIT_HALLOC,
     LFS_ERR_INIT_THREADPOOL,
+    LFS_ERR_INIT_TIMER,
     LFS_ERR_INIT_FS_ROOTDIR,
     LFS_ERR_INIT_FS_BOOTSTRAP,
     LFS_ERR_INIT_FS_META,
@@ -27,6 +28,12 @@ typedef enum LFS_ERR_CODE
     LFS_ERR_NET_FAILED,
     LFS_ERR_TABLE_BLOCKED,
 } LFS_ERRR_CODE;
+
+typedef enum LFS_TIMER
+{
+    LFS_TIMER_DUMP = 0,
+    LFS_TIMER_COMPACT
+} LFS_TIMER;
 
 typedef struct cfg_t
 {
@@ -116,6 +123,7 @@ typedef struct lfs_ctx_t
     table_t             tables[MAX_TABLES];                         // container for storing tables.
     cx_handle_alloc_t*  tablesHalloc;                               // handle allocator for tables container;
     cx_pool_t*          pool;                                       // main pool of worker threads to process incoming requests.
+    uint16_t            timerDump;                                  // dump operation timer handle.
 } lfs_ctx_t;
 
 extern lfs_ctx_t        g_ctx;

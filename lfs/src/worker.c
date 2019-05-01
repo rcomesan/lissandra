@@ -57,7 +57,7 @@ void worker_handle_describe(request_t* _req)
         }
         else
         {
-            CX_ERROR_SET(&data->c.err, 1, "Table '%s' does not exist.", data->tables[0].name);
+            CX_ERR_SET(&data->c.err, 1, "Table '%s' does not exist.", data->tables[0].name);
         }
     }
     else
@@ -78,7 +78,7 @@ void worker_handle_select(request_t* _req)
         if (fs_table_avail_guard_begin(table, &data->c.err, NULL))
         {
             memtable_t memt;
-            cx_error_t err;
+            cx_err_t err;
             table_record_t* rec = &data->record;
             table_record_t  recTmp;
 
@@ -135,7 +135,7 @@ void worker_handle_select(request_t* _req)
             // check if we finally found it
             if (NULL == rec->value)
             {
-                CX_ERROR_SET(&data->c.err, 1, "Key %d does not exist in table '%s'.", rec->key, data->name);
+                CX_ERR_SET(&data->c.err, 1, "Key %d does not exist in table '%s'.", rec->key, data->name);
             }
 
             fs_table_avail_guard_end(table);
@@ -143,7 +143,7 @@ void worker_handle_select(request_t* _req)
     }
     else
     {
-        CX_ERROR_SET(&data->c.err, 1, "Table '%s' does not exist.", data->name);
+        CX_ERR_SET(&data->c.err, 1, "Table '%s' does not exist.", data->name);
     }
     
     _worker_parse_result(_req);
@@ -165,7 +165,7 @@ void worker_handle_insert(request_t* _req)
     }
     else
     {
-        CX_ERROR_SET(&data->c.err, 1, "Table '%s' does not exist.", data->name);
+        CX_ERR_SET(&data->c.err, 1, "Table '%s' does not exist.", data->name);
     }
 
     _worker_parse_result(_req);
@@ -184,31 +184,27 @@ void worker_handle_compact(request_t* _req)
     if (fs_table_exists(data->name, &table))
     {
         // define the scope of our compaction renaming .tmp files to .tmpc
-        pthread_mutex_lock(&table->memtable.mtx);
+        exp = fs_table_explorer(data->name, &data->c.err);
+        if (NULL != exp)
         {
-            exp = fs_table_explorer(data->name, &data->c.err);
-            if (NULL != exp)
+            uint16_t   dumpNumberMax = fs_table_get_dump_number_next(data->name);
+            cx_path_t  dumpPath;
+            cx_path_t  dumpNewPath;
+            dumpNumbers = CX_MEM_ARR_ALLOC(dumpNumbers, dumpNumberMax);
+
+            while (cx_fs_explorer_next_file(exp, &dumpPath) && fs_is_dump(&dumpPath, &dumpNumbers[dumpCount], NULL))
             {
-                uint16_t   dumpNumberMax = fs_table_get_dump_number_next(data->name);
-                cx_path_t  dumpPath;
-                cx_path_t  dumpNewPath;
-                dumpNumbers = CX_MEM_ARR_ALLOC(dumpNumbers, dumpNumberMax);
+                dumpCount++;
+            }
 
-                while (cx_fs_explorer_next_file(exp, &dumpPath) && fs_is_dump(&dumpPath, &dumpNumbers[dumpCount], NULL))
-                {
-                    dumpCount++;
-                }
-
-                for (uint32_t i = 0; i < dumpCount; i++)
-                {
-                    cx_str_copy(dumpNewPath, sizeof(dumpNewPath), dumpPath);
-                    cx_str_copy(dumpNewPath[strlen(dumpNewPath) - sizeof(LFS_DUMP_EXTENSION)], 5, LFS_DUMP_EXTENSION_COMPACTION);
-                    if (!cx_fs_move(&dumpPath, &dumpNewPath, &data->c.err))
-                        goto failed;
-                }
+            for (uint32_t i = 0; i < dumpCount; i++)
+            {
+                cx_str_copy(dumpNewPath, sizeof(dumpNewPath), dumpPath);
+                cx_str_copy(&dumpNewPath[strlen(dumpNewPath) - sizeof(LFS_DUMP_EXTENSION)], 5, LFS_DUMP_EXTENSION_COMPACTION);
+                if (!cx_fs_move(&dumpPath, &dumpNewPath, &data->c.err))
+                    goto failed;
             }
         }
-        pthread_mutex_unlock(&table->memtable.mtx);
 
         // load .tmpc files into a temporary memtable, sort the entries and remove duplicates.
         if (memtable_init(data->name, false, dumpsMem, &data->c.err))
@@ -258,7 +254,7 @@ void worker_handle_compact(request_t* _req)
     }
     else
     {
-        CX_ERROR_SET(&data->c.err, 1, "Table '%s' does not exist.", data->name);
+        CX_ERR_SET(&data->c.err, 1, "Table '%s' does not exist.", data->name);
     }
 
 failed:

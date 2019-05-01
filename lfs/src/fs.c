@@ -26,29 +26,29 @@ static bool         _fs_is_lfs(cx_path_t* _rootDir);
 
 static uint32_t     _fs_calc_bitmap_size(uint32_t _maxBlocks);
 
-static bool         _fs_bootstrap(cx_path_t* _rootDir, uint32_t _maxBlocks, uint32_t _blockSize, cx_error_t* _err);
+static bool         _fs_bootstrap(cx_path_t* _rootDir, uint32_t _maxBlocks, uint32_t _blockSize, cx_err_t* _err);
 
-static bool         _fs_load_meta(cx_error_t* _err);
+static bool         _fs_load_meta(cx_err_t* _err);
 
-static bool         _fs_load_tables(cx_error_t* _err);
+static bool         _fs_load_tables(cx_err_t* _err);
 
-static bool         _fs_load_blocks(cx_error_t* _err);
+static bool         _fs_load_blocks(cx_err_t* _err);
 
-static bool         _fs_file_write(cx_path_t* _filePath, fs_file_t* _outFile, cx_error_t* _err);
+static bool         _fs_file_write(cx_path_t* _filePath, fs_file_t* _outFile, cx_err_t* _err);
 
-static bool         _fs_file_read(cx_path_t* _filePath, fs_file_t* _file, cx_error_t* _err);
+static bool         _fs_file_read(cx_path_t* _filePath, fs_file_t* _file, cx_err_t* _err);
 
 
 /****************************************************************************************
  ***  PUBLIC FUNCTIONS
  ***************************************************************************************/
 
-bool fs_init(cx_error_t* _err)
+bool fs_init(cx_err_t* _err)
 {
     CX_CHECK(NULL == m_fsCtx, "fs is already initialized!");
 
     m_fsCtx = CX_MEM_STRUCT_ALLOC(m_fsCtx);
-    CX_ERROR_CLEAR(_err);
+    CX_ERR_CLEAR(_err);
 
     bool rootDirOk = false;
     cx_path_t rootDir;
@@ -61,7 +61,7 @@ bool fs_init(cx_error_t* _err)
             rootDirOk = _fs_is_lfs(&rootDir);
             if (!rootDirOk)
             {
-                CX_ERROR_SET(_err, LFS_ERR_INIT_FS_ROOTDIR,
+                CX_ERR_SET(_err, LFS_ERR_INIT_FS_ROOTDIR,
                     "the given root dir '%s' exists but it's not a lissandra file system (%s file is missing).",
                     rootDir, LFS_ROOT_FILE_MARKER);
             }
@@ -69,7 +69,7 @@ bool fs_init(cx_error_t* _err)
         else
         {
             rootDirOk = false;
-            CX_ERROR_SET(_err, LFS_ERR_INIT_FS_ROOTDIR, "the given root dir '%s' already exists and is a file!", rootDir);
+            CX_ERR_SET(_err, LFS_ERR_INIT_FS_ROOTDIR, "the given root dir '%s' already exists and is a file!", rootDir);
         }
     }
     else
@@ -86,7 +86,7 @@ bool fs_init(cx_error_t* _err)
 
         if (!m_fsCtx->mtxBlocksInit)
         {
-            CX_ERROR_SET(_err, 1, "pthread mutex initialization failed!");
+            CX_ERR_SET(_err, 1, "pthread mutex initialization failed!");
         }
 
         return true
@@ -120,7 +120,7 @@ void fs_destroy()
     free(m_fsCtx);
 }
 
-table_meta_t* fs_describe(uint16_t* _outTablesCount, cx_error_t* _err)
+table_meta_t* fs_describe(uint16_t* _outTablesCount, cx_err_t* _err)
 {
     table_meta_t* tables = NULL;
     char* key = NULL;
@@ -159,11 +159,11 @@ table_meta_t* fs_describe(uint16_t* _outTablesCount, cx_error_t* _err)
     return tables;
 }
 
-bool fs_table_avail_guard_begin(table_t* _table, cx_error_t* _err, pthread_mutex_t* _mtx)
+bool fs_table_avail_guard_begin(table_t* _table, cx_err_t* _err, pthread_mutex_t* _mtx)
 {
     if (_table->blocked)
     {
-        CX_ERROR_SET(_err, LFS_ERR_TABLE_BLOCKED, "Operation cannot be performed at this time since the table is blocked. Try agian later.");
+        CX_ERR_SET(_err, LFS_ERR_TABLE_BLOCKED, "Operation cannot be performed at this time since the table is blocked. Try agian later.");
         if (NULL != _mtx)
         {
             pthread_mutex_unlock(_mtx);
@@ -172,7 +172,7 @@ bool fs_table_avail_guard_begin(table_t* _table, cx_error_t* _err, pthread_mutex
     }
     else
     {
-        // increment the amount of running jobs that depend on this table availability (not blocked)
+        // increment the amount of running jobs that depend on this table's availability (not blocked)
         pthread_mutex_lock(&_table->mtxOperations);
         _table->operations++;
         pthread_mutex_unlock(&_table->mtxOperations);
@@ -183,10 +183,10 @@ bool fs_table_avail_guard_begin(table_t* _table, cx_error_t* _err, pthread_mutex
 
 void fs_table_avail_guard_end(table_t* _table)
 {
-    // decrement the amount of running jobs that depend on this table availability (not blocked)
+    // decrement the amount of running jobs that depend on this table's availability (not blocked)
     pthread_mutex_lock(&_table->mtxOperations);
+    CX_CHECK(_table->operations > 0, "something is wrong here...");
     _table->operations--;
-    CX_CHECK(_table->operations >= 0, "something is wrong here...");
     pthread_mutex_unlock(&_table->mtxOperations);
 }
 
@@ -205,10 +205,10 @@ bool fs_table_exists(const char* _tableName, table_t** _outTable)
     return false;
 }
 
-bool fs_table_create(table_t* _table, const char* _tableName, uint8_t _consistency, uint16_t _partitions, uint32_t _compactionInterval, cx_error_t* _err)
+bool fs_table_create(table_t* _table, const char* _tableName, uint8_t _consistency, uint16_t _partitions, uint32_t _compactionInterval, cx_err_t* _err)
 {
     CX_CHECK(strlen(_tableName) > 0, "invalid _tableName!");
-    CX_ERROR_CLEAR(_err);
+    CX_ERR_CLEAR(_err);
 
     cx_path_t path;
     t_config* meta = NULL;
@@ -252,12 +252,12 @@ bool fs_table_create(table_t* _table, const char* _tableName, uint8_t _consisten
                             {
                                 if (!fs_table_set_part(_tableName, i, false, &partFile, _err))
                                 {
-                                    CX_ERROR_SET(_err, 1, "partition #%d for table '%s' could not be written!", i, _tableName);
+                                    CX_ERR_SET(_err, 1, "partition #%d for table '%s' could not be written!", i, _tableName);
                                 }
                             }
                             else
                             {
-                                CX_ERROR_SET(_err, 1, "an initial block for table '%s' partition #%d could not be allocated."
+                                CX_ERR_SET(_err, 1, "an initial block for table '%s' partition #%d could not be allocated."
                                     "we may have ran out of blocks!", _tableName, i);
                             }
                         }
@@ -265,14 +265,14 @@ bool fs_table_create(table_t* _table, const char* _tableName, uint8_t _consisten
                 }
                 else
                 {
-                    CX_ERROR_SET(_err, 1, "table metadata file '%s' could not be created.", path);
+                    CX_ERR_SET(_err, 1, "table metadata file '%s' could not be created.", path);
                 }
             }
         }
     }
     else
     {
-        CX_ERROR_SET(_err, 1, "Table '%s' already exists.", _tableName);
+        CX_ERR_SET(_err, 1, "Table '%s' already exists.", _tableName);
     }
     
     if (NULL != meta) config_destroy(meta);
@@ -283,10 +283,10 @@ bool fs_table_create(table_t* _table, const char* _tableName, uint8_t _consisten
     return (ERR_NONE == _err->code);
 }
 
-bool fs_table_delete(const char* _tableName, cx_error_t* _err)
+bool fs_table_delete(const char* _tableName, cx_err_t* _err)
 {
     CX_CHECK(strlen(_tableName) > 0, "invalid _tableName!");
-    CX_ERROR_CLEAR(_err);
+    CX_ERR_CLEAR(_err);
 
     cx_path_t    path;
     table_meta_t meta;
@@ -325,15 +325,15 @@ bool fs_table_delete(const char* _tableName, cx_error_t* _err)
     }
     else
     {
-        CX_ERROR_SET(_err, 1, "Table '%s' does not exist.", _tableName);
+        CX_ERR_SET(_err, 1, "Table '%s' does not exist.", _tableName);
     }
 
     return (ERR_NONE == _err->code);
 }
 
-bool fs_table_get_meta(const char* _tableName, table_meta_t* _outMeta, cx_error_t* _err)
+bool fs_table_get_meta(const char* _tableName, table_meta_t* _outMeta, cx_err_t* _err)
 {
-    CX_ERROR_CLEAR(_err);
+    CX_ERR_CLEAR(_err);
     CX_CHECK_NOT_NULL(_outMeta);
     CX_MEM_ZERO(*_outMeta);
 
@@ -382,16 +382,16 @@ bool fs_table_get_meta(const char* _tableName, table_meta_t* _outMeta, cx_error_
         return true;
 
     key_missing:
-        CX_ERROR_SET(_err, 1, "key '%s' is missing in table '%s' metadata file.", key, _tableName);
+        CX_ERR_SET(_err, 1, "key '%s' is missing in table '%s' metadata file.", key, _tableName);
         config_destroy(meta);
         return false;
     }
 
-    CX_ERROR_SET(_err, 1, "table metadata file '%s' is missing or not readable.", metadataPath);
+    CX_ERR_SET(_err, 1, "table metadata file '%s' is missing or not readable.", metadataPath);
     return false;
 }
 
-bool fs_table_get_part(const char* _tableName, uint16_t _partNumber, bool _isDuringCompaction, fs_file_t* _outFile, cx_error_t* _err)
+bool fs_table_get_part(const char* _tableName, uint16_t _partNumber, bool _isDuringCompaction, fs_file_t* _outFile, cx_err_t* _err)
 {
     cx_path_t path;
     cx_fs_path(&path, "%s/%s/%s/%s%d.%s", m_fsCtx->rootDir, LFS_DIR_TABLES,
@@ -401,7 +401,7 @@ bool fs_table_get_part(const char* _tableName, uint16_t _partNumber, bool _isDur
     return _fs_file_read(&path, _outFile, _err);
 }
 
-bool fs_table_set_part(const char* _tableName, uint16_t _partNumber, bool _isDuringCompaction, fs_file_t* _file, cx_error_t* _err)
+bool fs_table_set_part(const char* _tableName, uint16_t _partNumber, bool _isDuringCompaction, fs_file_t* _file, cx_err_t* _err)
 {
     cx_path_t path;
     cx_fs_path(&path, "%s/%s/%s/%s%d.%s", m_fsCtx->rootDir, LFS_DIR_TABLES,
@@ -411,7 +411,7 @@ bool fs_table_set_part(const char* _tableName, uint16_t _partNumber, bool _isDur
     return _fs_file_write(&path, _file, _err);
 }
 
-bool fs_table_get_dump(const char* _tableName, uint16_t _dumpNumber, bool _isDuringCompaction, fs_file_t* _outFile, cx_error_t* _err)
+bool fs_table_get_dump(const char* _tableName, uint16_t _dumpNumber, bool _isDuringCompaction, fs_file_t* _outFile, cx_err_t* _err)
 {
     cx_path_t path;
     cx_fs_path(&path, "%s/%s/%s/%s%d.%s", m_fsCtx->rootDir, LFS_DIR_TABLES,  
@@ -421,7 +421,7 @@ bool fs_table_get_dump(const char* _tableName, uint16_t _dumpNumber, bool _isDur
     return _fs_file_read(&path, _outFile, _err);
 }
 
-bool fs_table_set_dump(const char* _tableName, uint16_t _dumpNumber, bool _isDuringCompaction, fs_file_t* _file, cx_error_t* _err)
+bool fs_table_set_dump(const char* _tableName, uint16_t _dumpNumber, bool _isDuringCompaction, fs_file_t* _file, cx_err_t* _err)
 {
     cx_path_t path;
     cx_fs_path(&path, "%s/%s/%s/%s%d.%s", m_fsCtx->rootDir, LFS_DIR_TABLES, 
@@ -433,7 +433,7 @@ bool fs_table_set_dump(const char* _tableName, uint16_t _dumpNumber, bool _isDur
 
 uint16_t fs_table_get_dump_number_next(const char* _tableName)
 {
-    cx_error_t err;
+    cx_err_t err;
     uint16_t   dumpNumber = 0;
     uint16_t   dumpNumberLast = 0;
     bool       dumpCompacted = false;
@@ -456,7 +456,7 @@ uint16_t fs_table_get_dump_number_next(const char* _tableName)
     return 0;
 }
 
-cx_fs_explorer_t* fs_table_explorer(const char* _tableName, cx_error_t* _err)
+cx_fs_explorer_t* fs_table_explorer(const char* _tableName, cx_err_t* _err)
 {
     cx_path_t path;
     cx_fs_path(&path, "%s/%s/%s", m_fsCtx->rootDir, LFS_DIR_TABLES, _tableName);
@@ -571,7 +571,7 @@ void fs_block_free(uint32_t* _blocksArr, uint32_t _blocksCount)
     pthread_mutex_unlock(&m_fsCtx->mtxBlocks);
 }
 
-int32_t fs_block_read(uint32_t _blockNumber, char* _buffer, cx_error_t* _err)
+int32_t fs_block_read(uint32_t _blockNumber, char* _buffer, cx_err_t* _err)
 {
     cx_path_t blockFilePath;
     cx_fs_path(&blockFilePath, "%s/%s/%d.bin", m_fsCtx->rootDir, LFS_DIR_BLOCKS, _blockNumber);
@@ -579,7 +579,7 @@ int32_t fs_block_read(uint32_t _blockNumber, char* _buffer, cx_error_t* _err)
     return cx_fs_read(&blockFilePath, _buffer, m_fsCtx->meta.blocksSize, _err);
 }
 
-bool fs_block_write(uint32_t _blockNumber, char* _buffer, uint32_t _bufferSize, cx_error_t* _err)
+bool fs_block_write(uint32_t _blockNumber, char* _buffer, uint32_t _bufferSize, cx_err_t* _err)
 {
     CX_CHECK(_bufferSize <= m_fsCtx->meta.blocksSize, "_bufferSize must be less than or equal to blocksSize (%d bytes)!", 
         m_fsCtx->meta.blocksSize);
@@ -595,7 +595,7 @@ uint32_t fs_block_size()
     return m_fsCtx->meta.blocksSize;
 }
 
-bool fs_file_load(fs_file_t* _file, char* _buffer, cx_error_t* _err)
+bool fs_file_load(fs_file_t* _file, char* _buffer, cx_err_t* _err)
 {
     uint32_t buffPos = 0;
     int32_t bytesRead = 0;
@@ -605,7 +605,7 @@ bool fs_file_load(fs_file_t* _file, char* _buffer, cx_error_t* _err)
         bytesRead = fs_block_read(_file->blocks[i], &_buffer[buffPos], _err);
         if (-1 == bytesRead)
         {
-            CX_ERROR_SET(_err, 1, "block #%d could not be read!", _file->blocks[i]);
+            CX_ERR_SET(_err, 1, "block #%d could not be read!", _file->blocks[i]);
             return false;
         }
 
@@ -614,7 +614,7 @@ bool fs_file_load(fs_file_t* _file, char* _buffer, cx_error_t* _err)
 
     if (buffPos != _file->size)
     {
-        CX_ERROR_SET(_err, 1, "file is not fully loaded! (size is %d but we read %d)", _file->size, buffPos);
+        CX_ERR_SET(_err, 1, "file is not fully loaded! (size is %d but we read %d)", _file->size, buffPos);
         return false;
     }
 
@@ -669,7 +669,7 @@ static uint32_t _fs_calc_bitmap_size(uint32_t _maxBlocks)
     return _maxBlocks / CHAR_BIT + (_maxBlocks % CHAR_BIT > 0 ? 1 : 0);
 }
 
-static bool _fs_bootstrap(cx_path_t* _rootDir, uint32_t _maxBlocks, uint32_t _blockSize, cx_error_t* _err)
+static bool _fs_bootstrap(cx_path_t* _rootDir, uint32_t _maxBlocks, uint32_t _blockSize, cx_err_t* _err)
 {
     char temp[256];
     bool success = true;
@@ -716,7 +716,7 @@ static bool _fs_bootstrap(cx_path_t* _rootDir, uint32_t _maxBlocks, uint32_t _bl
         }
         else
         {
-            CX_ERROR_SET(_err, LFS_ERR_INIT_FS_BOOTSTRAP,
+            CX_ERR_SET(_err, LFS_ERR_INIT_FS_BOOTSTRAP,
                 "configuration file '%s' could not be created.", path);
         }
     }
@@ -739,9 +739,9 @@ static bool _fs_bootstrap(cx_path_t* _rootDir, uint32_t _maxBlocks, uint32_t _bl
     return success;
 }
 
-static bool _fs_load_meta(cx_error_t* _err)
+static bool _fs_load_meta(cx_err_t* _err)
 {
-    CX_ERROR_CLEAR(_err);
+    CX_ERR_CLEAR(_err);
 
     char* temp = NULL;
     char* key = "";
@@ -788,25 +788,25 @@ static bool _fs_load_meta(cx_error_t* _err)
         return true;
 
     key_missing:
-        CX_ERROR_SET(_err, LFS_ERR_INIT_FS_META, "key '%s' is missing in the filesystem metadata file '%s'.", key, metadataPath);
+        CX_ERR_SET(_err, LFS_ERR_INIT_FS_META, "key '%s' is missing in the filesystem metadata file '%s'.", key, metadataPath);
         config_destroy(meta);
     }
     else
     {
-        CX_ERROR_SET(_err, LFS_ERR_INIT_FS_META, "filesystem metadata '%s' is missing or not readable.", metadataPath);
+        CX_ERR_SET(_err, LFS_ERR_INIT_FS_META, "filesystem metadata '%s' is missing or not readable.", metadataPath);
     }
     
     return false;
 }
 
-static bool _fs_load_tables(cx_error_t* _err)
+static bool _fs_load_tables(cx_err_t* _err)
 {
-    CX_ERROR_CLEAR(_err);
+    CX_ERR_CLEAR(_err);
 
     m_fsCtx->tablesMap = cx_cdict_init();
     if (NULL == m_fsCtx->tablesMap)
     {
-        CX_ERROR_SET(_err, 1, "tablesMap concurrent dictionary creation failed.");
+        CX_ERR_SET(_err, 1, "tablesMap concurrent dictionary creation failed.");
         return false;
     }
 
@@ -854,12 +854,12 @@ static bool _fs_load_tables(cx_error_t* _err)
         return true;
     }
 
-    CX_ERROR_SET(_err, LFS_ERR_INIT_FS_TABLES,
+    CX_ERR_SET(_err, LFS_ERR_INIT_FS_TABLES,
         "Tables directory '%s' is not accessible.", tablesPath);
     return false;
 }
 
-static bool _fs_load_blocks(cx_error_t* _err)
+static bool _fs_load_blocks(cx_err_t* _err)
 {
     cx_path_t bitmapPath;
     cx_fs_path(&bitmapPath, "%s/%s/%s", m_fsCtx->rootDir, LFS_DIR_METADATA, LFS_FILE_BITMAP);
@@ -878,7 +878,7 @@ static bool _fs_load_blocks(cx_error_t* _err)
     }
     else
     {
-        CX_ERROR_SET(_err, LFS_ERR_INIT_FS_BITMAP, "the amount of bytes expected and the "
+        CX_ERR_SET(_err, LFS_ERR_INIT_FS_BITMAP, "the amount of bytes expected and the "
             "amount of actual bytes read from the bitmap file '%s' do not match. "
             "the file might be corrupt at this point.", bitmapPath);
     }
@@ -888,7 +888,7 @@ static bool _fs_load_blocks(cx_error_t* _err)
     return false;
 }
 
-bool fs_table_init(table_t* _outTable, const char* _tableName, cx_error_t* _err)
+bool fs_table_init(table_t* _outTable, const char* _tableName, cx_err_t* _err)
 {
     CX_CHECK(strlen(_tableName) > 0, "invalid table name!");
 
@@ -914,12 +914,12 @@ void fs_table_destroy(table_t* _table)
     }
 }
 
-static bool _fs_file_read(cx_path_t* _filePath, fs_file_t* _outFile, cx_error_t* _err)
+static bool _fs_file_read(cx_path_t* _filePath, fs_file_t* _outFile, cx_err_t* _err)
 {
     char* key = NULL;
     bool keyMissing = false;
     t_config* file = NULL;
-    CX_ERROR_CLEAR(_err);
+    CX_ERR_CLEAR(_err);
 
     if (cx_fs_exists(_filePath))
     {
@@ -978,27 +978,27 @@ static bool _fs_file_read(cx_path_t* _filePath, fs_file_t* _outFile, cx_error_t*
         key_missing:
             if (keyMissing)
             {
-                CX_ERROR_SET(_err, 1, "File '%s' is corrupt. Key '%s' is missing.", *_filePath, key);
+                CX_ERR_SET(_err, 1, "File '%s' is corrupt. Key '%s' is missing.", *_filePath, key);
             }
         }
         else
         {
-            CX_ERROR_SET(_err, 1, "File '%s' could not be loaded!", *_filePath);
+            CX_ERR_SET(_err, 1, "File '%s' could not be loaded!", *_filePath);
         }
     }
     else
     {
-        CX_ERROR_SET(_err, 1, "File '%s' does not exist.", *_filePath);
+        CX_ERR_SET(_err, 1, "File '%s' does not exist.", *_filePath);
     }
 
     if (NULL != file) config_destroy(file);
     return (LFS_ERR_NONE == _err->code);
 }
 
-static bool _fs_file_write(cx_path_t* _filePath, fs_file_t* _file, cx_error_t* _err)
+static bool _fs_file_write(cx_path_t* _filePath, fs_file_t* _file, cx_err_t* _err)
 {
     t_config* file = NULL;
-    CX_ERROR_CLEAR(_err);
+    CX_ERR_CLEAR(_err);
     char temp[32];
 
     if (cx_fs_remove(_filePath, _err) && cx_fs_touch(_filePath, _err))
@@ -1039,7 +1039,7 @@ static bool _fs_file_write(cx_path_t* _filePath, fs_file_t* _file, cx_error_t* _
         }
         else
         {
-            CX_ERROR_SET(_err, 1, "file '%s' could not be loaded!", *_filePath);
+            CX_ERR_SET(_err, 1, "file '%s' could not be loaded!", *_filePath);
         }
     }
 
