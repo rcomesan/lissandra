@@ -579,6 +579,7 @@ static void _cx_net_poll_events_server(cx_net_ctx_sv_t* _ctx)
                         CX_INFO("[%s<--] [handle: %d] client disconnected (ip: %s, socket: %d)",
                             _ctx->c.name, clientHandle, _ctx->clients[clientHandle].ip, clientSock);
 
+                        epoll_ctl(_ctx->c.epollDescriptor, EPOLL_CTL_DEL, client->sock, NULL);
                         close(client->sock);
                         cx_handle_free(_ctx->clientsHalloc, clientHandle);
                     }
