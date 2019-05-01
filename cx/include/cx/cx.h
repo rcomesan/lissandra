@@ -36,16 +36,6 @@ void            cx_init(const char* _projectName);
 
 void            cx_trace(const char* _filePath, uint16_t _lineNumber, const char* _format, ...);
 
-double          cx_time_counter();
-
-double          cx_time_delta();
-
-void            cx_time_update();
-
-uint32_t        cx_time_epoch();
-
-void            cx_time_stamp(cx_timestamp_t* _outTimestamp);
-
 /****************************************************************************************
  ***  MACROS
  ***************************************************************************************/

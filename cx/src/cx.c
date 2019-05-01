@@ -6,22 +6,12 @@
 #include <stdio.h>
 #include <string.h>
 #include <stdarg.h>
-#include <sys/time.h>
-#include <time.h>
 
 static char     g_projectName[64] = "undefined";
-static int64_t  g_timeOffset;
-static double   g_timeCounter;
-static double   g_timeCounterPrev;
-static double   g_timeDelta;
 
 void cx_init(const char* _projectName)
 {
     cx_str_copy(g_projectName, sizeof(g_projectName), _projectName);
-
-    struct timeval now;
-    gettimeofday(&now, 0);
-    g_timeOffset = now.tv_sec * INT64_C(1000000) + now.tv_usec;
 }
 
 void cx_trace(const char * _filePath, uint16_t _lineNumber, const char * _format, ...)
@@ -65,37 +55,4 @@ void cx_trace(const char * _filePath, uint16_t _lineNumber, const char * _format
     }
 
     va_end(args);
-}
-
-double cx_time_counter()
-{
-    return g_timeCounter;
-}
-
-double cx_time_delta()
-{
-    return g_timeDelta;
-}
-
-void cx_time_update()
-{
-    struct timeval now;
-    gettimeofday(&now, 0);
-
-    int64_t time = now.tv_sec * INT64_C(1000000) + now.tv_usec;
-    g_timeCounter = (double)(time - g_timeOffset) / (double)INT64_C(1000000);
-    g_timeDelta = g_timeCounter - g_timeCounterPrev;
-    g_timeCounterPrev = g_timeCounter;
-}
-
-uint32_t cx_time_epoch()
-{
-    //TODO CHECKME is seconds precision OK for this?
-    return time(NULL);
-}
-
-void cx_time_stamp(cx_timestamp_t* _outTimestamp)
-{
-    time_t now = time(NULL);
-    strftime(*_outTimestamp, 15, "%Y%m%d%H%M%S", localtime(&now));
 }

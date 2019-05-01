@@ -77,6 +77,7 @@
     <ClCompile Include="src\pool.c" />
     <ClCompile Include="src\sort.c" />
     <ClCompile Include="src\str.c" />
+    <ClCompile Include="src\timer.c" />
   </ItemGroup>
   <ItemGroup>
     <None Include="makefile" />
@@ -98,6 +99,7 @@
     <ClInclude Include="include\cx\pool.h" />
     <ClInclude Include="include\cx\sort.h" />
     <ClInclude Include="include\cx\str.h" />
+    <ClInclude Include="include\cx\timer.h" />
   </ItemGroup>
   <ItemDefinitionGroup Condition="'$(Configuration)|$(Platform)'=='Debug|x86'">
     <PreBuildEvent>

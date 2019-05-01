@@ -51,6 +51,9 @@
     <ClCompile Include="src\sort.c">
       <Filter>src</Filter>
     </ClCompile>
+    <ClCompile Include="src\timer.c">
+      <Filter>src</Filter>
+    </ClCompile>
   </ItemGroup>
   <ItemGroup>
     <None Include="makefile" />
@@ -102,6 +105,9 @@
       <Filter>include\cx</Filter>
     </ClInclude>
     <ClInclude Include="include\cx\sort.h">
+      <Filter>include\cx</Filter>
+    </ClInclude>
+    <ClInclude Include="include\cx\timer.h">
       <Filter>include\cx</Filter>
     </ClInclude>
   </ItemGroup>
