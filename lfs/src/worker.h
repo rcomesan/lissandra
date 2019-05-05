@@ -7,16 +7,18 @@
 ***  PUBLIC FUNCTIONS
 ***************************************************************************************/
 
-void        worker_handle_create(request_t* _req);
+void        worker_handle_create(task_t* _req);
 
-void        worker_handle_drop(request_t* _req);
+void        worker_handle_drop(task_t* _req);
 
-void        worker_handle_describe(request_t* _req);
+void        worker_handle_describe(task_t* _req);
 
-void        worker_handle_select(request_t* _req);
+void        worker_handle_select(task_t* _req);
 
-void        worker_handle_insert(request_t* _req);
+void        worker_handle_insert(task_t* _req);
 
-void        worker_handle_compact(request_t* _req);
+void        worker_handle_dump(task_t* _req);
+
+void        worker_handle_compact(task_t* _req);
 
 #endif // LFS_WORKER_H

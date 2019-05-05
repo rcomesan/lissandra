@@ -23,7 +23,7 @@
 #include <unistd.h>
 
 lfs_ctx_t           g_ctx;                                  // global LFS context
-static uint16_t     m_auxHandles[MAX_CONCURRENT_REQUESTS];  // statically allocated aux buffer for storing handles
+static uint16_t     m_auxHandles[MAX_TASKS];  // statically allocated aux buffer for storing handles
 
 /****************************************************************************************
  ***  PRIVATE DECLARATIONS
@@ -45,12 +45,15 @@ static bool         cli_init();
 static void         cli_destroy();
 
 static void         handle_cli_command(const cx_cli_cmd_t* _cmd);
-static void         handle_worker_task(request_t* _req);
 static bool         handle_timer_tick(uint64_t _expirations, uint32_t _id, void* _userData);
+static void         handle_wk_task(task_t* _task);
+static bool         handle_mt_task(task_t* _task);
 
-static void         requests_update();
-static void         request_completed(const request_t* _req);
-static void         request_free(request_t* _req);
+static void         queue_process();
+
+static void         tasks_update();
+static void         task_completed(const task_t* _task);
+static void         task_free(task_t* _task);
 
 static void         api_response_create(const data_create_t* _data);
 static void         api_response_drop(const data_drop_t* _data);
@@ -94,11 +97,14 @@ int main(int _argc, char** _argv)
             // poll socket events
             cx_net_poll_events(g_ctx.sv);
             
-            // update requests
-            requests_update();
+            // update tasks
+            tasks_update();
 
             // poll timer events
             cx_timer_poll_events();
+
+            // process main-thread queue
+            queue_process();
         }
     }
     else if (NULL != g_ctx.log)
@@ -124,6 +130,34 @@ int main(int _argc, char** _argv)
     
     logger_destroy();
     return err.code;
+}
+
+uint16_t lfs_task_create(TASK_ORIGIN _origin, TASK_TYPE _type, void* _data, cx_net_client_t* _client)
+{
+    pthread_mutex_lock(&g_ctx.tasksMutex);
+    uint16_t handle = cx_handle_alloc(g_ctx.tasksHalloc);
+    pthread_mutex_unlock(&g_ctx.tasksMutex);
+
+    if (INVALID_HANDLE != handle)
+    {
+        task_t* task = &(g_ctx.tasks[handle]);
+        task->state = TASK_STATE_NONE;
+        task->type = _type;
+        task->origin = _origin;
+        task->data = _data;
+
+        if (TASK_ORIGIN_API != task->origin)
+        {
+            task->clientHandle = _client->handle;
+        }
+        else
+        {
+            task->clientHandle = INVALID_HANDLE;
+        }
+    }
+    CX_CHECK(INVALID_HANDLE != handle, "we ran out of task handles! (ignored task type %s)", _type);
+  
+    return handle;
 }
 
 /****************************************************************************************
@@ -298,14 +332,24 @@ static void cfg_destroy()
 
 static bool lfs_init(cx_err_t* _err)
 {
-    uint8_t stage = 0;
-
-    g_ctx.requestsHalloc = cx_halloc_init(MAX_CONCURRENT_REQUESTS);
-    CX_MEM_ZERO(g_ctx.requests);
-    if (NULL == g_ctx.requestsHalloc)
+    g_ctx.tasksMutexI = (0 == pthread_mutex_init(&g_ctx.tasksMutex, NULL));
+    if (!g_ctx.tasksMutexI)
     {
-        CX_ERR_SET(_err, LFS_ERR_INIT_HALLOC, "requests handle allocator creation failed.");
+        CX_ERR_SET(_err, LFS_ERR_INIT_MTX, "tasks mutex creation failed.");
         return false;
+    }
+
+    g_ctx.tasksHalloc = cx_halloc_init(MAX_TASKS);
+    CX_MEM_ZERO(g_ctx.tasks);
+    if (NULL == g_ctx.tasksHalloc)
+    {
+        CX_ERR_SET(_err, LFS_ERR_INIT_HALLOC, "tasks handle allocator creation failed.");
+        return false;
+    }
+    for (uint32_t i = 0; i < MAX_TASKS; i++)
+    {
+        g_ctx.tasks[i].handle = i;
+        g_ctx.tasks[i].clientHandle = INVALID_HANDLE;
     }
 
     g_ctx.tablesHalloc = cx_halloc_init(MAX_TABLES);
@@ -315,14 +359,25 @@ static bool lfs_init(cx_err_t* _err)
         CX_ERR_SET(_err, LFS_ERR_INIT_HALLOC, "tables handle allocator creation failed.");
         return false;
     }
+    for (uint32_t i = 0; i < MAX_TABLES; i++)
+    {
+        g_ctx.tables[i].handle = i;
+    }
 
-    g_ctx.pool = cx_pool_init("worker", g_ctx.cfg.workers, (cx_pool_handler_cb)handle_worker_task);
+    g_ctx.pool = cx_pool_init("worker", g_ctx.cfg.workers, (cx_pool_handler_cb)handle_wk_task);
     if (NULL == g_ctx.pool)
     {
         CX_ERR_SET(_err, LFS_ERR_INIT_THREADPOOL, "thread pool creation failed.");
         return false;
     }
     
+    g_ctx.mtQueue = queue_create();
+    if (NULL == g_ctx.mtQueue)
+    {
+        CX_ERR_SET(_err, LFS_ERR_INIT_QUEUE, "main-thread queue creation failed.");
+        return false;
+    }
+
     g_ctx.timerDump = cx_timer_add(g_ctx.cfg.dumpInterval, LFS_TIMER_DUMP, NULL);
     if (INVALID_HANDLE == g_ctx.timerDump)
     {
@@ -339,31 +394,52 @@ static void lfs_destroy()
 
     uint16_t max = 0; 
     uint16_t handle = INVALID_HANDLE;
-    request_t* request = NULL;
+    task_t* request = NULL;
     table_t* table = NULL;
 
-    max = cx_handle_count(g_ctx.requestsHalloc);
-    for (uint16_t i = 0; i < max; i++)
+    if (g_ctx.tasksMutexI)
     {
-        handle = cx_handle_at(g_ctx.requestsHalloc, i);
-        request = &(g_ctx.requests[handle]);
-        request_free(request);
+        pthread_mutex_destroy(&g_ctx.tasksMutex);
+        g_ctx.tasksMutexI = false;
     }
-    cx_halloc_destroy(g_ctx.requestsHalloc);
-    g_ctx.requestsHalloc = NULL;
 
-    max = cx_handle_count(g_ctx.tablesHalloc);
-    for (uint16_t i = 0; i < max; i++)
+    if (NULL != g_ctx.tasksHalloc)
     {
-        handle = cx_handle_at(g_ctx.tablesHalloc, i);
-        table = &(g_ctx.tables[handle]);
-        fs_table_destroy(table);
+        max = cx_handle_count(g_ctx.tasksHalloc);
+        for (uint16_t i = 0; i < max; i++)
+        {
+            handle = cx_handle_at(g_ctx.tasksHalloc, i);
+            request = &(g_ctx.tasks[handle]);
+            task_free(request);
+        }
+        cx_halloc_destroy(g_ctx.tasksHalloc);
+        g_ctx.tasksHalloc = NULL;
     }
-    cx_halloc_destroy(g_ctx.tablesHalloc);
-    g_ctx.tablesHalloc = NULL;
 
-    cx_pool_destroy(g_ctx.pool);
-    g_ctx.pool = NULL;
+    if (NULL != g_ctx.tablesHalloc)
+    {
+        max = cx_handle_count(g_ctx.tablesHalloc);
+        for (uint16_t i = 0; i < max; i++)
+        {
+            handle = cx_handle_at(g_ctx.tablesHalloc, i);
+            table = &(g_ctx.tables[handle]);
+            fs_table_destroy(table);
+        }
+        cx_halloc_destroy(g_ctx.tablesHalloc);
+        g_ctx.tablesHalloc = NULL;
+    }
+
+    if (NULL != g_ctx.pool)
+    {
+        cx_pool_destroy(g_ctx.pool);
+        g_ctx.pool = NULL;
+    }
+
+    if (NULL != g_ctx.mtQueue)
+    {
+        queue_destroy(g_ctx.mtQueue);
+        g_ctx.mtQueue = NULL;
+    }
 
     if (INVALID_HANDLE != g_ctx.timerDump)
     {
@@ -511,54 +587,167 @@ static void handle_cli_command(const cx_cli_cmd_t* _cmd)
     }
 }
 
-static void handle_worker_task(request_t* _req)
+static void handle_wk_task(task_t* _task)
 {
-    REQ_STATE r;
-    _req->state = REQ_STATE_RUNNING;
+    _task->state = TASK_STATE_RUNNING;
 
-    switch (_req->type)
+    switch (_task->type)
     {
-    case TASK_W_CREATE:
-        worker_handle_create(_req);
+    case TASK_WT_CREATE:
+        worker_handle_create(_task);
         break;
 
-    case TASK_W_DROP:
-        worker_handle_drop(_req);
+    case TASK_WT_DROP:
+        worker_handle_drop(_task);
         break;
 
-    case TASK_W_DESCRIBE:
-        worker_handle_describe(_req);
+    case TASK_WT_DESCRIBE:
+        worker_handle_describe(_task);
         break;
 
-    case TASK_W_SELECT:
-        worker_handle_select(_req);
+    case TASK_WT_SELECT:
+        worker_handle_select(_task);
         break;
 
-    case TASK_W_INSERT:
-        worker_handle_insert(_req);
+    case TASK_WT_INSERT:
+        worker_handle_insert(_task);
         break;
 
-    case TASK_W_COMPACT:
-        worker_handle_compact(_req);
+    case TASK_WT_DUMP:
+        worker_handle_dump(_task);
+
+    case TASK_WT_COMPACT:
+        worker_handle_compact(_task);
         break;
 
     default:
-        CX_WARN(CX_ALW, "undefined <worker> behaviour for request type #%d.", _req->type);
+        CX_WARN(CX_ALW, "undefined <worker-thread> behaviour for task type #%d.", _task->type);
         break;
     }
+}
+
+static bool handle_mt_task(task_t* _task)
+{
+    _task->state = TASK_STATE_RUNNING;
+
+    bool     success = false;
+    table_t* table = NULL;
+    task_t*  task = NULL;
+    uint16_t taskHandle = INVALID_HANDLE;
+
+    switch (_task->type)
+    {
+    case TASK_MT_FREE:
+    {
+        table = (table_t*)_task->data;
+        if (0 == table->operations)
+        {
+            fs_table_destroy(table);
+            cx_handle_free(g_ctx.tablesHalloc, table->handle);
+            success = true;
+        }
+        break;
+    }
+
+    case TASK_MT_COMPACT:
+    {
+        table = (table_t*)_task->data;
+
+        taskHandle = lfs_task_create(TASK_ORIGIN_INTERNAL, TASK_WT_COMPACT, NULL, NULL);
+        if (INVALID_HANDLE != taskHandle)
+        {
+            task = &(g_ctx.tasks[taskHandle]);
+            
+            data_compact_t* data = CX_MEM_STRUCT_ALLOC(data);
+            cx_str_copy(data->tableName, sizeof(data->tableName), table->meta.name);
+
+            task->data = data;
+            task->state = TASK_STATE_NEW;
+            success = true;
+        }
+        break;
+    }
+
+    case TASK_MT_DUMP:
+    {
+        uint16_t max = cx_handle_count(g_ctx.tablesHalloc);
+        uint16_t handle = INVALID_HANDLE;
+        data_dump_t* data = NULL;
+
+        for (uint16_t i = 0; i < max; i++)
+        {
+            handle = cx_handle_at(g_ctx.tablesHalloc, i);
+            table = &(g_ctx.tables[handle]);
+
+            if (!table->deleted)
+            {
+                taskHandle = lfs_task_create(TASK_ORIGIN_INTERNAL, TASK_WT_DUMP, NULL, NULL);
+                if (INVALID_HANDLE != taskHandle)
+                {
+                    task = &(g_ctx.tasks[taskHandle]);
+
+                    data = CX_MEM_STRUCT_ALLOC(data);
+                    cx_str_copy(data->tableName, sizeof(data->tableName), table->meta.name);
+
+                    task->data = data;
+                    task->state = TASK_STATE_NEW;
+                }
+            }
+        }
+        success = true;
+        break;
+    }
+
+    case TASK_MT_UNBLOCK:
+    {
+        table = (table_t*)_task->data;
+        table->blocked = false;
+
+        if (table->justCreated)
+        {
+            table->justCreated = false;
+            table->timerHandle = cx_timer_add(table->meta.compactionInterval, LFS_TIMER_COMPACT, table);
+            CX_CHECK(INVALID_HANDLE != table->timerHandle, "we ran out of timer handles for table '%s'!", table->meta.name);
+        }
+
+        while (!queue_is_empty(table->blockedQueue))
+        {
+            task = queue_pop(table->blockedQueue);
+            task->state = TASK_STATE_NEW;
+        }
+        
+        success = true;
+        break;
+    }
+
+    default:
+        CX_WARN(CX_ALW, "undefined <main-thread> behaviour for task type #%d.", _task->type);
+        break;
+    }
+    
+    return success;
 }
 
 static bool handle_timer_tick(uint64_t _expirations, uint32_t _type, void* _userData)
 {
     bool stopTimer = false;
+    uint16_t taskHandle = INVALID_HANDLE;
+    task_t* task = NULL;
 
     switch (_type)
     {
     case LFS_TIMER_DUMP:
-        CX_INFO("dumping shit...");
+    {
+        taskHandle = lfs_task_create(TASK_ORIGIN_INTERNAL, TASK_MT_DUMP, NULL, NULL);
+        task = &(g_ctx.tasks[taskHandle]);
+        task->state = TASK_STATE_NEW;
         break;
+    }
 
     case LFS_TIMER_COMPACT:
+        taskHandle = lfs_task_create(TASK_ORIGIN_INTERNAL, TASK_MT_COMPACT, _userData, NULL);
+        task = &(g_ctx.tasks[taskHandle]);
+        task->state = TASK_STATE_NEW;
         break;
 
     default:
@@ -569,148 +758,217 @@ static bool handle_timer_tick(uint64_t _expirations, uint32_t _type, void* _user
     return !stopTimer;
 }
 
-void requests_update()
+void tasks_update()
 {
-    uint16_t max = cx_handle_count(g_ctx.requestsHalloc);
+    uint16_t max = cx_handle_count(g_ctx.tasksHalloc);
     uint16_t handle = INVALID_HANDLE;
-    request_t* req = NULL;
+    task_t*  task = NULL;
+    table_t* table = NULL;
     uint16_t removeCount = 0;
     data_common_t* dataCommon = NULL;
 
     for (uint16_t i = 0; i < max; i++)
     {
-        handle = cx_handle_at(g_ctx.requestsHalloc, i);
-        req = &(g_ctx.requests[handle]);
+        handle = cx_handle_at(g_ctx.tasksHalloc, i);
+        task = &(g_ctx.tasks[handle]);
 
-        if (REQ_STATE_NEW == req->state)
+        if (TASK_STATE_NEW == task->state)
         {
-            dataCommon = (data_common_t*)req->data;
+            dataCommon = (data_common_t*)task->data;
             dataCommon->startTime = cx_time_counter();
             CX_MEM_ZERO(dataCommon->err);
 
-            cx_pool_submit(g_ctx.pool, req);
+            if (TASK_WT & task->type)
+            {
+                cx_pool_submit(g_ctx.pool, task);
+            }
+            else
+            {
+                queue_push(g_ctx.mtQueue, task);
+            }
         }
-        else if (REQ_STATE_COMPLETED == req->state)
+        else if (TASK_STATE_COMPLETED == task->state)
         {
-            request_completed(req);
-            request_free(req);
+            task_completed(task);
+            task_free(task);
             m_auxHandles[removeCount++] = handle;
         }
-        else /* TODO handle requests blocked here. re-schedule them into our blocked queue for delayed execution */
+        else if (TASK_STATE_BLOCKED_RESCHEDULE == task->state)
         {
+            dataCommon = (data_common_t*)task->data;
+            if (INVALID_HANDLE != dataCommon->tableHandle)
+            {
+                table = &g_ctx.tables[dataCommon->tableHandle];
+                
+                queue_push(table->blockedQueue, task);
+                task->state = TASK_STATE_BLOCKED_AWAITING;
+            }
         }
     }
 
+    pthread_mutex_lock(&g_ctx.tasksMutex);
     for (uint16_t i = 0; i < removeCount; i++)
     {   
         handle = m_auxHandles[i];
-        req = &(g_ctx.requests[handle]);
-        cx_handle_free(g_ctx.requestsHalloc, handle);
+        task = &(g_ctx.tasks[handle]);
+        cx_handle_free(g_ctx.tasksHalloc, handle);
     }
+    pthread_mutex_unlock(&g_ctx.tasksMutex);
 }
 
-static void request_completed(const request_t* _req)
+static void task_completed(const task_t* _task)
 {
-    switch (_req->type)
+    switch (_task->type)
     {
-    case TASK_W_CREATE:
-        if (REQ_ORIGIN_API == _req->origin)
-            api_response_create((data_create_t*)_req->data);
+    case TASK_WT_CREATE:
+        if (TASK_ORIGIN_API == _task->origin)
+            api_response_create((data_create_t*)_task->data);
         else
-            cli_report_create((data_create_t*)_req->data);
+            cli_report_create((data_create_t*)_task->data);
         break;
 
-    case TASK_W_DROP:
-        if (REQ_ORIGIN_API == _req->origin)
-            api_response_drop((data_drop_t*)_req->data);
+    case TASK_WT_DROP:
+        if (TASK_ORIGIN_API == _task->origin)
+            api_response_drop((data_drop_t*)_task->data);
         else
-            cli_report_drop((data_drop_t*)_req->data);
+            cli_report_drop((data_drop_t*)_task->data);
         break;
 
-    case TASK_W_DESCRIBE:
-        if (REQ_ORIGIN_API == _req->origin)
-            api_response_describe((data_describe_t*)_req->data);
+    case TASK_WT_DESCRIBE:
+        if (TASK_ORIGIN_API == _task->origin)
+            api_response_describe((data_describe_t*)_task->data);
         else
-            cli_report_describe((data_describe_t*)_req->data);
+            cli_report_describe((data_describe_t*)_task->data);
         break;
 
-    case TASK_W_SELECT:
-        if (REQ_ORIGIN_API == _req->origin)
-            api_response_select((data_select_t*)_req->data);
+    case TASK_WT_SELECT:
+        if (TASK_ORIGIN_API == _task->origin)
+            api_response_select((data_select_t*)_task->data);
         else
-            cli_report_select((data_select_t*)_req->data);
+            cli_report_select((data_select_t*)_task->data);
         break;
 
-    case TASK_W_INSERT:
-        if (REQ_ORIGIN_API == _req->origin)
-            api_response_insert((data_insert_t*)_req->data);
+    case TASK_WT_INSERT:
+        if (TASK_ORIGIN_API == _task->origin)
+            api_response_insert((data_insert_t*)_task->data);
         else
-            cli_report_insert((data_insert_t*)_req->data);
+            cli_report_insert((data_insert_t*)_task->data);
         break;
 
     default:
-        CX_WARN(CX_ALW, "undefined <completed> behaviour for request type #%d.", _req->type);
+        CX_WARN(CX_ALW, "undefined <completed> behaviour for request type #%d.", _task->type);
         break;
     }
 
-    if (REQ_ORIGIN_CLI == _req->origin)
+    if (TASK_ORIGIN_CLI == _task->origin)
     {
         // mark the current (processed) command as done
         cx_cli_command_end();
     }
 }
 
-static void request_free(request_t* _req)
+static void task_free(task_t* _task)
 {
-    switch (_req->type)
+    switch (_task->type)
     {
-    case TASK_W_CREATE:
+    case TASK_WT_CREATE:
     {
-        data_create_t* data = (data_create_t*)_req->data;
+        data_create_t* data = (data_create_t*)_task->data;
         break;
     }
 
-    case TASK_W_DROP:
+    case TASK_WT_DROP:
     {
-        data_drop_t* data = (data_drop_t*)_req->data;
+        data_drop_t* data = (data_drop_t*)_task->data;
         break;
     }
 
-    case TASK_W_DESCRIBE:
+    case TASK_WT_DESCRIBE:
     {
-        data_describe_t* data = (data_describe_t*)_req->data;
+        data_describe_t* data = (data_describe_t*)_task->data;
         free(data->tables);
         data->tables = NULL;
         data->tablesCount = 0;
         break;
     }
 
-    case TASK_W_SELECT:
+    case TASK_WT_SELECT:
     {
-        data_select_t* data = (data_select_t*)_req->data;
+        data_select_t* data = (data_select_t*)_task->data;
         free(data->record.value);
         data->record.value = NULL;
         break;
     }
 
-    case TASK_W_INSERT:
+    case TASK_WT_INSERT:
     {
-        data_insert_t* data = (data_insert_t*)_req->data;
+        data_insert_t* data = (data_insert_t*)_task->data;
         free(data->record.value);
         data->record.value = NULL;
+        break;
+    }
+
+    case TASK_WT_DUMP:
+    {
+        data_dump_t* data = (data_dump_t*)_task->data;
+        break;
+    }
+
+    case TASK_WT_COMPACT:
+    {
+        data_compact_t* data = (data_compact_t*)_task->data;
+        break;
+    }
+
+    case TASK_MT_DUMP:
+    {
+        break;
+    }
+
+    case TASK_MT_COMPACT:
+    {
         break;
     }
 
     default:
-        CX_WARN(CX_ALW, "undefined <free> behaviour for request type #%d.", _req->type);
+        CX_WARN(CX_ALW, "undefined <free> behaviour for request type #%d.", _task->type);
         break;
     }
 
-    free(_req->data);
+    free(_task->data);
     
     // note that requests are statically allocated. we don't want to free them
     // here since we'll keep reusing them in subsequent requests.
-    CX_MEM_ZERO(*_req)
+    _task->clientHandle = INVALID_HANDLE;
+    _task->state = TASK_STATE_NONE;
+    _task->origin = TASK_ORIGIN_NONE;
+    _task->type = TASK_TYPE_NONE;
+    _task->data = NULL;
+}
+
+static void queue_process()
+{
+    task_t* task = NULL;
+    uint32_t count = 0;
+    uint32_t max = queue_size(g_ctx.mtQueue);
+
+    task = queue_pop(g_ctx.mtQueue);
+    while (count <= max)
+    {
+        if (handle_mt_task(task))
+        {
+            task->state = TASK_STATE_COMPLETED;
+        }
+        else
+        {
+            // we can't process it at this time, push it again to our queue
+            task->state = TASK_STATE_READY;
+            queue_push(g_ctx.mtQueue, task);
+        }
+
+        task = queue_pop(g_ctx.mtQueue);
+        count++;
+    }
 }
 
 static void api_response_create(const data_create_t* _result)

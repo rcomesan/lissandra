@@ -16,32 +16,28 @@
 
 #include "../lfs.h"
 
-#define LFS_REQ_BEGIN                                                                   \
+#define LFS_REQ_BEGIN(_taskType)                                                        \
     cx_net_ctx_sv_t* svCtx = (cx_net_ctx_sv_t*)_common;                                 \
-    cx_net_client_t* client = (cx_net_client_t*)_passThrou;                             \
+    cx_net_client_t* client = (cx_net_client_t*)_userData;                              \
     uint32_t pos = 0;                                                                   \
-    uint16_t requestHandle = cx_handle_alloc(g_ctx.requestsHalloc);                     \
-    if (INVALID_HANDLE != requestHandle)                                                \
+    uint16_t taskHandle = lfs_task_create(                                              \
+        NULL == _userData                                                               \
+            ? TASK_ORIGIN_CLI                                                           \
+            : TASK_ORIGIN_API,                                                          \
+        (_taskType),                                                                    \
+        NULL,                                                                           \
+        _userData);                                                                     \
+                                                                                        \
+    if (INVALID_HANDLE != taskHandle)                                                   \
     {                                                                                   \
-        request_t* req = &(g_ctx.requests[requestHandle]);                              \
-        req->state = REQ_STATE_NEW;                                                     \
-        if (NULL != _passThrou)                                                         \
-        {                                                                               \
-            req->origin = REQ_ORIGIN_API;                                               \
-            req->clientHandle = client->handle;                                         \
-        }                                                                               \
-        else                                                                            \
-        {                                                                               \
-            req->origin = REQ_ORIGIN_CLI;                                               \
-            req->clientHandle = INVALID_HANDLE;                                         \
-        }
+        task_t* task = &(g_ctx.tasks[taskHandle]);
 
 #define LFS_REQ_END                                                                     \
+        task->state = TASK_STATE_NEW;                                                   \
         CX_CHECK(pos == _size, "%d bytes were not consumed from the buffer!", _size - pos); \
     }                                                                                   \
-    CX_WARN(INVALID_HANDLE != requestHandle, "we ran out of request handles! (request ignored)");
 
-void lfs_handle_sum_request(const cx_net_common_t* _common, void* _passThrou, const char* _data, uint16_t _size)
+void lfs_handle_sum_request(const cx_net_common_t* _common, void* _userData, const char* _data, uint16_t _size)
 {
     //LFS_REQ_BEGIN;
 
@@ -63,44 +59,41 @@ void lfs_handle_sum_request(const cx_net_common_t* _common, void* _passThrou, co
     //LFS_REQ_END;
 }
 
-void lfs_handle_create(const cx_net_common_t* _common, void* _passThrou, const char* _data, uint16_t _size)
+void lfs_handle_create(const cx_net_common_t* _common, void* _userData, const char* _data, uint16_t _size)
 {
-    LFS_REQ_BEGIN;
+    LFS_REQ_BEGIN(TASK_WT_CREATE);
         data_create_t* data = CX_MEM_STRUCT_ALLOC(data);
-        req->type = TASK_W_CREATE;
-        req->data = data;
+        task->data = data;
         cx_binr_uint16(_data, _size, &pos, &data->c.remoteId);
-        cx_binr_str(_data, _size, &pos, data->name, sizeof(data->name));
+        cx_binr_str(_data, _size, &pos, data->tableName, sizeof(data->tableName));
         cx_binr_uint8(_data, _size, &pos, &data->consistency);
         cx_binr_uint16(_data, _size, &pos, &data->numPartitions);
         cx_binr_uint32(_data, _size, &pos, &data->compactionInterval);
-        data->tableHandle = cx_handle_alloc(g_ctx.tablesHalloc);
-        if (INVALID_HANDLE == data->tableHandle)
+        data->c.tableHandle = cx_handle_alloc(g_ctx.tablesHalloc);
+        if (INVALID_HANDLE == data->c.tableHandle)
         {
-            CX_WARN(CX_ALW, "we ran out of table handles! %d is not enough!", MAX_TABLES);
+            CX_WARN(CX_ALW, "we ran out of table handles! %d are not enough!", MAX_TABLES);
             CX_ERR_SET(&data->c.err, 1, "Table creation cannot be performed at this time (out of memory).");
-            req->state = REQ_STATE_COMPLETED;
+            task->state = TASK_STATE_COMPLETED;
         }
     LFS_REQ_END;
 }
 
-void lfs_handle_drop(const cx_net_common_t* _common, void* _passThrou, const char* _data, uint16_t _size)
+void lfs_handle_drop(const cx_net_common_t* _common, void* _userData, const char* _data, uint16_t _size)
 {
-    LFS_REQ_BEGIN;
+    LFS_REQ_BEGIN(TASK_WT_DROP);
         data_drop_t* data = CX_MEM_STRUCT_ALLOC(data);
-        req->type = TASK_W_DROP;
-        req->data = data;
+        task->data = data;
         cx_binr_uint16(_data, _size, &pos, &data->c.remoteId);
-        cx_binr_str(_data, _size, &pos, data->name, sizeof(data->name));
+        cx_binr_str(_data, _size, &pos, data->tableName, sizeof(data->tableName));
     LFS_REQ_END;
 }
 
-void lfs_handle_describe(const cx_net_common_t* _common, void* _passThrou, const char* _data, uint16_t _size)
+void lfs_handle_describe(const cx_net_common_t* _common, void* _userData, const char* _data, uint16_t _size)
 {
-    LFS_REQ_BEGIN;
+    LFS_REQ_BEGIN(TASK_WT_DESCRIBE);
         data_describe_t* data = CX_MEM_STRUCT_ALLOC(data);
-        req->type = TASK_W_DESCRIBE;
-        req->data = data;
+        task->data = data;
         cx_binr_uint16(_data, _size, &pos, &data->c.remoteId);
         
         char tableName[TABLE_NAME_LEN_MAX + 1];
@@ -120,26 +113,24 @@ void lfs_handle_describe(const cx_net_common_t* _common, void* _passThrou, const
     LFS_REQ_END;
 }
 
-void lfs_handle_select(const cx_net_common_t* _common, void* _passThrou, const char* _data, uint16_t _size)
+void lfs_handle_select(const cx_net_common_t* _common, void* _userData, const char* _data, uint16_t _size)
 {
-    LFS_REQ_BEGIN;
+    LFS_REQ_BEGIN(TASK_WT_SELECT);
         data_select_t* data = CX_MEM_STRUCT_ALLOC(data);
-        req->type = TASK_W_SELECT;
-        req->data = data;
+        task->data = data;
         cx_binr_uint16(_data, _size, &pos, &data->c.remoteId);
-        cx_binr_str(_data, _size, &pos, data->name, sizeof(data->name));
+        cx_binr_str(_data, _size, &pos, data->tableName, sizeof(data->tableName));
         cx_binr_uint16(_data, _size, &pos, &data->record.key);
     LFS_REQ_END;
 }
 
-void lfs_handle_insert(const cx_net_common_t* _common, void* _passThrou, const char* _data, uint16_t _size)
+void lfs_handle_insert(const cx_net_common_t* _common, void* _userData, const char* _data, uint16_t _size)
 {
-    LFS_REQ_BEGIN;
+    LFS_REQ_BEGIN(TASK_WT_INSERT);
         data_insert_t* data = CX_MEM_STRUCT_ALLOC(data);
-        req->type = TASK_W_INSERT;
-        req->data = data;
+        task->data = data;
         cx_binr_uint16(_data, _size, &pos, &data->c.remoteId);
-        cx_binr_str(_data, _size, &pos, data->name, sizeof(data->name));
+        cx_binr_str(_data, _size, &pos, data->tableName, sizeof(data->tableName));
         cx_binr_uint16(_data, _size, &pos, &data->record.key);
 
         uint16_t valueLen = cx_binr_str(_data, _size, &pos, NULL, 0) + 1;

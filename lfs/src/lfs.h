@@ -15,8 +15,10 @@ typedef enum LFS_ERR_CODE
     LFS_ERR_NONE = 0,
     LFS_ERR_GENERIC = 1,
     LFS_ERR_LOGGER_FAILED,
+    LFS_ERR_INIT_MTX,
     LFS_ERR_INIT_HALLOC,
     LFS_ERR_INIT_THREADPOOL,
+    LFS_ERR_INIT_QUEUE,
     LFS_ERR_INIT_TIMER,
     LFS_ERR_INIT_FS_ROOTDIR,
     LFS_ERR_INIT_FS_BOOTSTRAP,
@@ -49,14 +51,15 @@ typedef struct cfg_t
     uint32_t            dumpInterval;           // interval in ms to perform memtable dumps.
 } cfg_t;
 
-typedef struct request_t
+typedef struct task_t
 {
-    REQ_STATE           state;                  // the current state of our request.
-    REQ_ORIGIN          origin;                 // origin of this request. it can be either command line interface or sockets api.
-    REQ_TYPE            type;                   // the requested operation.
-    uint16_t            clientHandle;           // the handle to the client which requested this request in our server context. INVALID_HANDLE means a CLI-issued request.
-    void*               data;                   // the data (arguments and result) of the requested operation. see data_*_t structures in ker/defines.h.
-} request_t;
+    uint16_t            handle;                 // handle of this task entry in the tasks container (index).
+    TASK_STATE          state;                  // the current state of our task.
+    TASK_ORIGIN         origin;                 // origin of this task. it can be either command line interface or sockets api.
+    TASK_TYPE           type;                   // the requested operation.
+    uint16_t            clientHandle;           // the handle to the client which requested this task in our server context. INVALID_HANDLE means a CLI-issued task.
+    void*               data;                   // the data (arguments and results) of the requested operation. see data_*_t structures in ker/defines.h.
+} task_t;
 
 typedef struct fs_meta_t
 {
@@ -103,10 +106,14 @@ typedef struct memtable_t
 
 typedef struct table_t
 {
+    uint16_t            handle;                 // handle of this table entry in the tables container (index).
     table_meta_t        meta;                   // table metadata.
     memtable_t          memtable;               // memtable for this table.
     bool                deleted;                // true if this table is marked as deleted (pending to be removed).
     bool                blocked;                // true if this table is marked as blocked (pending to be compacted).
+    bool                justCreated;            // true if this table was just created (pending to be unblocked by the main thread and initialized before becomind available).
+    uint16_t            timerHandle;            // handle to the timer created with the desired compaction interval for this table.
+    t_queue*            blockedQueue;           // queue with tasks which are awaiting for this table to become unblocked.
     uint16_t            operations;             // number of operations being performed on this table (number of current jobs which depend on its availability).
     pthread_mutex_t     mtxOperations;          // mutex to protect operations variable when accessed/modified by multiple threads.
 } table_t;
@@ -117,15 +124,24 @@ typedef struct lfs_ctx_t
     t_log*              log;                                        // pointer to so-commons-lib log adt.
     bool                isRunning;                                  // true if the server is running. false if it's shutting down.
     cx_net_ctx_sv_t*    sv;                                         // server context for serving API requests coming from MEM nodes.
-    char                buffer[MAX_PACKET_LEN - MIN_PACKET_LEN];    // temporary pre-allocated buffer for building packets.
-    request_t           requests[MAX_CONCURRENT_REQUESTS];          // container for storing incoming requests during ready/running/completed states.
-    cx_handle_alloc_t*  requestsHalloc;                             // handle allocator for requests container.
+    cx_pool_t*          pool;                                       // main pool of worker threads to process incoming requests.
+    t_queue*            mtQueue;                                    // main-thread queue with tasks of type TASK_MT_*.
+    task_t              tasks[MAX_TASKS];                           // container for storing incoming tasks during ready/running/completed states.
+    cx_handle_alloc_t*  tasksHalloc;                                // handle allocator for tasks container.
+    pthread_mutex_t     tasksMutex;                                 // mutex for syncing tasks handle alloc/free.
+    bool                tasksMutexI;                                // true if tasksMutex was successfully initialized.
     table_t             tables[MAX_TABLES];                         // container for storing tables.
     cx_handle_alloc_t*  tablesHalloc;                               // handle allocator for tables container;
-    cx_pool_t*          pool;                                       // main pool of worker threads to process incoming requests.
+    char                buffer[MAX_PACKET_LEN - MIN_PACKET_LEN];    // temporary pre-allocated buffer for building packets.
     uint16_t            timerDump;                                  // dump operation timer handle.
 } lfs_ctx_t;
 
 extern lfs_ctx_t        g_ctx;
+
+/****************************************************************************************
+ ***  PUBLIC FUNCTIONS
+ ***************************************************************************************/
+
+uint16_t                lfs_task_create(TASK_ORIGIN _origin, TASK_TYPE _type, void* _data, cx_net_client_t* _client);
 
 #endif // LFS_LFS_

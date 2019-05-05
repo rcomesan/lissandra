@@ -25,17 +25,17 @@ typedef enum
 
 #include "../../src/lfs.h"
 
-void lfs_handle_sum_request(const cx_net_common_t* _common, void* _passThrou, const char* _data, uint16_t _size);
+void lfs_handle_sum_request(const cx_net_common_t* _common, void* _userData, const char* _data, uint16_t _size);
 
-void lfs_handle_create(const cx_net_common_t* _common, void* _passThrou, const char* _data, uint16_t _size);
+void lfs_handle_create(const cx_net_common_t* _common, void* _userData, const char* _data, uint16_t _size);
 
-void lfs_handle_drop(const cx_net_common_t* _common, void* _passThrou, const char* _data, uint16_t _size);
+void lfs_handle_drop(const cx_net_common_t* _common, void* _userData, const char* _data, uint16_t _size);
 
-void lfs_handle_describe(const cx_net_common_t* _common, void* _passThrou, const char* _data, uint16_t _size);
+void lfs_handle_describe(const cx_net_common_t* _common, void* _userData, const char* _data, uint16_t _size);
 
-void lfs_handle_select(const cx_net_common_t* _common, void* _passThrou, const char* _data, uint16_t _size);
+void lfs_handle_select(const cx_net_common_t* _common, void* _userData, const char* _data, uint16_t _size);
 
-void lfs_handle_insert(const cx_net_common_t* _common, void* _passThrou, const char* _data, uint16_t _size);
+void lfs_handle_insert(const cx_net_common_t* _common, void* _userData, const char* _data, uint16_t _size);
 
 #endif // LFS
 

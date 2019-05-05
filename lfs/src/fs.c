@@ -6,6 +6,7 @@
 #include <cx/fs.h>
 #include <cx/str.h>
 #include <cx/math.h>
+#include <cx/timer.h>
 
 #include <commons/config.h>
 
@@ -205,6 +206,17 @@ bool fs_table_exists(const char* _tableName, table_t** _outTable)
     return false;
 }
 
+uint16_t fs_table_handle(const char* _tableName)
+{
+    table_t* table;
+
+    if (cx_cdict_get(m_fsCtx->tablesMap, _tableName, (void**)&table))
+    {
+        return table->handle;
+    }
+    return INVALID_HANDLE;
+}
+
 bool fs_table_create(table_t* _table, const char* _tableName, uint8_t _consistency, uint16_t _partitions, uint32_t _compactionInterval, cx_err_t* _err)
 {
     CX_CHECK(strlen(_tableName) > 0, "invalid _tableName!");
@@ -213,7 +225,8 @@ bool fs_table_create(table_t* _table, const char* _tableName, uint8_t _consisten
     cx_path_t path;
     t_config* meta = NULL;
 
-    _table->blocked = false; //TODO i think we should block the table until it's fully created
+    _table->justCreated = true;
+    _table->blocked = true;
 
     if (cx_cdict_tryadd(m_fsCtx->tablesMap, _tableName, _table))
     {
@@ -274,16 +287,22 @@ bool fs_table_create(table_t* _table, const char* _tableName, uint8_t _consisten
     {
         CX_ERR_SET(_err, 1, "Table '%s' already exists.", _tableName);
     }
-    
-    if (NULL != meta) config_destroy(meta);
-
+      
     // if failed, mark table as deleted so that it gets wiped out in the main loop
-    if (ERR_NONE != _err->code) _table->deleted = true; 
+    if (ERR_NONE != _err->code) _table->deleted = true;
 
+    TASK_TYPE taskType = ERR_NONE != _err->code ? TASK_MT_FREE : TASK_MT_UNBLOCK;
+    uint16_t  taskHandle = lfs_task_create(TASK_ORIGIN_INTERNAL, taskType, _table, NULL);
+    if (INVALID_HANDLE != taskHandle)
+    {
+        g_ctx.tasks[taskHandle].state = TASK_STATE_NEW;
+    }
+
+    if (NULL != meta) config_destroy(meta);
     return (ERR_NONE == _err->code);
 }
 
-bool fs_table_delete(const char* _tableName, cx_err_t* _err)
+bool fs_table_delete(const char* _tableName, table_t** _outTable, cx_err_t* _err)
 {
     CX_CHECK(strlen(_tableName) > 0, "invalid _tableName!");
     CX_ERR_CLEAR(_err);
@@ -291,7 +310,7 @@ bool fs_table_delete(const char* _tableName, cx_err_t* _err)
     cx_path_t    path;
     table_meta_t meta;
     fs_file_t    part;
-    table_t*     table;
+    table_t*     table = NULL;
 
     if (cx_cdict_tryremove(m_fsCtx->tablesMap, _tableName, (void**)&table))
     {
@@ -322,12 +341,20 @@ bool fs_table_delete(const char* _tableName, cx_err_t* _err)
         // delete files
         cx_fs_path(&path, "%s/%s/%s", m_fsCtx->rootDir, LFS_DIR_TABLES, _tableName);
         cx_fs_remove(&path, _err);
+
+        // ask the main thread to free this table for us (in a thread-safe manner)
+        uint16_t taskHandle = lfs_task_create(TASK_ORIGIN_INTERNAL, TASK_MT_FREE, table, NULL);
+        if (INVALID_HANDLE != taskHandle)
+        {
+            g_ctx.tasks[taskHandle].state = TASK_STATE_NEW;
+        }
     }
     else
     {
         CX_ERR_SET(_err, 1, "Table '%s' does not exist.", _tableName);
     }
 
+    if (NULL != _outTable) (*_outTable) = table;
     return (ERR_NONE == _err->code);
 }
 
@@ -707,7 +734,7 @@ static bool _fs_bootstrap(cx_path_t* _rootDir, uint32_t _maxBlocks, uint32_t _bl
             cx_str_from_uint32(_blockSize, temp, sizeof(temp));
             config_set_value(meta, "blocksSize", temp);
 
-            config_set_value(meta, "magicNumber", "LFS"); //TODO. ????
+            config_set_value(meta, "magicNumber", "LFS");
 
             config_save(meta);
             config_destroy(meta);
@@ -893,20 +920,37 @@ bool fs_table_init(table_t* _outTable, const char* _tableName, cx_err_t* _err)
     CX_CHECK(strlen(_tableName) > 0, "invalid table name!");
 
     _outTable->operations = 0;
+    _outTable->timerHandle = INVALID_HANDLE;
+    _outTable->blockedQueue = queue_create();
 
     return true
         && fs_table_get_meta(_tableName, &_outTable->meta, _err)
         && memtable_init(_tableName, true, &_outTable->memtable, _err)
+        && NULL != _outTable->blockedQueue
         && (0 == pthread_mutex_init(&_outTable->mtxOperations, NULL));
 }
 
 void fs_table_destroy(table_t* _table)
 {
+    // this function is not thread-safe. it must only be called from the main thread!
+
     if (NULL != _table)
     {
         memtable_destroy(&_table->memtable);
 
         pthread_mutex_destroy(&_table->mtxOperations);
+
+        if (NULL != _table->blockedQueue)
+        {
+            queue_destroy(_table->blockedQueue);
+            _table->blockedQueue = NULL;
+        }
+
+        if (INVALID_HANDLE != _table->timerHandle)
+        {
+            cx_timer_remove(_table->timerHandle);
+            _table->timerHandle = INVALID_HANDLE;
+        }
 
         _table->operations = 0;
         _table->blocked = false;

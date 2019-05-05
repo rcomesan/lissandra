@@ -53,7 +53,7 @@ void cli_report_create(const data_create_t* _result)
     CLI_REPORT_BEGIN;
     if (ERR_NONE == _result->c.err.code)
     {
-        printf("Table '%s' created.\n", _result->name);
+        printf("Table '%s' created.\n", _result->tableName);
     }
     else
     {
@@ -93,7 +93,7 @@ void cli_report_drop(const data_drop_t* _result)
     CLI_REPORT_BEGIN;
     if (ERR_NONE == _result->c.err.code)
     {
-        printf("Table '%s' dropped.\n", _result->name);
+        printf("Table '%s' dropped.\n", _result->tableName);
     }
     else
     {

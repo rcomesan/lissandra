@@ -14,37 +14,49 @@
 ***  PRIVATE DECLARATIONS
 ***************************************************************************************/
 
-static void         _worker_parse_result(request_t* _req);
+static void         _worker_parse_result(task_t* _req, table_t* _dependingTable);
 
 /****************************************************************************************
 ***  PUBLIC FUNCTIONS
 ***************************************************************************************/
 
-void worker_handle_create(request_t* _req)
+void worker_handle_create(task_t* _req)
 {
     data_create_t* data = _req->data;
+    table_t* table = &(g_ctx.tables[data->c.tableHandle]);
 
-    fs_table_create(&(g_ctx.tables[data->tableHandle]),
-        data->name, 
+    fs_table_create(table,
+        data->tableName, 
         data->consistency, 
         data->numPartitions, 
         data->compactionInterval, 
         &data->c.err);
     
-    _worker_parse_result(_req);
+    _worker_parse_result(_req, table);
 }
 
-void worker_handle_drop(request_t* _req)
+void worker_handle_drop(task_t* _req)
 {
     data_drop_t* data = _req->data;
+    table_t* table;
 
-    fs_table_delete(data->name,
-        &data->c.err);
+    if (fs_table_exists(data->tableName, &table))
+    {
+        if (fs_table_avail_guard_begin(table, &data->c.err, NULL))
+        {
+            fs_table_delete(data->tableName, &table, &data->c.err);
+            fs_table_avail_guard_end(table);
+        }
+    }
+    else
+    {
+        CX_ERR_SET(&data->c.err, 1, "Table '%s' does not exist.", data->tableName);
+    }
 
-    _worker_parse_result(_req);
+    _worker_parse_result(_req, table);
 }
 
-void worker_handle_describe(request_t* _req)
+void worker_handle_describe(task_t* _req)
 {
     data_describe_t* data = _req->data;
 
@@ -65,15 +77,15 @@ void worker_handle_describe(request_t* _req)
         data->tables = fs_describe(&data->tablesCount, &data->c.err);
     }
 
-    _worker_parse_result(_req);
+    _worker_parse_result(_req, NULL);
 }
 
-void worker_handle_select(request_t* _req)
+void worker_handle_select(task_t* _req)
 {
     data_select_t* data = _req->data;
-
     table_t* table = NULL;
-    if (fs_table_exists(data->name, &table))
+
+    if (fs_table_exists(data->tableName, &table))
     {
         if (fs_table_avail_guard_begin(table, &data->c.err, NULL))
         {
@@ -87,7 +99,7 @@ void worker_handle_select(request_t* _req)
 
             // search it in the corresponding partition
             uint16_t partNumber = rec->key % table->meta.partitionsCount;
-            if (memtable_init_from_part(data->name, partNumber, false, &memt, &err))
+            if (memtable_init_from_part(data->tableName, partNumber, false, &memt, &err))
             {
                 if (memtable_find(&memt, rec->key, &recTmp) && recTmp.timestamp >= rec->timestamp)
                 {
@@ -102,12 +114,12 @@ void worker_handle_select(request_t* _req)
             uint16_t  dumpNumber = 0;
             bool      dumpDuringCompaction = false;
             cx_path_t filePath;
-            cx_fs_explorer_t* exp = fs_table_explorer(data->name, &err);
+            cx_fs_explorer_t* exp = fs_table_explorer(data->tableName, &err);
             if (NULL != exp)
             {
                 while (cx_fs_explorer_next_file(exp, &filePath) && fs_is_dump(&filePath, &dumpNumber, &dumpDuringCompaction))
                 {
-                    if (memtable_init_from_dump(data->name, dumpNumber, dumpDuringCompaction, &memt, &err))
+                    if (memtable_init_from_dump(data->tableName, dumpNumber, dumpDuringCompaction, &memt, &err))
                     {
                         if (memtable_find(&memt, rec->key, &recTmp) && recTmp.timestamp >= rec->timestamp)
                         {
@@ -135,7 +147,7 @@ void worker_handle_select(request_t* _req)
             // check if we finally found it
             if (NULL == rec->value)
             {
-                CX_ERR_SET(&data->c.err, 1, "Key %d does not exist in table '%s'.", rec->key, data->name);
+                CX_ERR_SET(&data->c.err, 1, "Key %d does not exist in table '%s'.", rec->key, data->tableName);
             }
 
             fs_table_avail_guard_end(table);
@@ -143,18 +155,18 @@ void worker_handle_select(request_t* _req)
     }
     else
     {
-        CX_ERR_SET(&data->c.err, 1, "Table '%s' does not exist.", data->name);
+        CX_ERR_SET(&data->c.err, 1, "Table '%s' does not exist.", data->tableName);
     }
     
-    _worker_parse_result(_req);
+    _worker_parse_result(_req, table);
 }
 
-void worker_handle_insert(request_t* _req)
+void worker_handle_insert(task_t* _req)
 {
     data_insert_t* data = _req->data;
-
     table_t* table = NULL;
-    if (fs_table_exists(data->name, &table))
+
+    if (fs_table_exists(data->tableName, &table))
     {           
         if (fs_table_avail_guard_begin(table, &data->c.err, NULL))
         {
@@ -165,13 +177,35 @@ void worker_handle_insert(request_t* _req)
     }
     else
     {
-        CX_ERR_SET(&data->c.err, 1, "Table '%s' does not exist.", data->name);
+        CX_ERR_SET(&data->c.err, 1, "Table '%s' does not exist.", data->tableName);
     }
 
-    _worker_parse_result(_req);
+    _worker_parse_result(_req, table);
 }
 
-void worker_handle_compact(request_t* _req)
+void worker_handle_dump(task_t* _req)
+{
+    data_insert_t* data = _req->data;
+    table_t* table = NULL;
+
+    if (fs_table_exists(data->tableName, &table))
+    {           
+        if (fs_table_avail_guard_begin(table, &data->c.err, NULL))
+        {
+            memtable_make_dump(&table->memtable, &data->c.err);
+
+            fs_table_avail_guard_end(table);
+        }
+    }
+    else
+    {
+        CX_ERR_SET(&data->c.err, 1, "Table '%s' does not exist.", data->tableName);
+    }
+
+    _worker_parse_result(_req, table);
+}
+
+void worker_handle_compact(task_t* _req)
 {
     data_compact_t* data = _req->data;
     table_t* table = NULL;
@@ -181,13 +215,13 @@ void worker_handle_compact(request_t* _req)
     memtable_t* dumpsMem = NULL;
     memtable_t* tempMem = NULL;
 
-    if (fs_table_exists(data->name, &table))
+    if (fs_table_exists(data->tableName, &table))
     {
         // define the scope of our compaction renaming .tmp files to .tmpc
-        exp = fs_table_explorer(data->name, &data->c.err);
+        exp = fs_table_explorer(data->tableName, &data->c.err);
         if (NULL != exp)
         {
-            uint16_t   dumpNumberMax = fs_table_get_dump_number_next(data->name);
+            uint16_t   dumpNumberMax = fs_table_get_dump_number_next(data->tableName);
             cx_path_t  dumpPath;
             cx_path_t  dumpNewPath;
             dumpNumbers = CX_MEM_ARR_ALLOC(dumpNumbers, dumpNumberMax);
@@ -207,11 +241,11 @@ void worker_handle_compact(request_t* _req)
         }
 
         // load .tmpc files into a temporary memtable, sort the entries and remove duplicates.
-        if (memtable_init(data->name, false, dumpsMem, &data->c.err))
+        if (memtable_init(data->tableName, false, dumpsMem, &data->c.err))
         {
             for (uint32_t i = 0; i < dumpCount; i++)
             {
-                if (memtable_init_from_dump(data->name, dumpNumbers[i], true, tempMem, &data->c.err))
+                if (memtable_init_from_dump(data->tableName, dumpNumbers[i], true, tempMem, &data->c.err))
                 {
                     memtable_add(dumpsMem, tempMem->records, tempMem->recordsCount);
                     memtable_destroy(tempMem);
@@ -236,7 +270,7 @@ void worker_handle_compact(request_t* _req)
             if (dumpsEntries > 0)
             {
                 // initialize the partition, add records, preprocess and save to a temporary (new) .binc partition file.
-                if (memtable_init_from_part(data->name, i, false, tempMem, &data->c.err))
+                if (memtable_init_from_part(data->tableName, i, false, tempMem, &data->c.err))
                 {
                     memtable_add(tempMem, &dumpsMem->records[dumpsPos], dumpsEntries);
                     memtable_preprocess(tempMem);
@@ -250,11 +284,11 @@ void worker_handle_compact(request_t* _req)
 
                 dumpsPos += dumpsEntries;
             }
-        }
+        }   
     }
     else
     {
-        CX_ERR_SET(&data->c.err, 1, "Table '%s' does not exist.", data->name);
+        CX_ERR_SET(&data->c.err, 1, "Table '%s' does not exist.", data->tableName);
     }
 
 failed:
@@ -263,21 +297,34 @@ failed:
     if (NULL != dumpsMem) memtable_destroy(dumpsMem);
     if (NULL != tempMem) memtable_destroy(tempMem);
 
-    _worker_parse_result(_req);
+    _worker_parse_result(_req, table);
 }
 
 /****************************************************************************************
 ***  PRIVATE FUNCTIONS
 ***************************************************************************************/
 
-static void _worker_parse_result(request_t* _req)
+static void _worker_parse_result(task_t* _req, table_t* _dependingTable)
 {
     if (LFS_ERR_TABLE_BLOCKED == ((data_common_t*)_req->data)->err.code)
     {
-        _req->state = REQ_STATE_BLOCKED_DOAGAIN;
+        _req->state = TASK_STATE_BLOCKED_RESCHEDULE;
+        data_common_t* common = (data_common_t*)_req->data;
+
+        if (NULL != _dependingTable)
+        {
+            // this task depends on a table which is blocked
+            // we need to store the tableHandle so that the main thread knows on which
+            // blocked queue this task should be placed
+            common->tableHandle = _dependingTable->handle;
+        }
+        else
+        {
+            common->tableHandle = INVALID_HANDLE;
+        }
     }
     else
     {
-        _req->state = REQ_STATE_COMPLETED;
+        _req->state = TASK_STATE_COMPLETED;
     }
 }

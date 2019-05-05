@@ -39,13 +39,15 @@ void                fs_table_destroy(table_t* _table);
 
 bool                fs_table_exists(const char* _tableName, table_t** _outTable);
 
+uint16_t            fs_table_handle(const char* _tableName);
+
 bool                fs_table_avail_guard_begin(table_t* _table, cx_err_t* _err, pthread_mutex_t* _mtx);
 
 void                fs_table_avail_guard_end(table_t* _table);
 
 bool                fs_table_create(table_t* _table, const char* _tableName, uint8_t _consistency, uint16_t _partitions, uint32_t _compactionInterval, cx_err_t* _err);
 
-bool                fs_table_delete(const char* _tableName, cx_err_t* _err);
+bool                fs_table_delete(const char* _tableName, table_t** _outTable, cx_err_t* _err);
 
 bool                fs_table_get_meta(const char* _tableName, table_meta_t* _outMeta, cx_err_t* _err);
 
