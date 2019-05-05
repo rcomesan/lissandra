@@ -59,11 +59,6 @@ void            cx_trace(const char* _filePath, uint16_t _lineNumber, const char
         snprintf((_err)->desc, sizeof((_err)->desc), _format, ##__VA_ARGS__);           \
     }
 
-#define CX_ERR_OK(_errPtr)                                                            \
-    (NULL != (_errPtr))                                                                 \
-    ? 0 == (_errPtr)->code                                                              \
-    : true
-
 #if CX_DEBUG
     #define CX_INFO(_format, ...)                                                        \
         cx_trace(__FILE__, (uint16_t)__LINE__, "[INFO] " _format, ##__VA_ARGS__)

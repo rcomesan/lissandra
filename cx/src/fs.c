@@ -175,24 +175,28 @@ bool cx_fs_remove(const cx_path_t* _path, cx_err_t* _err)
     CX_CHECK(strlen(*_path) > 0, "invalid folder path!");
     CX_ERR_CLEAR(_err);
     
+    bool success = false;
+
     if (cx_fs_exists(_path))
     {
         if (cx_fs_is_folder(_path))
         {
-            _cx_fs_rmdir(_path, _err);
+            success = _cx_fs_rmdir(_path, _err);
         }
         else
         {
-            _cx_fs_rm(_path, _err);
+            success = _cx_fs_rm(_path, _err);
         }
     }
-    return CX_ERR_OK(_err);
+    return success;
 }
 
 bool cx_fs_move(const cx_path_t* _path, const cx_path_t* _newPath, cx_err_t* _err)
 {
     CX_CHECK(strlen(*_path) > 0, "invalid _path!");
     CX_CHECK(strlen(*_newPath) > 0, "invalid _newPath!");
+
+    bool success = false;
 
     if (cx_fs_exists(_path))
     {
@@ -203,8 +207,11 @@ bool cx_fs_move(const cx_path_t* _path, const cx_path_t* _newPath, cx_err_t* _er
 
             if (cx_fs_exists(&destPath))
             {
-                errno = 0;
-                if (-1 == rename(*_path, *_newPath))
+                if (0 == rename(*_path, *_newPath))
+                {
+                    success = true;
+                }
+                else
                 {
                     CX_ERR_SET(_err, 1, "Move failed. %s.", strerror(errno));
                 }
@@ -223,13 +230,15 @@ bool cx_fs_move(const cx_path_t* _path, const cx_path_t* _newPath, cx_err_t* _er
     {
         CX_ERR_SET(_err, 1, "File '%s' does not exist.", *_path);
     }
-    return CX_ERR_OK(_err);
+    return success;
 }
 
 bool cx_fs_write(const cx_path_t* _path, const char* _buffer, uint32_t _bufferSize, cx_err_t* _err)
 {
     CX_CHECK(strlen(*_path) > 0, "invalid file path!");
     CX_ERR_CLEAR(_err);
+
+    bool success = false;
 
     if (cx_fs_touch(_path, _err))
     {
@@ -244,11 +253,13 @@ bool cx_fs_write(const cx_path_t* _path, const char* _buffer, uint32_t _bufferSi
                 {
                     CX_ERR_SET(_err, 1, "file '%s' could not be written. %s", *_path, strerror(errno));
                 }
+                else
+                {
+                    success = true;
+                }
             }
             fflush(fileHandle);
             fclose(fileHandle);
-
-            if (0 == _err->code) return true;
         }
         else
         {
@@ -256,13 +267,16 @@ bool cx_fs_write(const cx_path_t* _path, const char* _buffer, uint32_t _bufferSi
         }
     }
 
-    return false;
+    return success;
 }
 
 int32_t cx_fs_read(const cx_path_t* _path, char* _outBuffer, uint32_t _bufferSize, cx_err_t* _err)
 {
     CX_CHECK(strlen(*_path) > 0, "invalid file path!");
     CX_ERR_CLEAR(_err);
+
+    bool success = false;
+    uint32_t bytesToRead = 0;
 
     if (cx_fs_exists(_path))
     {
@@ -281,15 +295,16 @@ int32_t cx_fs_read(const cx_path_t* _path, char* _outBuffer, uint32_t _bufferSiz
                 FILE* fileHandle = fopen(*_path, "r");
                 if (NULL != fileHandle)
                 {
-                    uint32_t bytesToRead = cx_math_min(size, _bufferSize);
-
+                    bytesToRead = cx_math_min(size, _bufferSize);
                     if (bytesToRead > fread(_outBuffer, sizeof(char), bytesToRead, fileHandle))
                     {
                         CX_ERR_SET(_err, 1, "file '%s' could not be read. %s", *_path, strerror(errno));
                     }
+                    else
+                    {
+                        success = true;
+                    }
                     fclose(fileHandle);
-
-                    if (0 == _err->code) return bytesToRead;
                 }
                 else
                 {
@@ -307,7 +322,7 @@ int32_t cx_fs_read(const cx_path_t* _path, char* _outBuffer, uint32_t _bufferSiz
         CX_ERR_SET(_err, 1, "file '%s' is missing or not readable.", *_path);
     }
 
-    return -1;
+    return success ? bytesToRead : -1;
 }
 
 cx_fs_explorer_t* cx_fs_explorer_init(const cx_path_t* _folderPath, cx_err_t* _err)
@@ -485,21 +500,19 @@ static bool _cx_fs_rmdir(const cx_path_t* _folderPath, cx_err_t* _err)
     cx_fs_explorer_t* brw = cx_fs_explorer_init(_folderPath, _err);
     if (NULL == brw) return false;
 
-    bool failed = false;
+    bool success = true;
     
-    while (cx_fs_explorer_next_file(brw, &path) && !failed)
+    while (cx_fs_explorer_next_file(brw, &path) && success)
     {
-        _cx_fs_rm(&path, _err);
-        failed = (0 != _err->code);
+        success &= _cx_fs_rm(&path, _err);
     }
 
-    while (cx_fs_explorer_next_folder(brw, &path) && !failed)
+    while (cx_fs_explorer_next_folder(brw, &path) && success)
     {
-        _cx_fs_rmdir(&path, _err);
-        failed = (0 != _err->code);
+        success &= _cx_fs_rmdir(&path, _err);
     }
 
     cx_fs_explorer_destroy(brw);
 
-    return !failed && (0 == rmdir(*_folderPath));
+    return (0 == rmdir(*_folderPath)) && success;
 }

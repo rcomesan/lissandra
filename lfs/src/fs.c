@@ -222,6 +222,7 @@ bool fs_table_create(table_t* _table, const char* _tableName, uint8_t _consisten
     CX_CHECK(strlen(_tableName) > 0, "invalid _tableName!");
     CX_ERR_CLEAR(_err);
 
+    bool success = false;
     cx_path_t path;
     t_config* meta = NULL;
 
@@ -255,7 +256,7 @@ bool fs_table_create(table_t* _table, const char* _tableName, uint8_t _consisten
                     if (fs_table_init(_table, _tableName, _err))
                     {
                         fs_file_t partFile;
-                        for (uint16_t i = 0; i < _table->meta.partitionsCount && ERR_NONE == _err->code; i++)
+                        for (uint16_t i = 0; i < _table->meta.partitionsCount; i++)
                         {
                             CX_MEM_ZERO(partFile);
                             partFile.size = 0;
@@ -263,15 +264,21 @@ bool fs_table_create(table_t* _table, const char* _tableName, uint8_t _consisten
 
                             if (1 == partFile.blocksCount)
                             {
-                                if (!fs_table_set_part(_tableName, i, false, &partFile, _err))
+                                if (fs_table_set_part(_tableName, i, false, &partFile, _err))
+                                {
+                                    success = true;
+                                }
+                                else
                                 {
                                     CX_ERR_SET(_err, 1, "partition #%d for table '%s' could not be written!", i, _tableName);
+                                    break;
                                 }
                             }
                             else
                             {
                                 CX_ERR_SET(_err, 1, "an initial block for table '%s' partition #%d could not be allocated."
                                     "we may have ran out of blocks!", _tableName, i);
+                                break;
                             }
                         }
                     }
@@ -289,9 +296,9 @@ bool fs_table_create(table_t* _table, const char* _tableName, uint8_t _consisten
     }
       
     // if failed, mark table as deleted so that it gets wiped out in the main loop
-    if (ERR_NONE != _err->code) _table->deleted = true;
+    if (!success) _table->deleted = true;
 
-    TASK_TYPE taskType = ERR_NONE != _err->code ? TASK_MT_FREE : TASK_MT_UNBLOCK;
+    TASK_TYPE taskType = success ? TASK_MT_UNBLOCK : TASK_MT_FREE;
     uint16_t  taskHandle = lfs_task_create(TASK_ORIGIN_INTERNAL, taskType, _table, NULL);
     if (INVALID_HANDLE != taskHandle)
     {
@@ -299,7 +306,7 @@ bool fs_table_create(table_t* _table, const char* _tableName, uint8_t _consisten
     }
 
     if (NULL != meta) config_destroy(meta);
-    return (ERR_NONE == _err->code);
+    return success;
 }
 
 bool fs_table_delete(const char* _tableName, table_t** _outTable, cx_err_t* _err)
@@ -307,6 +314,7 @@ bool fs_table_delete(const char* _tableName, table_t** _outTable, cx_err_t* _err
     CX_CHECK(strlen(_tableName) > 0, "invalid _tableName!");
     CX_ERR_CLEAR(_err);
 
+    bool success = false;
     cx_path_t    path;
     table_meta_t meta;
     fs_file_t    part;
@@ -348,6 +356,8 @@ bool fs_table_delete(const char* _tableName, table_t** _outTable, cx_err_t* _err
         {
             g_ctx.tasks[taskHandle].state = TASK_STATE_NEW;
         }
+
+        success = true;
     }
     else
     {
@@ -355,7 +365,7 @@ bool fs_table_delete(const char* _tableName, table_t** _outTable, cx_err_t* _err
     }
 
     if (NULL != _outTable) (*_outTable) = table;
-    return (ERR_NONE == _err->code);
+    return success;
 }
 
 bool fs_table_get_meta(const char* _tableName, table_meta_t* _outMeta, cx_err_t* _err)
@@ -899,9 +909,9 @@ static bool _fs_load_blocks(cx_err_t* _err)
     {
         return true;
     }
-    else if (-1 == size)
+    else if (-1 == bytesRead)
     {
-        _err->code = LFS_ERR_INIT_FS_BITMAP;
+        // noop. _err already contains the reason of the cx_fs_read call failure.
     }
     else
     {
@@ -960,6 +970,7 @@ void fs_table_destroy(table_t* _table)
 
 static bool _fs_file_read(cx_path_t* _filePath, fs_file_t* _outFile, cx_err_t* _err)
 {
+    bool success = false;
     char* key = NULL;
     bool keyMissing = false;
     t_config* file = NULL;
@@ -1019,6 +1030,8 @@ static bool _fs_file_read(cx_path_t* _filePath, fs_file_t* _outFile, cx_err_t* _
                 goto key_missing;
             }
 
+            success = true;
+
         key_missing:
             if (keyMissing)
             {
@@ -1036,11 +1049,12 @@ static bool _fs_file_read(cx_path_t* _filePath, fs_file_t* _outFile, cx_err_t* _
     }
 
     if (NULL != file) config_destroy(file);
-    return (LFS_ERR_NONE == _err->code);
+    return success;
 }
 
 static bool _fs_file_write(cx_path_t* _filePath, fs_file_t* _file, cx_err_t* _err)
 {
+    bool success = false;
     t_config* file = NULL;
     CX_ERR_CLEAR(_err);
     char temp[32];
@@ -1080,6 +1094,8 @@ static bool _fs_file_write(cx_path_t* _filePath, fs_file_t* _file, cx_err_t* _er
             {
                 config_set_value(file, "blocks", "[]");
             }
+
+            success = true;
         }
         else
         {
@@ -1088,5 +1104,5 @@ static bool _fs_file_write(cx_path_t* _filePath, fs_file_t* _file, cx_err_t* _er
     }
 
     if (NULL != file) config_destroy(file);
-    return (LFS_ERR_NONE == _err->code);
+    return success;
 }
