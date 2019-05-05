@@ -19,7 +19,7 @@ typedef struct cx_net_args_t cx_net_args_t;
 typedef struct sockaddr_in sockaddr_in;
 typedef struct epoll_event epoll_event;
 
-typedef void(*cx_net_handler_cb)(const cx_net_common_t* _common, void* _passThrou, const char* _data, uint16_t _size);
+typedef void(*cx_net_handler_cb)(const cx_net_common_t* _common, void* _userData, const char* _data, uint16_t _size);
 typedef bool(*cx_net_route_cb)(const cx_net_client_t* _client);
 
 typedef enum

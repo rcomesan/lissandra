@@ -15,15 +15,15 @@ typedef struct epoll_event epoll_event;
 typedef struct cx_timer_instance_t
 {
     int32_t     fd;                             // file descriptor for this timer.
-    uint32_t    id;                             // timer identifier which will be passed through the given timer event handler when invoked.
-    void*       userData;                       // pointer to user data which will be passed through the given timer event handler when invoked.
+    uint32_t    id;                             // timer identifier which will be passed through to the given tick event andler when invoked.
+    void*       userData;                       // pointer to user data which will be passed through to the given tick event handler when invoked.
 } cx_timer_instance_t;
 
 typedef struct cx_timer_ctx_t
 {
     // Asynchronous timers variables.
     uint16_t                maxTimers;          // maximum amount of timers allowed.
-    cx_timer_handler_cb     handler;            // callback to the function that will handle our timer events.
+    cx_timer_handler_cb     handler;            // callback to the function that will handle our timers tick event.
     int32_t                 epollDescriptor;    // file descriptor to the epoll instance.
     epoll_event*            epollEvents;        // pre-allocated buffer for retrieving epoll events when calling epoll_wait.
     cx_timer_instance_t*    timers;             // container for storing timers.

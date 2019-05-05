@@ -22,7 +22,7 @@ static void             _cx_net_poll_events_client(cx_net_ctx_cl_t* _ctx);
 
 static void             _cx_net_poll_events_server(cx_net_ctx_sv_t* _ctx);
 
-static void             _cx_net_process_stream(const cx_net_common_t* _common, void* _passThru, char* _buffer, uint32_t _bufferSize, uint32_t* _inOutPos);
+static void             _cx_net_process_stream(const cx_net_common_t* _common, void* _userData, char* _buffer, uint32_t _bufferSize, uint32_t* _inOutPos);
 
 static void             _cx_net_epoll_mod(int32_t _epollDescriptor, int32_t _sock, bool _in, bool _out);
 
@@ -627,7 +627,7 @@ static void _cx_net_poll_events_server(cx_net_ctx_sv_t* _ctx)
         }
     }
 }
-static void _cx_net_process_stream(const cx_net_common_t* _common, void* _passThru,
+static void _cx_net_process_stream(const cx_net_common_t* _common, void* _userData,
     char* _buffer, uint32_t _bufferSize, uint32_t* _outPos)
 {   
     uint32_t bytesParsed = 0;       // current amount of bytes parsed from the given buffer
@@ -647,7 +647,7 @@ static void _cx_net_process_stream(const cx_net_common_t* _common, void* _passTh
             packetHandler = _common->msgHandlers[packetHeader];
             if (NULL != packetHandler)
             {
-                packetHandler(_common, _passThru, &(_buffer[bytesParsed]), packetLength);
+                packetHandler(_common, _userData, &(_buffer[bytesParsed]), packetLength);
             }
             CX_WARN(NULL != packetHandler, "[%s<--] message handler for packet #%d is not defined", _common->name, packetHeader);
 

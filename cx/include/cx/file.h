@@ -23,8 +23,8 @@ typedef struct file_t
     uint32_t lastLinePos;           // Previous line position in the file. Cached for fast sequential read operations.
 } cx_file_t;
 
-typedef void (*cx_file_for_each_cb)(const char* _str, void* _passThru);
-typedef char* (*cx_file_map_cb)(const char* _str, void* _passThru);
+typedef void (*cx_file_for_each_cb)(const char* _str, void* _userData);
+typedef char* (*cx_file_map_cb)(const char* _str, void* _userData);
 
 cx_file_t*  cx_file_open(const char* _filePath, CX_FILE_OPEN_MODE _mode);
 
@@ -36,8 +36,8 @@ int32_t     cx_file_line_read(cx_file_t* _file, uint32_t _number, char* _buffer,
 
 void        cx_file_line_append(cx_file_t* _file, char* _content);
 
-void        cx_file_lines_for_each(cx_file_t* _file, cx_file_for_each_cb _cb, void* _passThrou);
+void        cx_file_lines_for_each(cx_file_t* _file, cx_file_for_each_cb _cb, void* _userData);
 
-void        cx_file_lines_map(cx_file_t** _file, cx_file_map_cb _cb, void* _passThrou);
+void        cx_file_lines_map(cx_file_t** _file, cx_file_map_cb _cb, void* _userData);
 
 #endif // CX_FILE_H_

@@ -138,7 +138,7 @@ void cx_file_line_append(cx_file_t* _file, char* _content)
     fputc('\n', _file->handle);
 }
 
-void cx_file_lines_for_each(cx_file_t* _file, cx_file_for_each_cb _cb, void* _passThrou)
+void cx_file_lines_for_each(cx_file_t* _file, cx_file_for_each_cb _cb, void* _userData)
 {
     CX_CHECK_NOT_NULL(_file);
 
@@ -170,7 +170,7 @@ void cx_file_lines_for_each(cx_file_t* _file, cx_file_for_each_cb _cb, void* _pa
         else
         {
             // a fully line was read from the file, run our callback
-            _cb(buffer, _passThrou);
+            _cb(buffer, _userData);
             lineNumber++;
         }
     }
@@ -178,7 +178,7 @@ void cx_file_lines_for_each(cx_file_t* _file, cx_file_for_each_cb _cb, void* _pa
     free(buffer);
 }
 
-void cx_file_lines_map(cx_file_t** _file, cx_file_map_cb _cb, void* _passThrou)
+void cx_file_lines_map(cx_file_t** _file, cx_file_map_cb _cb, void* _userData)
 {
     CX_CHECK_NOT_NULL(_file);
 
@@ -216,7 +216,7 @@ void cx_file_lines_map(cx_file_t** _file, cx_file_map_cb _cb, void* _passThrou)
         else
         {
             // a fully line was read from the file, run our callback and write it back to the output stream
-            lineModified = _cb(buffer, _passThrou);
+            lineModified = _cb(buffer, _userData);
             cx_file_line_append(output, lineModified);
             free(lineModified);
 
