@@ -1,43 +1,57 @@
-#ifndef CX_FILE_H_
-#define CX_FILE_H_
+#ifndef cx_file_H_
+#define cx_file_H_
 
-#include <stdio.h>
-#include <stdint.h>
+#include "cx.h"
+
+#include <stdbool.h>
 #include <limits.h>
+#include <dirent.h>
 
-typedef enum
+typedef char cx_path_t[PATH_MAX + 1];
+
+typedef struct cx_file_explorer_t
 {
-    CX_FILE_OPEN_NONE,     // Default. Closed file.
-    CX_FILE_OPEN_READ,     // Opens a file for reading. The file must exist.
-    CX_FILE_OPEN_WRITE,    // Creates an empty file for writing. If a file with the same name already exists, its content is erased and the file is considered as a new empty file.
-    CX_FILE_OPEN_APPEND,   // Appends to a file. Writing operations, append data at the end of the file. The file is created if it does not exist.
-    CX_FILE_OPEN_COUNT
-} CX_FILE_OPEN_MODE;
+    cx_path_t   path;
+    DIR*        dir;
+    bool        readingFiles;
+} cx_file_explorer_t;
 
-typedef struct file_t
-{
-    char path[PATH_MAX];            // Path to the opened file.
-    FILE* handle;                   // Pointer to the opened file handle.
-    CX_FILE_OPEN_MODE mode;         // The io mode intended for this file.
-    uint32_t lastLineNumber;        // Previous line number (starting at 1). Cached for fast sequential read operations.
-    uint32_t lastLinePos;           // Previous line position in the file. Cached for fast sequential read operations.
-} cx_file_t;
+/****************************************************************************************
+ ***  PUBLIC FUNCTIONS
+ ***************************************************************************************/
 
-typedef void (*cx_file_for_each_cb)(const char* _str, void* _userData);
-typedef char* (*cx_file_map_cb)(const char* _str, void* _userData);
+void                cx_file_path(cx_path_t* _outPath, const char* _format, ...);
 
-cx_file_t*  cx_file_open(const char* _filePath, CX_FILE_OPEN_MODE _mode);
+bool                cx_file_exists(const cx_path_t* _path);
 
-void        cx_file_close(cx_file_t* _file);
+bool                cx_file_is_folder(const cx_path_t* _path);
 
-void        cx_file_delete(cx_file_t* _file);
+uint32_t            cx_file_get_size(const cx_path_t* _path);
 
-int32_t     cx_file_line_read(cx_file_t* _file, uint32_t _number, char* _buffer, uint32_t _bufferSize);
+void                cx_file_get_name(const cx_path_t* _path, bool _stripExtension, cx_path_t* _outName);
 
-void        cx_file_line_append(cx_file_t* _file, char* _content);
+void                cx_file_get_path(const cx_path_t* _path, cx_path_t* _outPath);
 
-void        cx_file_lines_for_each(cx_file_t* _file, cx_file_for_each_cb _cb, void* _userData);
+bool                cx_file_touch(const cx_path_t* _filePath, cx_err_t* _err);
 
-void        cx_file_lines_map(cx_file_t** _file, cx_file_map_cb _cb, void* _userData);
+bool                cx_file_mkdir(const cx_path_t* _folderPath, cx_err_t* _err);
 
-#endif // CX_FILE_H_
+bool                cx_file_remove(const cx_path_t* _path, cx_err_t* _err);
+
+bool                cx_file_move(const cx_path_t* _path, const cx_path_t* _newPath, cx_err_t* _err);
+
+bool                cx_file_write(const cx_path_t* _path, const char* _buffer, uint32_t _bufferSize, cx_err_t* _err);
+
+int32_t             cx_file_read(const cx_path_t* _path, char* _outBuffer, uint32_t _bufferSize, cx_err_t* _err);
+
+cx_file_explorer_t*   cx_file_explorer_init(const cx_path_t* _folderPath, cx_err_t* _err);
+
+void                cx_file_explorer_reset(cx_file_explorer_t* _explorer);
+
+bool                cx_file_explorer_next_file(cx_file_explorer_t* _explorer, cx_path_t* _outFile);
+
+bool                cx_file_explorer_next_folder(cx_file_explorer_t* _explorer, cx_path_t* _outFolder);
+
+void                cx_file_explorer_destroy(cx_file_explorer_t* _explorer);
+
+#endif

@@ -5,7 +5,7 @@
 #include <cx/cx.h>
 #include <cx/mem.h>
 #include <cx/str.h>
-#include <cx/fs.h>
+#include <cx/file.h>
 
 #include <ker/defines.h>
 #include <unistd.h>
@@ -114,10 +114,10 @@ void worker_handle_select(task_t* _req)
             uint16_t  dumpNumber = 0;
             bool      dumpDuringCompaction = false;
             cx_path_t filePath;
-            cx_fs_explorer_t* exp = fs_table_explorer(data->tableName, &err);
+            cx_file_explorer_t* exp = fs_table_explorer(data->tableName, &err);
             if (NULL != exp)
             {
-                while (cx_fs_explorer_next_file(exp, &filePath) && fs_is_dump(&filePath, &dumpNumber, &dumpDuringCompaction))
+                while (cx_file_explorer_next_file(exp, &filePath) && fs_is_dump(&filePath, &dumpNumber, &dumpDuringCompaction))
                 {
                     if (memtable_init_from_dump(data->tableName, dumpNumber, dumpDuringCompaction, &memt, &err))
                     {
@@ -132,7 +132,7 @@ void worker_handle_select(task_t* _req)
                         memtable_destroy(&memt);
                     }
                 }
-                cx_fs_explorer_destroy(exp);
+                cx_file_explorer_destroy(exp);
             }
 
             // search it in our current memtable
@@ -210,7 +210,7 @@ void worker_handle_compact(task_t* _req)
     bool success = true;
     data_compact_t* data = _req->data;
     table_t* table = NULL;
-    cx_fs_explorer_t* exp = NULL;
+    cx_file_explorer_t* exp = NULL;
     uint16_t*   dumpNumbers = NULL;
     uint32_t    dumpCount = 0;
     memtable_t  dumpsMem;
@@ -231,7 +231,7 @@ void worker_handle_compact(task_t* _req)
             cx_path_t  dumpNewPath;
             dumpNumbers = CX_MEM_ARR_ALLOC(dumpNumbers, dumpNumberMax);
 
-            while (cx_fs_explorer_next_file(exp, &dumpPath) && fs_is_dump(&dumpPath, &dumpNumbers[dumpCount], NULL))
+            while (cx_file_explorer_next_file(exp, &dumpPath) && fs_is_dump(&dumpPath, &dumpNumbers[dumpCount], NULL))
             {
                 dumpCount++;
             }
@@ -240,7 +240,7 @@ void worker_handle_compact(task_t* _req)
             {
                 cx_str_copy(dumpNewPath, sizeof(dumpNewPath), dumpPath);
                 cx_str_copy(&dumpNewPath[strlen(dumpNewPath) - sizeof(LFS_DUMP_EXTENSION)], sizeof(dumpNewPath), LFS_DUMP_EXTENSION_COMPACTION);
-                if (!cx_fs_move(&dumpPath, &dumpNewPath, &_req->err))
+                if (!cx_file_move(&dumpPath, &dumpNewPath, &_req->err))
                     goto failed;
             }
         }
@@ -305,7 +305,7 @@ void worker_handle_compact(task_t* _req)
 
             cx_str_copy(tmpPath, sizeof(tmpPath), oldPartFile.path);
             cx_str_copy(&tmpPath[strlen(tmpPath) - sizeof(LFS_PART_EXTENSION) - 1], sizeof(tmpPath), LFS_PART_EXTENSION_COMPACTION);
-            if (!cx_fs_move(&tmpPath, &oldPartFile.path, &_req->err))
+            if (!cx_file_move(&tmpPath, &oldPartFile.path, &_req->err))
                 goto failed;
         }
     }
@@ -315,7 +315,7 @@ void worker_handle_compact(task_t* _req)
     }
 
 failed:
-    if (NULL != exp) cx_fs_explorer_destroy(exp);
+    if (NULL != exp) cx_file_explorer_destroy(exp);
     if (NULL != dumpNumbers) free(dumpNumbers);
     if (dumpsMemInitialized) memtable_destroy(&dumpsMem);
 

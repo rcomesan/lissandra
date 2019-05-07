@@ -12,7 +12,7 @@
 #include <cx/file.h>
 #include <cx/str.h>
 #include <cx/cli.h>
-#include <cx/fs.h>
+#include <cx/file.h>
 #include <cx/cdict.h>
 
 #include <lfs/lfs_protocol.h>
@@ -170,10 +170,10 @@ static bool logger_init(cx_err_t* _err)
     cx_time_stamp(&timestamp);
 
     cx_path_t path;
-    cx_fs_path(&path, "logs");
-    if (cx_fs_mkdir(&path, _err))
+    cx_file_path(&path, "logs");
+    if (cx_file_mkdir(&path, _err))
     {
-        cx_fs_path(&path, "logs/%s.txt", timestamp);
+        cx_file_path(&path, "logs/%s.txt", timestamp);
         g_ctx.log = log_create(path, PROJECT_NAME, true, LOG_LEVEL_INFO);
 
         if (NULL != g_ctx.log)
@@ -207,7 +207,7 @@ static bool cfg_init(const char* _cfgFilePath, cx_err_t* _err)
     char* key = "";
 
     cx_path_t cfgPath;
-    cx_fs_path(&cfgPath, "%s", _cfgFilePath);
+    cx_file_path(&cfgPath, "%s", _cfgFilePath);
 
     g_ctx.cfg.handle = config_create(cfgPath);
     CX_CHECK_NOT_NULL(g_ctx.cfg.handle);

@@ -7,7 +7,7 @@
 #include <stdbool.h>
 
 #include <cx/cx.h>
-#include <cx/fs.h>
+#include <cx/file.h>
 
 #include <pthread.h>
 
@@ -61,7 +61,7 @@ bool                fs_table_set_dump(const char* _tableName, uint16_t _dumpNumb
 
 uint16_t            fs_table_get_dump_number_next(const char* _tableName);
 
-cx_fs_explorer_t*   fs_table_explorer(const char* _tableName, cx_err_t* _err);
+cx_file_explorer_t*   fs_table_explorer(const char* _tableName, cx_err_t* _err);
 
 uint32_t            fs_block_alloc(uint32_t _blocksCount, uint32_t* _outBlocksArr);
 

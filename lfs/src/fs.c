@@ -3,7 +3,7 @@
 #include "memtable.h"
 
 #include <cx/mem.h>
-#include <cx/fs.h>
+#include <cx/file.h>
 #include <cx/str.h>
 #include <cx/math.h>
 #include <cx/timer.h>
@@ -53,11 +53,11 @@ bool fs_init(cx_err_t* _err)
 
     bool rootDirOk = false;
     cx_path_t rootDir;
-    cx_fs_path(&rootDir, g_ctx.cfg.rootDir);
+    cx_file_path(&rootDir, g_ctx.cfg.rootDir);
 
-    if (cx_fs_exists(&rootDir))
+    if (cx_file_exists(&rootDir))
     {
-        if (cx_fs_is_folder(&rootDir))
+        if (cx_file_is_folder(&rootDir))
         {
             rootDirOk = _fs_is_lfs(&rootDir);
             if (!rootDirOk)
@@ -231,11 +231,11 @@ bool fs_table_create(table_t* _table, const char* _tableName, uint8_t _consisten
 
     if (cx_cdict_tryadd(m_fsCtx->tablesMap, _tableName, _table))
     {
-        cx_fs_path(&path, "%s/%s/%s", m_fsCtx->rootDir, LFS_DIR_TABLES, _tableName);
-        if (cx_fs_mkdir(&path, _err))
+        cx_file_path(&path, "%s/%s/%s", m_fsCtx->rootDir, LFS_DIR_TABLES, _tableName);
+        if (cx_file_mkdir(&path, _err))
         {
-            cx_fs_path(&path, "%s/%s/%s/%s", m_fsCtx->rootDir, LFS_DIR_TABLES, _tableName, LFS_DIR_METADATA);
-            if (cx_fs_touch(&path, _err))
+            cx_file_path(&path, "%s/%s/%s/%s", m_fsCtx->rootDir, LFS_DIR_TABLES, _tableName, LFS_DIR_METADATA);
+            if (cx_file_touch(&path, _err))
             {
                 meta = config_create(path);
                 if (NULL != meta)
@@ -348,8 +348,8 @@ bool fs_table_delete(const char* _tableName, table_t** _outTable, cx_err_t* _err
         }
         
         // delete files
-        cx_fs_path(&path, "%s/%s/%s", m_fsCtx->rootDir, LFS_DIR_TABLES, _tableName);
-        cx_fs_remove(&path, _err);
+        cx_file_path(&path, "%s/%s/%s", m_fsCtx->rootDir, LFS_DIR_TABLES, _tableName);
+        cx_file_remove(&path, _err);
 
         // ask the main thread to free this table for us (in a thread-safe manner)
         uint16_t taskHandle = lfs_task_create(TASK_ORIGIN_INTERNAL, TASK_MT_FREE, NULL, NULL);
@@ -381,7 +381,7 @@ bool fs_table_get_meta(const char* _tableName, table_meta_t* _outMeta, cx_err_t*
     cx_str_copy(_outMeta->name, sizeof(_outMeta->name), _tableName);
 
     cx_path_t metadataPath;
-    cx_fs_path(&metadataPath, "%s/%s/%s/%s", m_fsCtx->rootDir, LFS_DIR_TABLES, _tableName, LFS_DIR_METADATA);
+    cx_file_path(&metadataPath, "%s/%s/%s/%s", m_fsCtx->rootDir, LFS_DIR_TABLES, _tableName, LFS_DIR_METADATA);
 
     t_config* meta = config_create(metadataPath);
 
@@ -433,7 +433,7 @@ bool fs_table_get_meta(const char* _tableName, table_meta_t* _outMeta, cx_err_t*
 bool fs_table_get_part(const char* _tableName, uint16_t _partNumber, bool _isDuringCompaction, fs_file_t* _outFile, cx_err_t* _err)
 {
     cx_path_t path;
-    cx_fs_path(&path, "%s/%s/%s/%s%d.%s", m_fsCtx->rootDir, LFS_DIR_TABLES,
+    cx_file_path(&path, "%s/%s/%s/%s%d.%s", m_fsCtx->rootDir, LFS_DIR_TABLES,
         _tableName, LFS_PART_PREFIX, _partNumber,
         _isDuringCompaction ? LFS_PART_EXTENSION_COMPACTION : LFS_PART_EXTENSION);
 
@@ -444,7 +444,7 @@ bool fs_table_get_part(const char* _tableName, uint16_t _partNumber, bool _isDur
 bool fs_table_set_part(const char* _tableName, uint16_t _partNumber, bool _isDuringCompaction, fs_file_t* _file, cx_err_t* _err)
 {
     cx_path_t path;
-    cx_fs_path(&path, "%s/%s/%s/%s%d.%s", m_fsCtx->rootDir, LFS_DIR_TABLES,
+    cx_file_path(&path, "%s/%s/%s/%s%d.%s", m_fsCtx->rootDir, LFS_DIR_TABLES,
         _tableName, LFS_PART_PREFIX, _partNumber,
         _isDuringCompaction ? LFS_PART_EXTENSION_COMPACTION : LFS_PART_EXTENSION);
 
@@ -455,7 +455,7 @@ bool fs_table_set_part(const char* _tableName, uint16_t _partNumber, bool _isDur
 bool fs_table_get_dump(const char* _tableName, uint16_t _dumpNumber, bool _isDuringCompaction, fs_file_t* _outFile, cx_err_t* _err)
 {
     cx_path_t path;
-    cx_fs_path(&path, "%s/%s/%s/%s%d.%s", m_fsCtx->rootDir, LFS_DIR_TABLES,  
+    cx_file_path(&path, "%s/%s/%s/%s%d.%s", m_fsCtx->rootDir, LFS_DIR_TABLES,  
         _tableName, LFS_DUMP_PREFIX, _dumpNumber,
         _isDuringCompaction ? LFS_DUMP_EXTENSION_COMPACTION : LFS_DUMP_EXTENSION);
 
@@ -466,7 +466,7 @@ bool fs_table_get_dump(const char* _tableName, uint16_t _dumpNumber, bool _isDur
 bool fs_table_set_dump(const char* _tableName, uint16_t _dumpNumber, bool _isDuringCompaction, fs_file_t* _file, cx_err_t* _err)
 {
     cx_path_t path;
-    cx_fs_path(&path, "%s/%s/%s/%s%d.%s", m_fsCtx->rootDir, LFS_DIR_TABLES, 
+    cx_file_path(&path, "%s/%s/%s/%s%d.%s", m_fsCtx->rootDir, LFS_DIR_TABLES, 
         _tableName, LFS_DUMP_PREFIX, _dumpNumber,
         _isDuringCompaction ? LFS_DUMP_EXTENSION_COMPACTION : LFS_DUMP_EXTENSION);
 
@@ -483,15 +483,15 @@ uint16_t fs_table_get_dump_number_next(const char* _tableName)
     cx_path_t  filePath;
     cx_path_t  fileName;
 
-    cx_fs_explorer_t* explorer = fs_table_explorer(_tableName, &err);
+    cx_file_explorer_t* explorer = fs_table_explorer(_tableName, &err);
     if (NULL != explorer)
     {
-        while (cx_fs_explorer_next_file(explorer, &filePath))
+        while (cx_file_explorer_next_file(explorer, &filePath))
         {
             if (fs_is_dump(&filePath, &dumpNumber, &dumpCompacted) && !dumpCompacted && dumpNumber > dumpNumberLast)
                 dumpNumberLast = dumpNumber;
         }
-        cx_fs_explorer_destroy(explorer);
+        cx_file_explorer_destroy(explorer);
 
         return dumpNumberLast + 1;
     }
@@ -499,12 +499,12 @@ uint16_t fs_table_get_dump_number_next(const char* _tableName)
     return 0;
 }
 
-cx_fs_explorer_t* fs_table_explorer(const char* _tableName, cx_err_t* _err)
+cx_file_explorer_t* fs_table_explorer(const char* _tableName, cx_err_t* _err)
 {
     cx_path_t path;
-    cx_fs_path(&path, "%s/%s/%s", m_fsCtx->rootDir, LFS_DIR_TABLES, _tableName);
+    cx_file_path(&path, "%s/%s/%s", m_fsCtx->rootDir, LFS_DIR_TABLES, _tableName);
 
-    cx_fs_explorer_t* explorer = cx_fs_explorer_init(&path, _err);
+    cx_file_explorer_t* explorer = cx_file_explorer_init(&path, _err);
 
     CX_WARN(NULL != explorer, "table directory can't be explored: %s", _err->desc);
     return explorer;
@@ -517,7 +517,7 @@ uint32_t fs_block_alloc(uint32_t _blocksCount, uint32_t* _outBlocksArr)
     uint32_t allocatedBlocks = 0;
 
     cx_path_t bitmapFilePath;
-    cx_fs_path(&bitmapFilePath, "%s/%s/%s", m_fsCtx->rootDir, LFS_DIR_METADATA, LFS_FILE_BITMAP);
+    cx_file_path(&bitmapFilePath, "%s/%s/%s", m_fsCtx->rootDir, LFS_DIR_METADATA, LFS_FILE_BITMAP);
 
     FILE* bitmap = fopen(bitmapFilePath, "r+");
     if (NULL != bitmap)
@@ -588,7 +588,7 @@ void fs_block_free(uint32_t* _blocksArr, uint32_t _blocksCount)
     pthread_mutex_lock(&m_fsCtx->mtxBlocks);
 
     cx_path_t bitmapFilePath;
-    cx_fs_path(&bitmapFilePath, "%s/%s/%s", m_fsCtx->rootDir, LFS_DIR_METADATA, LFS_FILE_BITMAP);
+    cx_file_path(&bitmapFilePath, "%s/%s/%s", m_fsCtx->rootDir, LFS_DIR_METADATA, LFS_FILE_BITMAP);
 
     FILE* bitmap = fopen(bitmapFilePath, "r+");
     if (NULL != bitmap)
@@ -617,9 +617,9 @@ void fs_block_free(uint32_t* _blocksArr, uint32_t _blocksCount)
 int32_t fs_block_read(uint32_t _blockNumber, char* _buffer, cx_err_t* _err)
 {
     cx_path_t blockFilePath;
-    cx_fs_path(&blockFilePath, "%s/%s/%d.bin", m_fsCtx->rootDir, LFS_DIR_BLOCKS, _blockNumber);
+    cx_file_path(&blockFilePath, "%s/%s/%d.bin", m_fsCtx->rootDir, LFS_DIR_BLOCKS, _blockNumber);
 
-    return cx_fs_read(&blockFilePath, _buffer, m_fsCtx->meta.blocksSize, _err);
+    return cx_file_read(&blockFilePath, _buffer, m_fsCtx->meta.blocksSize, _err);
 }
 
 bool fs_block_write(uint32_t _blockNumber, char* _buffer, uint32_t _bufferSize, cx_err_t* _err)
@@ -628,9 +628,9 @@ bool fs_block_write(uint32_t _blockNumber, char* _buffer, uint32_t _bufferSize, 
         m_fsCtx->meta.blocksSize);
 
     cx_path_t blockFilePath;
-    cx_fs_path(&blockFilePath, "%s/%s/%d.bin", m_fsCtx->rootDir, LFS_DIR_BLOCKS, _blockNumber);
+    cx_file_path(&blockFilePath, "%s/%s/%d.bin", m_fsCtx->rootDir, LFS_DIR_BLOCKS, _blockNumber);
 
-    return cx_fs_write(&blockFilePath, _buffer, _bufferSize, _err);
+    return cx_file_write(&blockFilePath, _buffer, _bufferSize, _err);
 }
 
 uint32_t fs_block_size()
@@ -668,7 +668,7 @@ bool fs_file_delete(fs_file_t* _file, cx_err_t* _err)
 {
     fs_block_free(_file->blocks, _file->blocksCount);
 
-    return cx_fs_remove(&_file->path, _err);
+    return cx_file_remove(&_file->path, _err);
 }
 
 bool fs_is_dump(cx_path_t* _filePath, uint16_t* _outDumpNumber, bool* _outDuringCompaction)
@@ -677,7 +677,7 @@ bool fs_is_dump(cx_path_t* _filePath, uint16_t* _outDumpNumber, bool* _outDuring
     bool     duringCompaction = false;
     
     cx_path_t fileName;
-    cx_fs_get_name(_filePath, false, &fileName);
+    cx_file_get_name(_filePath, false, &fileName);
 
     if (cx_str_starts_with(fileName, LFS_DUMP_PREFIX, true))
     {
@@ -704,11 +704,11 @@ bool fs_is_dump(cx_path_t* _filePath, uint16_t* _outDumpNumber, bool* _outDuring
 static bool _fs_is_lfs(cx_path_t* _rootDir)
 {
     cx_path_t lfsFile;
-    cx_fs_path(&lfsFile, "%s/%s", _rootDir, LFS_ROOT_FILE_MARKER);
+    cx_file_path(&lfsFile, "%s/%s", _rootDir, LFS_ROOT_FILE_MARKER);
     
     return true
-        && cx_fs_exists(&lfsFile)
-        && !cx_fs_is_folder(&lfsFile);
+        && cx_file_exists(&lfsFile)
+        && !cx_file_is_folder(&lfsFile);
 }
 
 static uint32_t _fs_calc_bitmap_size(uint32_t _maxBlocks)
@@ -728,25 +728,25 @@ static bool _fs_bootstrap(cx_path_t* _rootDir, uint32_t _maxBlocks, uint32_t _bl
     CX_INFO("bootstrapping lissandra filesystem in %s...", _rootDir);
     
     // create directory structure
-    cx_fs_path(&path, "%s/%s", _rootDir, LFS_ROOT_FILE_MARKER);
-    success = success && cx_fs_touch(&path, _err);
+    cx_file_path(&path, "%s/%s", _rootDir, LFS_ROOT_FILE_MARKER);
+    success = success && cx_file_touch(&path, _err);
 
-    cx_fs_path(&path, "%s/%s", _rootDir, LFS_DIR_METADATA);
-    success = success && cx_fs_mkdir(&path, _err);
+    cx_file_path(&path, "%s/%s", _rootDir, LFS_DIR_METADATA);
+    success = success && cx_file_mkdir(&path, _err);
 
-    cx_fs_path(&path, "%s/%s", _rootDir, LFS_DIR_TABLES);
-    success = success && cx_fs_mkdir(&path, _err);
+    cx_file_path(&path, "%s/%s", _rootDir, LFS_DIR_TABLES);
+    success = success && cx_file_mkdir(&path, _err);
 
-    cx_fs_path(&path, "%s/%s", _rootDir, LFS_DIR_BLOCKS);
-    success = success && cx_fs_mkdir(&path, _err);
+    cx_file_path(&path, "%s/%s", _rootDir, LFS_DIR_BLOCKS);
+    success = success && cx_file_mkdir(&path, _err);
 
     // create metadata file
     if (success)
     {
         success = false;
 
-        cx_fs_path(&path, "%s/%s/%s", _rootDir, LFS_DIR_METADATA, LFS_DIR_METADATA);
-        cx_fs_touch(&path, _err);
+        cx_file_path(&path, "%s/%s/%s", _rootDir, LFS_DIR_METADATA, LFS_DIR_METADATA);
+        cx_file_touch(&path, _err);
 
         t_config* meta = config_create(path);
         if (NULL != meta)
@@ -780,8 +780,8 @@ static bool _fs_bootstrap(cx_path_t* _rootDir, uint32_t _maxBlocks, uint32_t _bl
         char* emptyBuffer = malloc(bytesNeeded);
         memset(emptyBuffer, 0, bytesNeeded);
 
-        cx_fs_path(&path, "%s/%s/%s", _rootDir, LFS_DIR_METADATA, LFS_FILE_BITMAP);
-        success = cx_fs_write(&path, emptyBuffer, bytesNeeded, _err);
+        cx_file_path(&path, "%s/%s/%s", _rootDir, LFS_DIR_METADATA, LFS_FILE_BITMAP);
+        success = cx_file_write(&path, emptyBuffer, bytesNeeded, _err);
         
         free(emptyBuffer);
     }
@@ -797,7 +797,7 @@ static bool _fs_load_meta(cx_err_t* _err)
     char* key = "";
     
     cx_path_t metadataPath;
-    cx_fs_path(&metadataPath, "%s/%s/%s", m_fsCtx->rootDir, LFS_DIR_METADATA, LFS_DIR_METADATA);
+    cx_file_path(&metadataPath, "%s/%s/%s", m_fsCtx->rootDir, LFS_DIR_METADATA, LFS_DIR_METADATA);
 
     t_config* meta = config_create(metadataPath);
 
@@ -861,11 +861,11 @@ static bool _fs_load_tables(cx_err_t* _err)
     }
 
     cx_path_t tablesPath;
-    cx_fs_path(&tablesPath, "%s/%s", m_fsCtx->rootDir, LFS_DIR_TABLES);
+    cx_file_path(&tablesPath, "%s/%s", m_fsCtx->rootDir, LFS_DIR_TABLES);
     // not really needed, but just in case the tables folder is deleted, we can recover
-    cx_fs_mkdir(&tablesPath, _err);
+    cx_file_mkdir(&tablesPath, _err);
     
-    cx_fs_explorer_t* explorer = cx_fs_explorer_init(&tablesPath, _err);
+    cx_file_explorer_t* explorer = cx_file_explorer_init(&tablesPath, _err);
     cx_path_t tableFolderPath;
     cx_path_t tableName;
     uint16_t tableHandle = INVALID_HANDLE;
@@ -874,9 +874,9 @@ static bool _fs_load_tables(cx_err_t* _err)
 
     if (NULL != explorer)
     {
-        while (cx_fs_explorer_next_folder(explorer, &tableFolderPath))
+        while (cx_file_explorer_next_folder(explorer, &tableFolderPath))
         {
-            cx_fs_get_name(&tableFolderPath, false, &tableName);
+            cx_file_get_name(&tableFolderPath, false, &tableName);
             
             tableHandle = cx_handle_alloc(g_ctx.tablesHalloc);
             if (INVALID_HANDLE != tableHandle)
@@ -898,7 +898,7 @@ static bool _fs_load_tables(cx_err_t* _err)
             }
         }
 
-        cx_fs_explorer_destroy(explorer);
+        cx_file_explorer_destroy(explorer);
 
         CX_INFO("%d tables imported from the filesystem", count);
         return true;
@@ -912,19 +912,19 @@ static bool _fs_load_tables(cx_err_t* _err)
 static bool _fs_load_blocks(cx_err_t* _err)
 {
     cx_path_t bitmapPath;
-    cx_fs_path(&bitmapPath, "%s/%s/%s", m_fsCtx->rootDir, LFS_DIR_METADATA, LFS_FILE_BITMAP);
+    cx_file_path(&bitmapPath, "%s/%s/%s", m_fsCtx->rootDir, LFS_DIR_METADATA, LFS_FILE_BITMAP);
 
     int32_t size = (int32_t)_fs_calc_bitmap_size(m_fsCtx->meta.blocksCount);
     m_fsCtx->blocksMap = malloc(size);
     
-    int32_t bytesRead = cx_fs_read(&bitmapPath, m_fsCtx->blocksMap, size, _err);
+    int32_t bytesRead = cx_file_read(&bitmapPath, m_fsCtx->blocksMap, size, _err);
     if (size == bytesRead)
     {
         return true;
     }
     else if (-1 == bytesRead)
     {
-        // noop. _err already contains the reason of the cx_fs_read call failure.
+        // noop. _err already contains the reason of the cx_file_read call failure.
     }
     else
     {
@@ -989,7 +989,7 @@ static bool _fs_file_load(fs_file_t* _outFile, cx_err_t* _err)
     t_config* file = NULL;
     CX_ERR_CLEAR(_err);
 
-    if (cx_fs_exists(&_outFile->path))
+    if (cx_file_exists(&_outFile->path))
     {
         file = config_create(_outFile->path);
         if (NULL != file)
@@ -1072,7 +1072,7 @@ static bool _fs_file_save(fs_file_t* _file, cx_err_t* _err)
     CX_ERR_CLEAR(_err);
     char temp[32];
 
-    if (cx_fs_remove(&_file->path, _err) && cx_fs_touch(&_file->path, _err))
+    if (cx_file_remove(&_file->path, _err) && cx_file_touch(&_file->path, _err))
     {
         file = config_create(_file->path);
         if (NULL != file)

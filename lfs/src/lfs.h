@@ -3,7 +3,7 @@
 
 #include <ker/defines.h>
 #include <cx/cx.h>
-#include <cx/fs.h>
+#include <cx/file.h>
 #include <cx/net.h>
 #include <cx/pool.h>
 #include <cx/cdict.h>
