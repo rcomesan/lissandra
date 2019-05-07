@@ -112,6 +112,13 @@ valgrind: debug
 	@echo ${COLOR_GREEN}"** [$(BIN_OUTPUT)] Valgrind checks passed successfully."${COLOR_NONE}
 	@echo ""
 
+.PHONY: helgrind
+helgrind: debug
+	@valgrind --tool=helgrind --error-exitcode=1 -v $(PATH_BUILD)debug/$(BIN_OUTPUT)
+	@echo ""
+	@echo ${COLOR_GREEN}"** [$(BIN_OUTPUT)] Valgrind checks passed successfully."${COLOR_NONE}
+	@echo ""
+
 $(PATH_BUILD).obj/common/ker/%.o: $(PATH_COMMON_KER)%.c
 	$(CC) $(CFLAGS) -c $< -o $@
 
