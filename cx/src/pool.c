@@ -230,7 +230,7 @@ static void* _cx_pool_main_loop(void* _args)
         }
         else
         {
-            CX_INFO("[pool: %s-%03d] handling data %p.", args->pool->name, args->index, data);
+            //CX_INFO("[pool: %s-%03d] handling data %p.", args->pool->name, args->index, data);
             args->pool->handler(data);
         }
     }

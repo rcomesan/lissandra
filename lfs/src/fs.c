@@ -186,7 +186,7 @@ void fs_table_avail_guard_end(table_t* _table)
 {
     // decrement the amount of running jobs that depend on this table's availability (not blocked)
     pthread_mutex_lock(&_table->mtxOperations);
-    CX_CHECK(_table->operations > 0, "something is wrong here...");
+    CX_CHECK(_table->operations > 0, "Something is wrong here...");
     _table->operations--;
     pthread_mutex_unlock(&_table->mtxOperations);
 }
@@ -219,7 +219,7 @@ uint16_t fs_table_handle(const char* _tableName)
 
 bool fs_table_create(table_t* _table, const char* _tableName, uint8_t _consistency, uint16_t _partitions, uint32_t _compactionInterval, cx_err_t* _err)
 {
-    CX_CHECK(strlen(_tableName) > 0, "invalid _tableName!");
+    CX_CHECK(strlen(_tableName) > 0, "Invalid _tableName!");
     CX_ERR_CLEAR(_err);
 
     bool success = false;
@@ -270,13 +270,13 @@ bool fs_table_create(table_t* _table, const char* _tableName, uint8_t _consisten
                                 }
                                 else
                                 {
-                                    CX_ERR_SET(_err, 1, "partition #%d for table '%s' could not be written!", i, _tableName);
+                                    CX_ERR_SET(_err, 1, "Partition #%d for table '%s' could not be written!", i, _tableName);
                                     break;
                                 }
                             }
                             else
                             {
-                                CX_ERR_SET(_err, 1, "an initial block for table '%s' partition #%d could not be allocated."
+                                CX_ERR_SET(_err, 1, "An initial block for table '%s' partition #%d could not be allocated."
                                     "we may have ran out of blocks!", _tableName, i);
                                 break;
                             }
@@ -285,7 +285,7 @@ bool fs_table_create(table_t* _table, const char* _tableName, uint8_t _consisten
                 }
                 else
                 {
-                    CX_ERR_SET(_err, 1, "table metadata file '%s' could not be created.", path);
+                    CX_ERR_SET(_err, 1, "Table metadata file '%s' could not be created.", path);
                 }
             }
         }
@@ -299,9 +299,10 @@ bool fs_table_create(table_t* _table, const char* _tableName, uint8_t _consisten
     if (!success) _table->deleted = true;
 
     TASK_TYPE taskType = success ? TASK_MT_UNBLOCK : TASK_MT_FREE;
-    uint16_t  taskHandle = lfs_task_create(TASK_ORIGIN_INTERNAL, taskType, _table, NULL);
+    uint16_t  taskHandle = lfs_task_create(TASK_ORIGIN_INTERNAL, taskType, NULL, NULL);
     if (INVALID_HANDLE != taskHandle)
     {
+        g_ctx.tasks[taskHandle].tableHandle = _table->handle;
         g_ctx.tasks[taskHandle].state = TASK_STATE_NEW;
     }
 
@@ -351,9 +352,10 @@ bool fs_table_delete(const char* _tableName, table_t** _outTable, cx_err_t* _err
         cx_fs_remove(&path, _err);
 
         // ask the main thread to free this table for us (in a thread-safe manner)
-        uint16_t taskHandle = lfs_task_create(TASK_ORIGIN_INTERNAL, TASK_MT_FREE, table, NULL);
+        uint16_t taskHandle = lfs_task_create(TASK_ORIGIN_INTERNAL, TASK_MT_FREE, NULL, NULL);
         if (INVALID_HANDLE != taskHandle)
         {
+            g_ctx.tasks[taskHandle].tableHandle = table->handle;
             g_ctx.tasks[taskHandle].state = TASK_STATE_NEW;
         }
 
@@ -666,7 +668,7 @@ bool fs_file_delete(fs_file_t* _file, cx_err_t* _err)
 {
     fs_block_free(_file->blocks, _file->blocksCount);
 
-    return cx_fs_remove(_file->path, _err);
+    return cx_fs_remove(&_file->path, _err);
 }
 
 bool fs_is_dump(cx_path_t* _filePath, uint16_t* _outDumpNumber, bool* _outDuringCompaction)

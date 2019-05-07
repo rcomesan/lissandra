@@ -14,7 +14,7 @@ void cx_init(const char* _projectName)
     cx_str_copy(g_projectName, sizeof(g_projectName), _projectName);
 }
 
-void cx_trace(const char * _filePath, uint16_t _lineNumber, const char * _format, ...)
+void cx_trace(const char* _filePath, uint16_t _lineNumber, const char* _format, ...)
 {
     char temp[2048];
     char* out = temp;

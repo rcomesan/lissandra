@@ -53,16 +53,6 @@ typedef struct cfg_t
     uint32_t            dumpInterval;           // interval in ms to perform memtable dumps.
 } cfg_t;
 
-typedef struct task_t
-{
-    uint16_t            handle;                 // handle of this task entry in the tasks container (index).
-    TASK_STATE          state;                  // the current state of our task.
-    TASK_ORIGIN         origin;                 // origin of this task. it can be either command line interface or sockets api.
-    TASK_TYPE           type;                   // the requested operation.
-    uint16_t            clientHandle;           // the handle to the client which requested this task in our server context. INVALID_HANDLE means a CLI-issued task.
-    void*               data;                   // the data (arguments and results) of the requested operation. see data_*_t structures in ker/defines.h.
-} task_t;
-
 typedef struct fs_meta_t
 {
     uint32_t            blocksSize;             // size in bytes of each block in our filesystem.
@@ -114,6 +104,7 @@ typedef struct table_t
     memtable_t          memtable;               // memtable for this table.
     bool                deleted;                // true if this table is marked as deleted (pending to be removed).
     bool                blocked;                // true if this table is marked as blocked (pending to be compacted).
+    double              blockedStartTime;       // time counter value of when the table block started.
     bool                justCreated;            // true if this table was just created (pending to be unblocked by the main thread and initialized before becomind available).
     uint16_t            timerHandle;            // handle to the timer created with the desired compaction interval for this table.
     t_queue*            blockedQueue;           // queue with tasks which are awaiting for this table to become unblocked.

@@ -55,11 +55,11 @@ static void         tasks_update();
 static void         task_completed(const task_t* _task);
 static void         task_free(task_t* _task);
 
-static void         api_response_create(const data_create_t* _data);
-static void         api_response_drop(const data_drop_t* _data);
-static void         api_response_describe(const data_describe_t* _data);
-static void         api_response_select(const data_select_t* _data);
-static void         api_response_insert(const data_insert_t* _data);
+static void         api_response_create(const task_t* _task);
+static void         api_response_drop(const task_t* _task);
+static void         api_response_describe(const task_t* _task);
+static void         api_response_select(const task_t* _task);
+static void         api_response_insert(const task_t* _task);
 
 /****************************************************************************************
  ***  PUBLIC FUNCTIONS
@@ -155,7 +155,7 @@ uint16_t lfs_task_create(TASK_ORIGIN _origin, TASK_TYPE _type, void* _data, cx_n
             task->clientHandle = INVALID_HANDLE;
         }
     }
-    CX_CHECK(INVALID_HANDLE != handle, "we ran out of task handles! (ignored task type %s)", _type);
+    CX_CHECK(INVALID_HANDLE != handle, "we ran out of task handles! (ignored task type %d)", _type);
   
     return handle;
 }
@@ -615,6 +615,7 @@ static void handle_wk_task(task_t* _task)
 
     case TASK_WT_DUMP:
         worker_handle_dump(_task);
+        break;
 
     case TASK_WT_COMPACT:
         worker_handle_compact(_task);
@@ -640,7 +641,7 @@ static bool handle_mt_task(task_t* _task)
     {
     case TASK_MT_FREE:
     {
-        table = (table_t*)_task->data;
+        table = &g_ctx.tables[_task->tableHandle];
         if (0 == table->operations)
         {
             fs_table_destroy(table);
@@ -652,19 +653,32 @@ static bool handle_mt_task(task_t* _task)
 
     case TASK_MT_COMPACT:
     {
-        table = (table_t*)_task->data;
+        table = &g_ctx.tables[_task->tableHandle];
 
-        taskHandle = lfs_task_create(TASK_ORIGIN_INTERNAL, TASK_WT_COMPACT, NULL, NULL);
-        if (INVALID_HANDLE != taskHandle)
+        if (!table->blocked)
         {
-            task = &(g_ctx.tasks[taskHandle]);
-            
-            data_compact_t* data = CX_MEM_STRUCT_ALLOC(data);
-            cx_str_copy(data->tableName, sizeof(data->tableName), table->meta.name);
+            table->blocked = true;
+            table->blockedStartTime = cx_time_counter();
+        }
 
-            task->data = data;
-            task->state = TASK_STATE_NEW;
-            success = true;
+        if (0 == table->operations)
+        {
+            taskHandle = lfs_task_create(TASK_ORIGIN_INTERNAL, TASK_WT_COMPACT, NULL, NULL);
+            if (INVALID_HANDLE != taskHandle)
+            {
+                task = &(g_ctx.tasks[taskHandle]);
+
+                data_compact_t* data = CX_MEM_STRUCT_ALLOC(data);
+                cx_str_copy(data->tableName, sizeof(data->tableName), table->meta.name);
+
+                task->data = data;
+                task->state = TASK_STATE_NEW;
+                success = true;
+            }
+            else
+            {
+                //TODO if this handle allocation fails, we end up with a table blocked indefinitely
+            }
         }
         break;
     }
@@ -701,7 +715,7 @@ static bool handle_mt_task(task_t* _task)
 
     case TASK_MT_UNBLOCK:
     {
-        table = (table_t*)_task->data;
+        table = &g_ctx.tables[_task->tableHandle];
         table->blocked = false;
 
         if (table->justCreated)
@@ -746,8 +760,9 @@ static bool handle_timer_tick(uint64_t _expirations, uint32_t _type, void* _user
     }
 
     case LFS_TIMER_COMPACT:
-        taskHandle = lfs_task_create(TASK_ORIGIN_INTERNAL, TASK_MT_COMPACT, _userData, NULL);
+        taskHandle = lfs_task_create(TASK_ORIGIN_INTERNAL, TASK_MT_COMPACT, NULL, NULL);
         task = &(g_ctx.tasks[taskHandle]);
+        task->tableHandle = ((table_t*)_userData)->handle;
         task->state = TASK_STATE_NEW;
         break;
 
@@ -766,7 +781,6 @@ void tasks_update()
     task_t*  task = NULL;
     table_t* table = NULL;
     uint16_t removeCount = 0;
-    data_common_t* dataCommon = NULL;
 
     for (uint16_t i = 0; i < max; i++)
     {
@@ -775,9 +789,8 @@ void tasks_update()
 
         if (TASK_STATE_NEW == task->state)
         {
-            dataCommon = (data_common_t*)task->data;
-            dataCommon->startTime = cx_time_counter();
-            CX_MEM_ZERO(dataCommon->err);
+            task->startTime = cx_time_counter();
+            CX_MEM_ZERO(task->err);
 
             if (TASK_WT & task->type)
             {
@@ -796,10 +809,9 @@ void tasks_update()
         }
         else if (TASK_STATE_BLOCKED_RESCHEDULE == task->state)
         {
-            dataCommon = (data_common_t*)task->data;
-            if (INVALID_HANDLE != dataCommon->tableHandle)
+            if (INVALID_HANDLE != task->tableHandle)
             {
-                table = &g_ctx.tables[dataCommon->tableHandle];
+                table = &g_ctx.tables[task->tableHandle];
                 
                 queue_push(table->blockedQueue, task);
                 task->state = TASK_STATE_BLOCKED_AWAITING;
@@ -823,37 +835,57 @@ static void task_completed(const task_t* _task)
     {
     case TASK_WT_CREATE:
         if (TASK_ORIGIN_API == _task->origin)
-            api_response_create((data_create_t*)_task->data);
+            api_response_create(_task);
         else
-            cli_report_create((data_create_t*)_task->data);
+            cli_report_create(_task);
         break;
 
     case TASK_WT_DROP:
         if (TASK_ORIGIN_API == _task->origin)
-            api_response_drop((data_drop_t*)_task->data);
+            api_response_drop(_task);
         else
-            cli_report_drop((data_drop_t*)_task->data);
+            cli_report_drop(_task);
         break;
 
     case TASK_WT_DESCRIBE:
         if (TASK_ORIGIN_API == _task->origin)
-            api_response_describe((data_describe_t*)_task->data);
+            api_response_describe(_task);
         else
-            cli_report_describe((data_describe_t*)_task->data);
+            cli_report_describe(_task);
         break;
 
     case TASK_WT_SELECT:
         if (TASK_ORIGIN_API == _task->origin)
-            api_response_select((data_select_t*)_task->data);
+            api_response_select(_task);
         else
-            cli_report_select((data_select_t*)_task->data);
+            cli_report_select(_task);
         break;
 
     case TASK_WT_INSERT:
         if (TASK_ORIGIN_API == _task->origin)
-            api_response_insert((data_insert_t*)_task->data);
+            api_response_insert(_task);
         else
-            cli_report_insert((data_insert_t*)_task->data);
+            cli_report_insert(_task);
+        break;
+
+    case TASK_WT_DUMP:
+        break;
+
+    case TASK_MT_UNBLOCK:
+    {        
+        table_t* table = &g_ctx.tables[_task->tableHandle];        
+        if (!table->justCreated)
+            cli_report_unblocked(table->meta.name, cx_time_counter() - table->blockedStartTime);
+        break;
+    }
+
+    case TASK_MT_DUMP:
+        break;
+
+    case TASK_MT_COMPACT:
+        break;
+
+    case TASK_MT_FREE:
         break;
 
     default:
@@ -921,12 +953,22 @@ static void task_free(task_t* _task)
         break;
     }
 
-    case TASK_MT_DUMP:
+    case TASK_MT_FREE:
     {
         break;
     }
 
     case TASK_MT_COMPACT:
+    {
+        break;
+    }
+
+    case TASK_MT_DUMP:
+    {
+        break;
+    }
+
+    case TASK_MT_UNBLOCK:
     {
         break;
     }
@@ -956,7 +998,7 @@ static void queue_process()
     if (0 >= max) return;
 
     task = queue_pop(g_ctx.mtQueue);
-    while (count <= max)
+    while (count < max)
     {
         if (handle_mt_task(task))
         {
@@ -969,32 +1011,32 @@ static void queue_process()
             queue_push(g_ctx.mtQueue, task);
         }
 
-        task = queue_pop(g_ctx.mtQueue);
         count++;
+        task = queue_pop(g_ctx.mtQueue);
     }
 }
 
-static void api_response_create(const data_create_t* _result)
+static void api_response_create(const task_t* _task)
 {
     //TODO. reply back to the MEM node that requested this query.
 }
 
-static void api_response_drop(const data_drop_t* _result)
+static void api_response_drop(const task_t* _task)
 {
     //TODO. reply back to the MEM node that requested this query.
 }
 
-static void api_response_describe(const data_describe_t* _result)
+static void api_response_describe(const task_t* _task)
 {
     //TODO. reply back to the MEM node that requested this query.
 }
 
-static void api_response_select(const data_select_t* _result)
+static void api_response_select(const task_t* _task)
 {
     //TODO. reply back to the MEM node that requested this query.
 }
 
-static void api_response_insert(const data_insert_t* _result)
+static void api_response_insert(const task_t* _task)
 {
     //TODO. reply back to the MEM node that requested this query.
 }

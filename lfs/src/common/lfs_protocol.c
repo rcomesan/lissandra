@@ -64,16 +64,16 @@ void lfs_handle_create(const cx_net_common_t* _common, void* _userData, const ch
     LFS_REQ_BEGIN(TASK_WT_CREATE);
         data_create_t* data = CX_MEM_STRUCT_ALLOC(data);
         task->data = data;
-        cx_binr_uint16(_data, _size, &pos, &data->c.remoteId);
+        cx_binr_uint16(_data, _size, &pos, &task->remoteId);
         cx_binr_str(_data, _size, &pos, data->tableName, sizeof(data->tableName));
         cx_binr_uint8(_data, _size, &pos, &data->consistency);
         cx_binr_uint16(_data, _size, &pos, &data->numPartitions);
         cx_binr_uint32(_data, _size, &pos, &data->compactionInterval);
-        data->c.tableHandle = cx_handle_alloc(g_ctx.tablesHalloc);
-        if (INVALID_HANDLE == data->c.tableHandle)
+        task->tableHandle = cx_handle_alloc(g_ctx.tablesHalloc);
+        if (INVALID_HANDLE == task->tableHandle)
         {
             CX_WARN(CX_ALW, "we ran out of table handles! %d are not enough!", MAX_TABLES);
-            CX_ERR_SET(&data->c.err, 1, "Table creation cannot be performed at this time (out of memory).");
+            CX_ERR_SET(&task->err, 1, "Table creation cannot be performed at this time (out of memory).");
             task->state = TASK_STATE_COMPLETED;
         }
     LFS_REQ_END;
@@ -84,7 +84,7 @@ void lfs_handle_drop(const cx_net_common_t* _common, void* _userData, const char
     LFS_REQ_BEGIN(TASK_WT_DROP);
         data_drop_t* data = CX_MEM_STRUCT_ALLOC(data);
         task->data = data;
-        cx_binr_uint16(_data, _size, &pos, &data->c.remoteId);
+        cx_binr_uint16(_data, _size, &pos, &task->remoteId);
         cx_binr_str(_data, _size, &pos, data->tableName, sizeof(data->tableName));
     LFS_REQ_END;
 }
@@ -94,7 +94,7 @@ void lfs_handle_describe(const cx_net_common_t* _common, void* _userData, const 
     LFS_REQ_BEGIN(TASK_WT_DESCRIBE);
         data_describe_t* data = CX_MEM_STRUCT_ALLOC(data);
         task->data = data;
-        cx_binr_uint16(_data, _size, &pos, &data->c.remoteId);
+        cx_binr_uint16(_data, _size, &pos, &task->remoteId);
         
         char tableName[TABLE_NAME_LEN_MAX + 1];
         cx_binr_str(_data, _size, &pos, tableName, sizeof(tableName));
@@ -118,7 +118,7 @@ void lfs_handle_select(const cx_net_common_t* _common, void* _userData, const ch
     LFS_REQ_BEGIN(TASK_WT_SELECT);
         data_select_t* data = CX_MEM_STRUCT_ALLOC(data);
         task->data = data;
-        cx_binr_uint16(_data, _size, &pos, &data->c.remoteId);
+        cx_binr_uint16(_data, _size, &pos, &task->remoteId);
         cx_binr_str(_data, _size, &pos, data->tableName, sizeof(data->tableName));
         cx_binr_uint16(_data, _size, &pos, &data->record.key);
     LFS_REQ_END;
@@ -129,7 +129,7 @@ void lfs_handle_insert(const cx_net_common_t* _common, void* _userData, const ch
     LFS_REQ_BEGIN(TASK_WT_INSERT);
         data_insert_t* data = CX_MEM_STRUCT_ALLOC(data);
         task->data = data;
-        cx_binr_uint16(_data, _size, &pos, &data->c.remoteId);
+        cx_binr_uint16(_data, _size, &pos, &task->remoteId);
         cx_binr_str(_data, _size, &pos, data->tableName, sizeof(data->tableName));
         cx_binr_uint16(_data, _size, &pos, &data->record.key);
 

@@ -81,17 +81,23 @@ typedef struct table_record_t
     char*               value;
 } table_record_t;
 
-typedef struct data_common_t
+typedef struct task_t
 {
-    cx_err_t        err;
-    double          startTime;
-    uint16_t        remoteId;
-    uint16_t        tableHandle;
-} data_common_t;
+    uint16_t            handle;                 // handle of this task entry in the tasks container (index).
+    double              startTime;              // time counter value of when this task started executing.
+    TASK_STATE          state;                  // the current state of our task.
+    TASK_ORIGIN         origin;                 // origin of this task. it can be either command line interface or sockets api.
+    TASK_TYPE           type;                   // the requested operation.
+    cx_err_t            err;                    // if the task failed, err contains the error number and the error description for logging purposes.
+    uint16_t            clientHandle;           // the handle to the client which requested this task in our server context. INVALID_HANDLE means a CLI-issued task.
+    uint16_t            remoteId;               // the remote identifier for this remote task/request. (only if origin is TASK_ORIGIN_API)
+    // task data ---------------------------------------------------------------------------------------------------------------------------------------------------
+    uint16_t            tableHandle;            // temp variable for specific tasks which operate on a specific table and therefore we need to store its handle.
+    void*               data;                   // the data (arguments and results) of the requested operation. see data_*_t structures in ker/defines.h.
+} task_t;
 
 typedef struct data_create_t
 {
-    data_common_t   c;
     table_name_t    tableName;
     uint8_t         consistency;
     uint16_t        numPartitions;
@@ -100,51 +106,45 @@ typedef struct data_create_t
 
 typedef struct data_drop_t
 {
-    data_common_t   c;
     table_name_t    tableName;
 } data_drop_t;
 
 typedef struct data_describe_t
 {
-    data_common_t   c;
     table_meta_t*   tables;
     uint16_t        tablesCount;
 } data_describe_t;
 
 typedef struct data_select_t
 {
-    data_common_t   c;
     table_name_t    tableName;
     table_record_t  record;
 } data_select_t;
 
 typedef struct data_insert_t
 {
-    data_common_t   c;
     table_name_t    tableName;
     table_record_t  record;
 } data_insert_t;
 
 typedef struct data_dump_t
 {
-    data_common_t   c;
     table_name_t    tableName;
 } data_dump_t;
 
 typedef struct data_compact_t
 {
-    data_common_t   c;
     table_name_t    tableName;
 } data_compact_t;
 
 typedef struct data_run_t
 {
-    data_common_t   c;
+    int32_t         foo;
 } data_run_t;
 
 typedef struct data_add_memory_t
 {
-    data_common_t   c;
+    int32_t         bar;
 } data_add_memory_t;
 
 #endif // DEFINES_H_
