@@ -73,7 +73,9 @@ bool                fs_block_write(uint32_t _blockNumber, char* _buffer, uint32_
 
 uint32_t            fs_block_size();
 
-bool                fs_file_load(fs_file_t* _file, char* _buffer, cx_err_t* _err);
+bool                fs_file_read(fs_file_t* _file, char* _buffer, cx_err_t* _err);
+
+bool                fs_file_delete(fs_file_t* _file, cx_err_t* _err);
 
 bool                fs_is_dump(cx_path_t* _filePath, uint16_t* _outDumpNumber, bool* _outDuringCompaction);
 

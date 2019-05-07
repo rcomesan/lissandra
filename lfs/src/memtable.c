@@ -56,7 +56,7 @@ bool memtable_init_from_dump(const char* _tableName, uint16_t _dumpNumber, bool 
     if (fs_table_get_dump(_tableName, _dumpNumber, _isDuringCompaction, &dumpFile, _err))
     {
         char* buff = malloc(dumpFile.size);
-        if (fs_file_load(&dumpFile, buff, _err))
+        if (fs_file_read(&dumpFile, buff, _err))
         {
             _memtable_load(_outTable, buff, dumpFile.size, _err);
         }
@@ -78,7 +78,7 @@ bool memtable_init_from_part(const char* _tableName, uint16_t _partNumber, bool 
     if (fs_table_get_part(_tableName, _partNumber, _isDuringCompaction, &partFile, _err))
     {
         char* buff = malloc(partFile.size);
-        if (fs_file_load(&partFile, buff, _err))
+        if (fs_file_read(&partFile, buff, _err))
         {
             _memtable_load(_outTable, buff, partFile.size, _err);
         }

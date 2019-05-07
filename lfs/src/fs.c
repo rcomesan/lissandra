@@ -35,9 +35,9 @@ static bool         _fs_load_tables(cx_err_t* _err);
 
 static bool         _fs_load_blocks(cx_err_t* _err);
 
-static bool         _fs_file_write(cx_path_t* _filePath, fs_file_t* _outFile, cx_err_t* _err);
+static bool         _fs_file_save(fs_file_t* _outFile, cx_err_t* _err);
 
-static bool         _fs_file_read(cx_path_t* _filePath, fs_file_t* _file, cx_err_t* _err);
+static bool         _fs_file_load(fs_file_t* _file, cx_err_t* _err);
 
 
 /****************************************************************************************
@@ -435,7 +435,8 @@ bool fs_table_get_part(const char* _tableName, uint16_t _partNumber, bool _isDur
         _tableName, LFS_PART_PREFIX, _partNumber,
         _isDuringCompaction ? LFS_PART_EXTENSION_COMPACTION : LFS_PART_EXTENSION);
 
-    return _fs_file_read(&path, _outFile, _err);
+    cx_str_copy(_outFile->path, sizeof(_outFile->path), path);
+    return _fs_file_load(_outFile, _err);
 }
 
 bool fs_table_set_part(const char* _tableName, uint16_t _partNumber, bool _isDuringCompaction, fs_file_t* _file, cx_err_t* _err)
@@ -445,7 +446,8 @@ bool fs_table_set_part(const char* _tableName, uint16_t _partNumber, bool _isDur
         _tableName, LFS_PART_PREFIX, _partNumber,
         _isDuringCompaction ? LFS_PART_EXTENSION_COMPACTION : LFS_PART_EXTENSION);
 
-    return _fs_file_write(&path, _file, _err);
+    cx_str_copy(_file->path, sizeof(_file->path), path);
+    return _fs_file_save(_file, _err);
 }
 
 bool fs_table_get_dump(const char* _tableName, uint16_t _dumpNumber, bool _isDuringCompaction, fs_file_t* _outFile, cx_err_t* _err)
@@ -455,7 +457,8 @@ bool fs_table_get_dump(const char* _tableName, uint16_t _dumpNumber, bool _isDur
         _tableName, LFS_DUMP_PREFIX, _dumpNumber,
         _isDuringCompaction ? LFS_DUMP_EXTENSION_COMPACTION : LFS_DUMP_EXTENSION);
 
-    return _fs_file_read(&path, _outFile, _err);
+    cx_str_copy(_outFile->path, sizeof(_outFile->path), path);
+    return _fs_file_load(_outFile, _err);
 }
 
 bool fs_table_set_dump(const char* _tableName, uint16_t _dumpNumber, bool _isDuringCompaction, fs_file_t* _file, cx_err_t* _err)
@@ -465,7 +468,8 @@ bool fs_table_set_dump(const char* _tableName, uint16_t _dumpNumber, bool _isDur
         _tableName, LFS_DUMP_PREFIX, _dumpNumber,
         _isDuringCompaction ? LFS_DUMP_EXTENSION_COMPACTION : LFS_DUMP_EXTENSION);
 
-    return _fs_file_write(&path, _file, _err);
+    cx_str_copy(_file->path, sizeof(_file->path), path);
+    return _fs_file_save(_file, _err);
 }
 
 uint16_t fs_table_get_dump_number_next(const char* _tableName)
@@ -632,7 +636,7 @@ uint32_t fs_block_size()
     return m_fsCtx->meta.blocksSize;
 }
 
-bool fs_file_load(fs_file_t* _file, char* _buffer, cx_err_t* _err)
+bool fs_file_read(fs_file_t* _file, char* _buffer, cx_err_t* _err)
 {
     uint32_t buffPos = 0;
     int32_t bytesRead = 0;
@@ -656,6 +660,13 @@ bool fs_file_load(fs_file_t* _file, char* _buffer, cx_err_t* _err)
     }
 
     return true;
+}
+
+bool fs_file_delete(fs_file_t* _file, cx_err_t* _err)
+{
+    fs_block_free(_file->blocks, _file->blocksCount);
+
+    return cx_fs_remove(_file->path, _err);
 }
 
 bool fs_is_dump(cx_path_t* _filePath, uint16_t* _outDumpNumber, bool* _outDuringCompaction)
@@ -968,7 +979,7 @@ void fs_table_destroy(table_t* _table)
     }
 }
 
-static bool _fs_file_read(cx_path_t* _filePath, fs_file_t* _outFile, cx_err_t* _err)
+static bool _fs_file_load(fs_file_t* _outFile, cx_err_t* _err)
 {
     bool success = false;
     char* key = NULL;
@@ -976,9 +987,9 @@ static bool _fs_file_read(cx_path_t* _filePath, fs_file_t* _outFile, cx_err_t* _
     t_config* file = NULL;
     CX_ERR_CLEAR(_err);
 
-    if (cx_fs_exists(_filePath))
+    if (cx_fs_exists(&_outFile->path))
     {
-        file = config_create(*_filePath);
+        file = config_create(_outFile->path);
         if (NULL != file)
         {
             key = "size";
@@ -1035,33 +1046,33 @@ static bool _fs_file_read(cx_path_t* _filePath, fs_file_t* _outFile, cx_err_t* _
         key_missing:
             if (keyMissing)
             {
-                CX_ERR_SET(_err, 1, "File '%s' is corrupt. Key '%s' is missing.", *_filePath, key);
+                CX_ERR_SET(_err, 1, "File '%s' is corrupt. Key '%s' is missing.", _outFile->path, key);
             }
         }
         else
         {
-            CX_ERR_SET(_err, 1, "File '%s' could not be loaded!", *_filePath);
+            CX_ERR_SET(_err, 1, "File '%s' could not be loaded!", _outFile->path);
         }
     }
     else
     {
-        CX_ERR_SET(_err, 1, "File '%s' does not exist.", *_filePath);
+        CX_ERR_SET(_err, 1, "File '%s' does not exist.", _outFile->path);
     }
 
     if (NULL != file) config_destroy(file);
     return success;
 }
 
-static bool _fs_file_write(cx_path_t* _filePath, fs_file_t* _file, cx_err_t* _err)
+static bool _fs_file_save(fs_file_t* _file, cx_err_t* _err)
 {
     bool success = false;
     t_config* file = NULL;
     CX_ERR_CLEAR(_err);
     char temp[32];
 
-    if (cx_fs_remove(_filePath, _err) && cx_fs_touch(_filePath, _err))
+    if (cx_fs_remove(&_file->path, _err) && cx_fs_touch(&_file->path, _err))
     {
-        file = config_create(*_filePath);
+        file = config_create(_file->path);
         if (NULL != file)
         {
             cx_str_from_uint32(_file->size, temp, sizeof(temp));
@@ -1099,7 +1110,7 @@ static bool _fs_file_write(cx_path_t* _filePath, fs_file_t* _file, cx_err_t* _er
         }
         else
         {
-            CX_ERR_SET(_err, 1, "file '%s' could not be loaded!", *_filePath);
+            CX_ERR_SET(_err, 1, "file '%s' could not be loaded!", _file->path);
         }
     }
 

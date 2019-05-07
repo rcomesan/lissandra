@@ -215,6 +215,9 @@ void worker_handle_compact(task_t* _req)
     memtable_t* dumpsMem = NULL;
     memtable_t* tempMem = NULL;
 
+    // if this function is invoked we can safely assume the given table is fully blocked,
+    // and no other operation is being performed on it.
+
     if (fs_table_exists(data->tableName, &table))
     {
         // define the scope of our compaction renaming .tmp files to .tmpc
@@ -234,7 +237,7 @@ void worker_handle_compact(task_t* _req)
             for (uint32_t i = 0; i < dumpCount; i++)
             {
                 cx_str_copy(dumpNewPath, sizeof(dumpNewPath), dumpPath);
-                cx_str_copy(&dumpNewPath[strlen(dumpNewPath) - sizeof(LFS_DUMP_EXTENSION)], 5, LFS_DUMP_EXTENSION_COMPACTION);
+                cx_str_copy(&dumpNewPath[strlen(dumpNewPath) - sizeof(LFS_DUMP_EXTENSION)], sizeof(dumpNewPath), LFS_DUMP_EXTENSION_COMPACTION);
                 if (!cx_fs_move(&dumpPath, &dumpNewPath, &data->c.err))
                     goto failed;
             }
@@ -255,7 +258,7 @@ void worker_handle_compact(task_t* _req)
             memtable_preprocess(dumpsMem);
         }
 
-        // make the new partitions, and free the old ones.
+        // make the new partitions
         uint32_t dumpsEntries = 0;
         uint32_t dumpsPos = 0;
         for (uint16_t i = 0; i < table->meta.partitionsCount; i++)
@@ -268,23 +271,38 @@ void worker_handle_compact(task_t* _req)
             }
 
             if (dumpsEntries > 0)
-            {
-                // initialize the partition, add records, preprocess and save to a temporary (new) .binc partition file.
+            {              
+                // initialize the new partition, add records, preprocess and save it to a new temporary .binc partition file.
                 if (memtable_init_from_part(data->tableName, i, false, tempMem, &data->c.err))
                 {
                     memtable_add(tempMem, &dumpsMem->records[dumpsPos], dumpsEntries);
                     memtable_preprocess(tempMem);
 
+                    // save the new one
                     if (!memtable_make_part(tempMem, i, &data->c.err))
                         goto failed;
-
-                    memtable_destroy(tempMem);
-                    tempMem = NULL;
                 }
 
                 dumpsPos += dumpsEntries;
             }
-        }   
+        }
+
+        // delete the current partitions and replace them with the new ones
+        fs_file_t oldPartFile;
+        cx_path_t tmpPath;
+        for (uint16_t i = 0; i < table->meta.partitionsCount; i++)
+        {
+            if (fs_table_get_part(data->tableName, i, false, &oldPartFile, &data->c.err))
+            {
+                if (!fs_file_delete(&oldPartFile, &data->c.err))
+                    goto failed;
+            }
+
+            cx_str_copy(tmpPath, sizeof(tmpPath), oldPartFile.path);
+            cx_str_copy(&tmpPath[strlen(tmpPath) - sizeof(LFS_PART_EXTENSION) - 1], sizeof(tmpPath), LFS_PART_EXTENSION_COMPACTION);
+            if (!cx_fs_move(&tmpPath, &oldPartFile.path, &data->c.err))
+                goto failed;
+        }
     }
     else
     {
@@ -296,6 +314,13 @@ failed:
     if (NULL != dumpNumbers) free(dumpNumbers);
     if (NULL != dumpsMem) memtable_destroy(dumpsMem);
     if (NULL != tempMem) memtable_destroy(tempMem);
+
+    // lastly, ask the main thread to unblock this table for us
+    uint16_t taskHandle = lfs_task_create(TASK_ORIGIN_INTERNAL, TASK_MT_UNBLOCK, table, NULL);
+    if (INVALID_HANDLE != taskHandle)
+    {
+        g_ctx.tasks[taskHandle].state = TASK_STATE_NEW;
+    }
 
     _worker_parse_result(_req, table);
 }

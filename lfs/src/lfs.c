@@ -146,7 +146,7 @@ uint16_t lfs_task_create(TASK_ORIGIN _origin, TASK_TYPE _type, void* _data, cx_n
         task->origin = _origin;
         task->data = _data;
 
-        if (TASK_ORIGIN_API != task->origin)
+        if (TASK_ORIGIN_API == task->origin)
         {
             task->clientHandle = _client->handle;
         }
@@ -628,6 +628,7 @@ static void handle_wk_task(task_t* _task)
 
 static bool handle_mt_task(task_t* _task)
 {
+    CX_CHECK_NOT_NULL(_task);
     _task->state = TASK_STATE_RUNNING;
 
     bool     success = false;
@@ -950,7 +951,9 @@ static void queue_process()
 {
     task_t* task = NULL;
     uint32_t count = 0;
+
     uint32_t max = queue_size(g_ctx.mtQueue);
+    if (0 >= max) return;
 
     task = queue_pop(g_ctx.mtQueue);
     while (count <= max)

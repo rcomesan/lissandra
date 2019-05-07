@@ -2,6 +2,8 @@
 #define LFS_LFS_H_
 
 #include <ker/defines.h>
+#include <cx/cx.h>
+#include <cx/fs.h>
 #include <cx/net.h>
 #include <cx/pool.h>
 #include <cx/cdict.h>
@@ -70,6 +72,7 @@ typedef struct fs_meta_t
 
 typedef struct fs_file_t
 {
+    cx_path_t           path;                   // absolute file path to this file in our filesystem.
     uint32_t            size;                   // size in bytes of the file stored in the fs.
     uint32_t            blocks[MAX_FILE_FRAG];  // ordered array containing the number of each block that stores bytes of our partitioned file.
     uint32_t            blocksCount;            // number of elements in the blocks array.
