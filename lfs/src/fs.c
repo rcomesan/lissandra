@@ -884,6 +884,9 @@ static bool _fs_load_tables(cx_err_t* _err)
                 table = &(g_ctx.tables[tableHandle]);
                 if (fs_table_init(table, tableName, _err))
                 {
+                    table->timerHandle = cx_timer_add(table->meta.compactionInterval, LFS_TIMER_COMPACT, table);
+                    CX_CHECK(INVALID_HANDLE != table->timerHandle, "we ran out of timer handles for table '%s'!", table->meta.name);
+
                     cx_cdict_set(m_fsCtx->tablesMap, tableName, table);
                     count++;
                 }
