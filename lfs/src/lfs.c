@@ -97,11 +97,11 @@ int main(int _argc, char** _argv)
             // poll socket events
             cx_net_poll_events(g_ctx.sv);
             
-            // update tasks
-            tasks_update();
-
             // poll timer events
             cx_timer_poll_events();
+
+            // update tasks
+            tasks_update();
 
             // process main-thread queue
             queue_process();
@@ -760,11 +760,13 @@ static bool handle_timer_tick(uint64_t _expirations, uint32_t _type, void* _user
     }
 
     case LFS_TIMER_COMPACT:
+    {
         taskHandle = lfs_task_create(TASK_ORIGIN_INTERNAL, TASK_MT_COMPACT, NULL, NULL);
         task = &(g_ctx.tasks[taskHandle]);
         task->tableHandle = ((table_t*)_userData)->handle;
         task->state = TASK_STATE_NEW;
         break;
+    }
 
     default:
         CX_WARN(CX_ALW, "undefined <tick> behaviour for timer of type #%d.", _type);
@@ -789,6 +791,7 @@ void tasks_update()
 
         if (TASK_STATE_NEW == task->state)
         {
+            task->state = TASK_STATE_READY;
             task->startTime = cx_time_counter();
             CX_MEM_ZERO(task->err);
 
@@ -871,11 +874,13 @@ static void task_completed(const task_t* _task)
     case TASK_WT_DUMP:
         break;
 
+    case TASK_WT_COMPACT:
+        break;
+
     case TASK_MT_UNBLOCK:
     {        
         table_t* table = &g_ctx.tables[_task->tableHandle];        
-        if (!table->justCreated)
-            cli_report_unblocked(table->meta.name, cx_time_counter() - table->blockedStartTime);
+        cli_report_unblocked(table->meta.name, cx_time_counter() - table->blockedStartTime);
         break;
     }
 
@@ -1007,8 +1012,7 @@ static void queue_process()
         else
         {
             // we can't process it at this time, push it again to our queue
-            task->state = TASK_STATE_READY;
-            queue_push(g_ctx.mtQueue, task);
+            task->state = TASK_STATE_NEW;
         }
 
         count++;
