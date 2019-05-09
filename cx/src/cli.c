@@ -33,15 +33,30 @@ bool cx_cli_init()
     CX_CHECK(!m_cliCtx->initialized, "cli module is already initialized!");
     if (m_cliCtx->initialized) return false;
 
-    int result = pthread_create(&m_cliCtx->thread, NULL, cx_cli_main_loop, NULL);
+    m_cliCtx->initialized = false;
+    m_cliCtx->state = CX_CLI_STATE_NONE;
 
-    if (0 == result)
+    m_cliCtx->mtxInitialized = (0 == pthread_mutex_init(&m_cliCtx->mtx, NULL));
+    if (m_cliCtx->mtxInitialized)
     {
-        m_cliCtx->initialized = true;
-        m_cliCtx->state = CX_CLI_STATE_READING;
+        m_cliCtx->semInitialized = (0 == sem_init(&m_cliCtx->sem, 0, 0));
+        if (m_cliCtx->semInitialized)
+        {
+            int32_t result = pthread_create(&m_cliCtx->thread, NULL, cx_cli_main_loop, NULL);
+            if (0 == result)
+            {
+                m_cliCtx->initialized = true;
+
+                // send the signal to start consuming commands from stdin.
+                m_cliCtx->state = CX_CLI_STATE_READING;
+                sem_post(&m_cliCtx->sem);
+            }
+            CX_WARN(0 == result, "cx command line interface thread creation failed: %s", strerror(errno));
+        }
+        CX_WARN(m_cliCtx->semInitialized, "cx command line interface semaphore creation failed: %s", strerror(errno));
     }
-    CX_WARN(0 == result, "cx command line interface thread creation failed: %s", strerror(errno));
-   
+    CX_WARN(m_cliCtx->mtxInitialized, "cx command line interface mutex creation failed: %s", strerror(errno));
+
     return m_cliCtx->initialized;
 }
 
@@ -49,19 +64,38 @@ void cx_cli_destroy()
 {
     if (NULL == m_cliCtx || !m_cliCtx->initialized) return;
 
+    pthread_mutex_lock(&m_cliCtx->mtx);
     if (CX_CLI_STATE_READING == m_cliCtx->state)
     {
         m_cliCtx->state = CX_CLI_STATE_SHUTDOWN;
         pthread_cancel(m_cliCtx->thread);
     }
+    else if (CX_CLI_STATE_PROCESSING == m_cliCtx->state)
+    {
+        m_cliCtx->state = CX_CLI_STATE_SHUTDOWN;
+        sem_post(&m_cliCtx->sem);
+    }
     else
     {
         m_cliCtx->state = CX_CLI_STATE_SHUTDOWN;
     }
-    
+    pthread_mutex_unlock(&m_cliCtx->mtx);
+
     // wait for completion
     pthread_join(m_cliCtx->thread, NULL);
     
+    if (m_cliCtx->semInitialized)
+    {
+        sem_destroy(&m_cliCtx->sem);
+        m_cliCtx->semInitialized = false;
+    }   
+
+    if (m_cliCtx->mtxInitialized)
+    {
+        pthread_mutex_destroy(&m_cliCtx->mtx);
+        m_cliCtx->mtxInitialized = false;
+    }
+
     // destroy our context
     free(m_cliCtx);
     m_cliCtx = NULL;
@@ -69,18 +103,24 @@ void cx_cli_destroy()
 
 bool cx_cli_command_begin(cx_cli_cmd_t** _outCmd)
 {
+    bool available = false;
+
+    pthread_mutex_lock(&m_cliCtx->mtx);
     if (CX_CLI_STATE_PENDING == m_cliCtx->state)
     {
         m_cliCtx->state = CX_CLI_STATE_PROCESSING;
         (*_outCmd) = &(m_cliCtx->command);
 
-        return true;
+        available = true;
     }
-    return false;
+    pthread_mutex_unlock(&m_cliCtx->mtx);
+
+    return available;
 }
 
 void cx_cli_command_end()
 {
+    pthread_mutex_lock(&m_cliCtx->mtx);
     if (CX_CLI_STATE_PROCESSING == m_cliCtx->state)
     {
         // free the dynamically allocated strings
@@ -92,7 +132,9 @@ void cx_cli_command_end()
 
         // resume reading from stdin
         m_cliCtx->state = CX_CLI_STATE_READING;
+        sem_post(&m_cliCtx->sem);
     }
+    pthread_mutex_unlock(&m_cliCtx->mtx);
 }
 
 /****************************************************************************************
@@ -107,11 +149,19 @@ static void* cx_cli_main_loop(void* _arg)
 
     CX_INFO("command line interface loop started");
 
+    pthread_mutex_lock(&m_cliCtx->mtx);
     while (CX_CLI_STATE_SHUTDOWN != m_cliCtx->state)
     {
+        pthread_mutex_unlock(&m_cliCtx->mtx);
+        sem_wait(&m_cliCtx->sem);
+        pthread_mutex_lock(&m_cliCtx->mtx);
+
         if (CX_CLI_STATE_READING == m_cliCtx->state)
         {
+            pthread_mutex_unlock(&m_cliCtx->mtx);
             cmd = readline("> ");
+            pthread_mutex_lock(&m_cliCtx->mtx);
+
             cmdLen = strlen(cmd);
 
             if (NULL != cmd)
@@ -187,11 +237,8 @@ static void* cx_cli_main_loop(void* _arg)
                 m_cliCtx->state = CX_CLI_STATE_PENDING;
             }
         }
-        else
-        {
-            usleep(100 * 1000); //TODO volar esto y meter pthread_cond
-        }
     }
+    pthread_mutex_unlock(&m_cliCtx->mtx);
 
     CX_INFO("command line interface loop terminated gracefully.");
 
