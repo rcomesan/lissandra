@@ -97,7 +97,7 @@ bool cx_cdict_tryremove(cx_cdict_t* _cdict, const char* _key, void** _outData)
     }
     pthread_mutex_unlock(&_cdict->mutex);
 
-    if (NULL != (*_outData)) (*_outData) = data;
+    if (NULL != _outData) (*_outData) = data;
     return result;
 }
 
