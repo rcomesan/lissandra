@@ -64,7 +64,7 @@ uint16_t cx_handle_alloc(cx_handle_alloc_t* _halloc)
         _halloc->numHandles++;
 
         uint16_t handle = _halloc->indexToHandle[index];
-        _halloc->indexToHandle[index] = handle;
+        _halloc->handleToIndex[handle] = index;
 
         return handle;
     }
@@ -106,9 +106,8 @@ void cx_handle_free(cx_handle_alloc_t* _halloc, uint16_t _handle)
     _halloc->indexToHandle[_halloc->numHandles] = _handle;
 
     int32_t key = _halloc->handleToKey[_handle];
-    if (key > INT32_MIN)
+    if (key > INT32_MIN) // valid key in use
     {
-        // valid key / key in use (not the default value)
         // remove it now
         memcpy(_halloc->tempKey, &key, sizeof(key));
         _halloc->tempKey[4] = '\0';
