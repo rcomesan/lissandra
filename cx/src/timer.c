@@ -265,23 +265,11 @@ static bool _cx_timer_epoll_mod(int32_t _fd, bool _set)
 
 double cx_time_counter()
 {
-    return m_timerCtx.timeCounter;
-}
-
-double cx_time_delta()
-{
-    return m_timerCtx.timeDelta;
-}
-
-void cx_time_update()
-{
     struct timeval now;
     gettimeofday(&now, 0);
 
     int64_t time = now.tv_sec * INT64_C(1000000) + now.tv_usec;
-    m_timerCtx.timeCounter = (double)(time - m_timerCtx.timeOffset) / (double)INT64_C(1000000);
-    m_timerCtx.timeDelta = m_timerCtx.timeCounter - m_timerCtx.timeCounterPrev;
-    m_timerCtx.timeCounterPrev = m_timerCtx.timeCounter;
+    return (double)(time - m_timerCtx.timeOffset) / (double)INT64_C(1000000);
 }
 
 uint32_t cx_time_epoch()

@@ -31,9 +31,6 @@ typedef struct cx_timer_ctx_t
     
     // Generic timing functions variables.
     int64_t                 timeOffset;
-    double                  timeCounter;
-    double                  timeCounterPrev;
-    double                  timeDelta;
 } cx_timer_ctx_t;
 
 
@@ -60,10 +57,6 @@ void            cx_timer_poll_events();
 // Generic timing functions.
 
 double          cx_time_counter();
-
-double          cx_time_delta();
-
-void            cx_time_update();
 
 uint32_t        cx_time_epoch();
 
