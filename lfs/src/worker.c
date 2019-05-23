@@ -356,9 +356,6 @@ static void _worker_parse_result(task_t* _req, table_t* _affectedTable)
     }
     else
     {
-        pthread_mutex_lock(&g_ctx.tasksCompletionKeyMutex);
-        _req->completionKey = g_ctx.tasksCompletionKeyLast++;
-        _req->state = TASK_STATE_COMPLETED;
-        pthread_mutex_unlock(&g_ctx.tasksCompletionKeyMutex);
+        taskman_completion(_req);
     }
 }

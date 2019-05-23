@@ -440,6 +440,7 @@ bool fs_table_part_delete(const char* _tableName, uint16_t _partNumber, bool _is
     {
         return fs_file_delete(&part, _err);
     }
+    return false;
 }
 
 bool fs_table_dump_get(const char* _tableName, uint16_t _dumpNumber, bool _isDuringCompaction, fs_file_t* _outFile, cx_err_t* _err)
@@ -467,6 +468,7 @@ bool fs_table_dump_delete(const char* _tableName, uint16_t _dumpNumber, bool _is
     {
         return fs_file_delete(&part, _err);
     }
+    return false;
 }
 
 uint16_t fs_table_dump_number_next(const char* _tableName)

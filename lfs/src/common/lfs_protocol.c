@@ -1,6 +1,7 @@
 #include <lfs/lfs_protocol.h>
 #include <mem/mem_protocol.h>
 #include <ker/defines.h>
+#include <ker/taskman.h>
 
 #include <cx/binr.h>
 #include <cx/binw.h>
@@ -20,7 +21,7 @@
     cx_net_ctx_sv_t* svCtx = (cx_net_ctx_sv_t*)_common;                                 \
     cx_net_client_t* client = (cx_net_client_t*)_userData;                              \
     uint32_t pos = 0;                                                                   \
-    uint16_t taskHandle = lfs_task_create(                                              \
+    task_t* task = taskman_create(                                                      \
         NULL == _userData                                                               \
             ? TASK_ORIGIN_CLI                                                           \
             : TASK_ORIGIN_API,                                                          \
@@ -28,9 +29,8 @@
         NULL,                                                                           \
         _userData);                                                                     \
                                                                                         \
-    if (INVALID_HANDLE != taskHandle)                                                   \
-    {                                                                                   \
-        task_t* task = &(g_ctx.tasks[taskHandle]);
+    if (NULL != task)                                                                   \
+    {
 
 #define LFS_REQ_END                                                                     \
         task->state = TASK_STATE_NEW;                                                   \

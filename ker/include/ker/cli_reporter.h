@@ -2,7 +2,9 @@
 #define CLI_REPORTER_H_
 
 #include "defines.h"
+
 #include <cx/cx.h>
+#include <ker/taskman.h>
 
 /****************************************************************************************
  ***  PUBLIC FUNCTIONS

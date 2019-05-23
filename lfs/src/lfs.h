@@ -5,12 +5,12 @@
 #include <cx/cx.h>
 #include <cx/file.h>
 #include <cx/net.h>
-#include <cx/pool.h>
 #include <cx/cdict.h>
 
 #include <commons/config.h>
 #include <commons/log.h>
 #include <commons/collections/dictionary.h>
+#include <commons/collections/queue.h>
 
 typedef enum LFS_ERR_CODE
 {
@@ -119,15 +119,6 @@ typedef struct lfs_ctx_t
     t_log*              log;                                        // pointer to so-commons-lib log adt.
     bool                isRunning;                                  // true if the server is running. false if it's shutting down.
     cx_net_ctx_sv_t*    sv;                                         // server context for serving API requests coming from MEM nodes.
-    cx_pool_t*          pool;                                       // main pool of worker threads to process incoming requests.
-    t_queue*            mtQueue;                                    // main-thread queue with tasks of type TASK_MT_*.
-    task_t              tasks[MAX_TASKS];                           // container for storing incoming tasks during ready/running/completed states.
-    cx_handle_alloc_t*  tasksHalloc;                                // handle allocator for tasks container.
-    pthread_mutex_t     tasksMutex;                                 // mutex for syncing tasks handle alloc/free.
-    bool                tasksMutexInited;                           // true if tasksMutex was successfully initialized.
-    uint32_t            tasksCompletionKeyLast;                     // auto-incremental number for sorting completed tasks.
-    pthread_mutex_t     tasksCompletionKeyMutex;                    // mutex for protecting tasksCompletionKeyLast.
-    bool                tasksCompletionKeyMutexInited;              // true if tasksCompletionKeyMutex was successfully initialized.
     table_t             tables[MAX_TABLES];                         // container for storing tables.
     cx_handle_alloc_t*  tablesHalloc;                               // handle allocator for tables container.
     char                buffer[MAX_PACKET_LEN - MIN_PACKET_LEN];    // temporary pre-allocated buffer for building packets.
@@ -135,11 +126,5 @@ typedef struct lfs_ctx_t
 } lfs_ctx_t;
 
 extern lfs_ctx_t        g_ctx;
-
-/****************************************************************************************
- ***  PUBLIC FUNCTIONS
- ***************************************************************************************/
-
-uint16_t                lfs_task_create(TASK_ORIGIN _origin, TASK_TYPE _type, void* _data, cx_net_client_t* _client);
 
 #endif // LFS_LFS_
