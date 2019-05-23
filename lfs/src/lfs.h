@@ -100,16 +100,17 @@ typedef struct memtable_t
 typedef struct table_t
 {
     uint16_t            handle;                 // handle of this table entry in the tables container (index).
+    bool                inUse;                  // true if this handle has a table assigned to, false if it doesn't.
     table_meta_t        meta;                   // table metadata.
     memtable_t          memtable;               // memtable for this table.
     bool                deleted;                // true if this table is marked as deleted (pending to be removed).
+    bool                compacting;             // true if this table is performing a compaction.
     bool                blocked;                // true if this table is marked as blocked (pending to be compacted).
     double              blockedStartTime;       // time counter value of when the table block started.
-    bool                justCreated;            // true if this table was just created (pending to be unblocked by the main thread and initialized before becomind available).
     uint16_t            timerHandle;            // handle to the timer created with the desired compaction interval for this table.
     t_queue*            blockedQueue;           // queue with tasks which are awaiting for this table to become unblocked.
     uint16_t            operations;             // number of operations being performed on this table (number of current jobs which depend on its availability).
-    pthread_mutex_t     mtxOperations;          // mutex to protect operations variable when accessed/modified by multiple threads.
+    pthread_mutex_t     mtxOperations;          // mutex to protect operations/blocked/compacting variables when being accessed/modified by multiple threads.
 } table_t;
 
 typedef struct lfs_ctx_t
@@ -123,9 +124,12 @@ typedef struct lfs_ctx_t
     task_t              tasks[MAX_TASKS];                           // container for storing incoming tasks during ready/running/completed states.
     cx_handle_alloc_t*  tasksHalloc;                                // handle allocator for tasks container.
     pthread_mutex_t     tasksMutex;                                 // mutex for syncing tasks handle alloc/free.
-    bool                tasksMutexI;                                // true if tasksMutex was successfully initialized.
+    bool                tasksMutexInited;                           // true if tasksMutex was successfully initialized.
+    uint32_t            tasksCompletionKeyLast;                     // auto-incremental number for sorting completed tasks.
+    pthread_mutex_t     tasksCompletionKeyMutex;                    // mutex for protecting tasksCompletionKeyLast.
+    bool                tasksCompletionKeyMutexInited;              // true if tasksCompletionKeyMutex was successfully initialized.
     table_t             tables[MAX_TABLES];                         // container for storing tables.
-    cx_handle_alloc_t*  tablesHalloc;                               // handle allocator for tables container;
+    cx_handle_alloc_t*  tablesHalloc;                               // handle allocator for tables container.
     char                buffer[MAX_PACKET_LEN - MIN_PACKET_LEN];    // temporary pre-allocated buffer for building packets.
     uint16_t            timerDump;                                  // dump operation timer handle.
 } lfs_ctx_t;

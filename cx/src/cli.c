@@ -48,8 +48,10 @@ bool cx_cli_init()
                 m_cliCtx->initialized = true;
 
                 // send the signal to start consuming commands from stdin.
+                pthread_mutex_lock(&m_cliCtx->mtx);
                 m_cliCtx->state = CX_CLI_STATE_READING;
                 sem_post(&m_cliCtx->sem);
+                pthread_mutex_unlock(&m_cliCtx->mtx);
             }
             CX_WARN(0 == result, "cx command line interface thread creation failed: %s", strerror(errno));
         }

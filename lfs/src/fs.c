@@ -39,6 +39,9 @@ static bool         _fs_file_save(fs_file_t* _outFile, cx_err_t* _err);
 
 static bool         _fs_file_load(fs_file_t* _file, cx_err_t* _err);
 
+static void         _fs_get_dump_path(cx_path_t* _outFilePath, const char* _tableName, uint16_t _dumpNumber, bool _isDuringCompaction);
+
+static void         _fs_get_part_path(cx_path_t* _outFilePath, const char* _tableName, uint16_t _partNumber, bool _isDuringCompaction);
 
 /****************************************************************************************
  ***  PUBLIC FUNCTIONS
@@ -128,6 +131,8 @@ table_meta_t* fs_describe(uint16_t* _outTablesCount, cx_err_t* _err)
     table_t* table;
     uint16_t i = 0;
 
+    CX_ERR_CLEAR(_err);
+
     cx_cdict_iter_begin(m_fsCtx->tablesMap);
     (*_outTablesCount) = (uint16_t)cx_cdict_size(m_fsCtx->tablesMap);
     if (0 < (*_outTablesCount))
@@ -162,24 +167,27 @@ table_meta_t* fs_describe(uint16_t* _outTablesCount, cx_err_t* _err)
 
 bool fs_table_avail_guard_begin(table_t* _table, cx_err_t* _err, pthread_mutex_t* _mtx)
 {
-    if (_table->blocked)
+    bool result = false;
+    
+    pthread_mutex_lock(&_table->mtxOperations);
+    if (_table->blocked || _table->compacting)
     {
         CX_ERR_SET(_err, LFS_ERR_TABLE_BLOCKED, "Operation cannot be performed at this time since the table is blocked. Try agian later.");
         if (NULL != _mtx)
         {
             pthread_mutex_unlock(_mtx);
         }
-        return false;
+        result = false;
     }
     else
     {
         // increment the amount of running jobs that depend on this table's availability (not blocked)
-        pthread_mutex_lock(&_table->mtxOperations);
         _table->operations++;
-        pthread_mutex_unlock(&_table->mtxOperations);
-
-        return true;
+        result = true;
     }
+    pthread_mutex_unlock(&_table->mtxOperations);
+
+    return result;
 }
 
 void fs_table_avail_guard_end(table_t* _table)
@@ -226,7 +234,6 @@ bool fs_table_create(table_t* _table, const char* _tableName, uint8_t _consisten
     cx_path_t path;
     t_config* meta = NULL;
 
-    _table->justCreated = true;
     _table->blocked = true;
 
     if (cx_cdict_tryadd(m_fsCtx->tablesMap, _tableName, _table))
@@ -264,7 +271,7 @@ bool fs_table_create(table_t* _table, const char* _tableName, uint8_t _consisten
 
                             if (1 == partFile.blocksCount)
                             {
-                                if (fs_table_set_part(_tableName, i, false, &partFile, _err))
+                                if (fs_table_part_set(_tableName, i, false, &partFile, _err))
                                 {
                                     success = true;
                                 }
@@ -294,17 +301,6 @@ bool fs_table_create(table_t* _table, const char* _tableName, uint8_t _consisten
     {
         CX_ERR_SET(_err, 1, "Table '%s' already exists.", _tableName);
     }
-      
-    // if failed, mark table as deleted so that it gets wiped out in the main loop
-    if (!success) _table->deleted = true;
-
-    TASK_TYPE taskType = success ? TASK_MT_UNBLOCK : TASK_MT_FREE;
-    uint16_t  taskHandle = lfs_task_create(TASK_ORIGIN_INTERNAL, taskType, NULL, NULL);
-    if (INVALID_HANDLE != taskHandle)
-    {
-        g_ctx.tasks[taskHandle].tableHandle = _table->handle;
-        g_ctx.tasks[taskHandle].state = TASK_STATE_NEW;
-    }
 
     if (NULL != meta) config_destroy(meta);
     return success;
@@ -323,15 +319,12 @@ bool fs_table_delete(const char* _tableName, table_t** _outTable, cx_err_t* _err
 
     if (cx_cdict_tryremove(m_fsCtx->tablesMap, _tableName, (void**)&table))
     {
-        // mark the table slot as deleted, so that it gets freed up safely in the main loop
-        table->deleted = true;
-
         // free the blocks in use
-        if (fs_table_get_meta(_tableName, &meta, _err))
+        if (fs_table_meta_get(_tableName, &meta, _err))
         {
             for (uint32_t i = 0; i < meta.partitionsCount; i++)
             {
-                if (fs_table_get_part(_tableName, i, false, &part, _err))
+                if (fs_table_part_get(_tableName, i, false, &part, _err))
                 {
                     fs_block_free(part.blocks, part.blocksCount);
                 }
@@ -351,14 +344,6 @@ bool fs_table_delete(const char* _tableName, table_t** _outTable, cx_err_t* _err
         cx_file_path(&path, "%s/%s/%s", m_fsCtx->rootDir, LFS_DIR_TABLES, _tableName);
         cx_file_remove(&path, _err);
 
-        // ask the main thread to free this table for us (in a thread-safe manner)
-        uint16_t taskHandle = lfs_task_create(TASK_ORIGIN_INTERNAL, TASK_MT_FREE, NULL, NULL);
-        if (INVALID_HANDLE != taskHandle)
-        {
-            g_ctx.tasks[taskHandle].tableHandle = table->handle;
-            g_ctx.tasks[taskHandle].state = TASK_STATE_NEW;
-        }
-
         success = true;
     }
     else
@@ -370,7 +355,7 @@ bool fs_table_delete(const char* _tableName, table_t** _outTable, cx_err_t* _err
     return success;
 }
 
-bool fs_table_get_meta(const char* _tableName, table_meta_t* _outMeta, cx_err_t* _err)
+bool fs_table_meta_get(const char* _tableName, table_meta_t* _outMeta, cx_err_t* _err)
 {
     CX_ERR_CLEAR(_err);
     CX_CHECK_NOT_NULL(_outMeta);
@@ -430,51 +415,61 @@ bool fs_table_get_meta(const char* _tableName, table_meta_t* _outMeta, cx_err_t*
     return false;
 }
 
-bool fs_table_get_part(const char* _tableName, uint16_t _partNumber, bool _isDuringCompaction, fs_file_t* _outFile, cx_err_t* _err)
+bool fs_table_part_get(const char* _tableName, uint16_t _partNumber, bool _isDuringCompaction, fs_file_t* _outFile, cx_err_t* _err)
 {
     cx_path_t path;
-    cx_file_path(&path, "%s/%s/%s/%s%d.%s", m_fsCtx->rootDir, LFS_DIR_TABLES,
-        _tableName, LFS_PART_PREFIX, _partNumber,
-        _isDuringCompaction ? LFS_PART_EXTENSION_COMPACTION : LFS_PART_EXTENSION);
+    _fs_get_part_path(&path, _tableName, _partNumber, _isDuringCompaction);
 
     cx_str_copy(_outFile->path, sizeof(_outFile->path), path);
     return _fs_file_load(_outFile, _err);
 }
 
-bool fs_table_set_part(const char* _tableName, uint16_t _partNumber, bool _isDuringCompaction, fs_file_t* _file, cx_err_t* _err)
+bool fs_table_part_set(const char* _tableName, uint16_t _partNumber, bool _isDuringCompaction, fs_file_t* _file, cx_err_t* _err)
 {
     cx_path_t path;
-    cx_file_path(&path, "%s/%s/%s/%s%d.%s", m_fsCtx->rootDir, LFS_DIR_TABLES,
-        _tableName, LFS_PART_PREFIX, _partNumber,
-        _isDuringCompaction ? LFS_PART_EXTENSION_COMPACTION : LFS_PART_EXTENSION);
+    _fs_get_part_path(&path, _tableName, _partNumber, _isDuringCompaction);
 
     cx_str_copy(_file->path, sizeof(_file->path), path);
     return _fs_file_save(_file, _err);
 }
 
-bool fs_table_get_dump(const char* _tableName, uint16_t _dumpNumber, bool _isDuringCompaction, fs_file_t* _outFile, cx_err_t* _err)
+bool fs_table_part_delete(const char* _tableName, uint16_t _partNumber, bool _isDuringCompaction, cx_err_t* _err)
+{
+    fs_file_t part;
+    if (fs_table_part_get(_tableName, _partNumber, _isDuringCompaction, &part, _err))
+    {
+        return fs_file_delete(&part, _err);
+    }
+}
+
+bool fs_table_dump_get(const char* _tableName, uint16_t _dumpNumber, bool _isDuringCompaction, fs_file_t* _outFile, cx_err_t* _err)
 {
     cx_path_t path;
-    cx_file_path(&path, "%s/%s/%s/%s%d.%s", m_fsCtx->rootDir, LFS_DIR_TABLES,  
-        _tableName, LFS_DUMP_PREFIX, _dumpNumber,
-        _isDuringCompaction ? LFS_DUMP_EXTENSION_COMPACTION : LFS_DUMP_EXTENSION);
+    _fs_get_dump_path(&path, _tableName, _dumpNumber, _isDuringCompaction);
 
     cx_str_copy(_outFile->path, sizeof(_outFile->path), path);
     return _fs_file_load(_outFile, _err);
 }
 
-bool fs_table_set_dump(const char* _tableName, uint16_t _dumpNumber, bool _isDuringCompaction, fs_file_t* _file, cx_err_t* _err)
+bool fs_table_dump_set(const char* _tableName, uint16_t _dumpNumber, bool _isDuringCompaction, fs_file_t* _file, cx_err_t* _err)
 {
     cx_path_t path;
-    cx_file_path(&path, "%s/%s/%s/%s%d.%s", m_fsCtx->rootDir, LFS_DIR_TABLES, 
-        _tableName, LFS_DUMP_PREFIX, _dumpNumber,
-        _isDuringCompaction ? LFS_DUMP_EXTENSION_COMPACTION : LFS_DUMP_EXTENSION);
+    _fs_get_dump_path(&path, _tableName, _dumpNumber, _isDuringCompaction);
 
     cx_str_copy(_file->path, sizeof(_file->path), path);
     return _fs_file_save(_file, _err);
 }
 
-uint16_t fs_table_get_dump_number_next(const char* _tableName)
+bool fs_table_dump_delete(const char* _tableName, uint16_t _dumpNumber, bool _isDuringCompaction, cx_err_t* _err)
+{
+    fs_file_t part;
+    if (fs_table_dump_get(_tableName, _dumpNumber, _isDuringCompaction, &part, _err))
+    {
+        return fs_file_delete(&part, _err);
+    }
+}
+
+uint16_t fs_table_dump_number_next(const char* _tableName)
 {
     cx_err_t err;
     uint16_t   dumpNumber = 0;
@@ -945,12 +940,13 @@ bool fs_table_init(table_t* _outTable, const char* _tableName, cx_err_t* _err)
 {
     CX_CHECK(strlen(_tableName) > 0, "invalid table name!");
 
+    _outTable->inUse = true;
     _outTable->operations = 0;
     _outTable->timerHandle = INVALID_HANDLE;
     _outTable->blockedQueue = queue_create();
-
+    
     return true
-        && fs_table_get_meta(_tableName, &_outTable->meta, _err)
+        && fs_table_meta_get(_tableName, &_outTable->meta, _err)
         && memtable_init(_tableName, true, &_outTable->memtable, _err)
         && NULL != _outTable->blockedQueue
         && (0 == pthread_mutex_init(&_outTable->mtxOperations, NULL));
@@ -978,9 +974,15 @@ void fs_table_destroy(table_t* _table)
             _table->timerHandle = INVALID_HANDLE;
         }
 
-        _table->operations = 0;
-        _table->blocked = false;
+        CX_MEM_ZERO(_table->meta);
+        CX_MEM_ZERO(_table->memtable);
+
+        _table->inUse = false;
         _table->deleted = false;
+        _table->compacting = false;
+        _table->blocked = false;
+        _table->blockedStartTime = 0;
+        _table->operations = 0;
     }
 }
 
@@ -1121,4 +1123,18 @@ static bool _fs_file_save(fs_file_t* _file, cx_err_t* _err)
 
     if (NULL != file) config_destroy(file);
     return success;
+}
+
+static void _fs_get_dump_path(cx_path_t* _outFilePath, const char* _tableName, uint16_t _dumpNumber, bool _isDuringCompaction)
+{
+    cx_file_path(_outFilePath, "%s/%s/%s/%s%d.%s", m_fsCtx->rootDir, LFS_DIR_TABLES,
+        _tableName, LFS_DUMP_PREFIX, _dumpNumber,
+        _isDuringCompaction ? LFS_DUMP_EXTENSION_COMPACTION : LFS_DUMP_EXTENSION);
+}
+
+static void _fs_get_part_path(cx_path_t* _outFilePath, const char* _tableName, uint16_t _partNumber, bool _isDuringCompaction)
+{
+    cx_file_path(_outFilePath, "%s/%s/%s/%s%d.%s", m_fsCtx->rootDir, LFS_DIR_TABLES,
+        _tableName, LFS_PART_PREFIX, _partNumber,
+        _isDuringCompaction ? LFS_PART_EXTENSION_COMPACTION : LFS_PART_EXTENSION);
 }

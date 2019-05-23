@@ -53,7 +53,7 @@ bool memtable_init_from_dump(const char* _tableName, uint16_t _dumpNumber, bool 
     _outTable->recordsSorted = true;
 
     fs_file_t dumpFile;
-    if (fs_table_get_dump(_tableName, _dumpNumber, _isDuringCompaction, &dumpFile, _err))
+    if (fs_table_dump_get(_tableName, _dumpNumber, _isDuringCompaction, &dumpFile, _err))
     {
         char* buff = malloc(dumpFile.size);
         if (fs_file_read(&dumpFile, buff, _err))
@@ -75,14 +75,17 @@ bool memtable_init_from_part(const char* _tableName, uint16_t _partNumber, bool 
     _outTable->recordsSorted = true;
 
     fs_file_t partFile;
-    if (fs_table_get_part(_tableName, _partNumber, _isDuringCompaction, &partFile, _err))
+    if (fs_table_part_get(_tableName, _partNumber, _isDuringCompaction, &partFile, _err))
     {
-        char* buff = malloc(partFile.size);
-        if (fs_file_read(&partFile, buff, _err))
+        if (partFile.size > 0)
         {
-            _memtable_load(_outTable, buff, partFile.size, _err);
+            char* buff = malloc(partFile.size);
+            if (fs_file_read(&partFile, buff, _err))
+            {
+                _memtable_load(_outTable, buff, partFile.size, _err);
+            }
+            free(buff);
         }
-        free(buff);
     }
 
     if (ERR_NONE != _err->code) memtable_destroy(_outTable);
@@ -180,8 +183,8 @@ bool memtable_make_dump(memtable_t* _table, cx_err_t* _err)
         CX_MEM_ZERO(dumpFile);
         if (_memtable_save(_table, &dumpFile, _err))
         {
-            uint16_t dumpNumber = fs_table_get_dump_number_next(_table->name);
-            if (fs_table_set_dump(_table->name, dumpNumber, false, &dumpFile, _err))
+            uint16_t dumpNumber = fs_table_dump_number_next(_table->name);
+            if (fs_table_dump_set(_table->name, dumpNumber, false, &dumpFile, _err))
             {
                 // clear the memtable
                 for (uint32_t i = 0; i < _table->recordsCount; i++)
@@ -204,7 +207,6 @@ bool memtable_make_dump(memtable_t* _table, cx_err_t* _err)
 bool memtable_make_part(memtable_t* _table, uint16_t _partNumber, cx_err_t* _err)
 {
     CX_CHECK_NOT_NULL(_table);
-    CX_CHECK(MEMTABLE_TYPE_MEM == _table->type, "you can only dump memtables of type MEM!")
 
     if (_table->mtxInitialized) pthread_mutex_lock(&_table->mtx);
 
@@ -217,7 +219,7 @@ bool memtable_make_part(memtable_t* _table, uint16_t _partNumber, cx_err_t* _err
         CX_MEM_ZERO(partFile);
         if (_memtable_save(_table, &partFile, _err))
         {
-            fs_table_set_part(_table->name, _partNumber, true, &partFile, _err);
+            fs_table_part_set(_table->name, _partNumber, true, &partFile, _err);
         }
     }
     else
@@ -231,7 +233,7 @@ bool memtable_make_part(memtable_t* _table, uint16_t _partNumber, cx_err_t* _err
 
 bool memtable_find(memtable_t* _table, uint16_t _key, table_record_t* _outRecord)
 {
-    if (_table->mtxInitialized) pthread_mutex_lock(&_table->mtx);
+    if (_table->mtxInitialized) pthread_mutex_lock(&_table->mtx); //TODO checkme. this isn't really needed.
 
     int32_t pos = -1;
     bool found = false;

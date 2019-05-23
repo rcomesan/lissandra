@@ -6,6 +6,7 @@
 #include <cx/mem.h>
 #include <cx/str.h>
 #include <cx/file.h>
+#include <cx/timer.h>
 
 #include <ker/defines.h>
 #include <unistd.h>
@@ -117,9 +118,10 @@ void worker_handle_select(task_t* _req)
             cx_file_explorer_t* exp = fs_table_explorer(data->tableName, &err);
             if (NULL != exp)
             {
-                while (cx_file_explorer_next_file(exp, &filePath) && fs_is_dump(&filePath, &dumpNumber, &dumpDuringCompaction))
+                while (cx_file_explorer_next_file(exp, &filePath))
                 {
-                    if (memtable_init_from_dump(data->tableName, dumpNumber, dumpDuringCompaction, &memt, &err))
+                    if (fs_is_dump(&filePath, &dumpNumber, &dumpDuringCompaction) 
+                        &&  memtable_init_from_dump(data->tableName, dumpNumber, dumpDuringCompaction, &memt, &err))
                     {
                         if (memtable_find(&memt, rec->key, &recTmp) && recTmp.timestamp >= rec->timestamp)
                         {
@@ -215,6 +217,7 @@ void worker_handle_compact(task_t* _req)
     uint32_t    dumpCount = 0;
     memtable_t  dumpsMem;
     bool        dumpsMemInitialized = false;
+    fs_file_t   dumpFile;
     memtable_t  tempMem;
 
     // if this function is invoked we can safely assume the given table is fully blocked,
@@ -226,22 +229,25 @@ void worker_handle_compact(task_t* _req)
         exp = fs_table_explorer(data->tableName, &_req->err);
         if (NULL != exp)
         {
-            uint16_t   dumpNumberMax = fs_table_get_dump_number_next(data->tableName);
+            uint16_t   dumpNumberMax = fs_table_dump_number_next(data->tableName);
             cx_path_t  dumpPath;
-            cx_path_t  dumpNewPath;
             dumpNumbers = CX_MEM_ARR_ALLOC(dumpNumbers, dumpNumberMax);
 
-            while (cx_file_explorer_next_file(exp, &dumpPath) && fs_is_dump(&dumpPath, &dumpNumbers[dumpCount], NULL))
+            while (cx_file_explorer_next_file(exp, &dumpPath))
             {
-                dumpCount++;
+                if (fs_is_dump(&dumpPath, &dumpNumbers[dumpCount], NULL))
+                    dumpCount++;
             }
 
             for (uint32_t i = 0; i < dumpCount; i++)
             {
-                cx_str_copy(dumpNewPath, sizeof(dumpNewPath), dumpPath);
-                cx_str_copy(&dumpNewPath[strlen(dumpNewPath) - sizeof(LFS_DUMP_EXTENSION)], sizeof(dumpNewPath), LFS_DUMP_EXTENSION_COMPACTION);
-                if (!cx_file_move(&dumpPath, &dumpNewPath, &_req->err))
-                    goto failed;
+                if (fs_table_dump_get(data->tableName, dumpNumbers[i], false, &dumpFile, NULL))
+                {
+                    cx_str_copy(dumpPath, sizeof(dumpPath), dumpFile.path);
+                    cx_str_copy(&dumpPath[strlen(dumpPath) - (sizeof(LFS_DUMP_EXTENSION) - 1)], sizeof(dumpPath), LFS_DUMP_EXTENSION_COMPACTION);
+                    if (!cx_file_move(&dumpFile.path, &dumpPath, &_req->err))
+                        goto failed;
+                }
             }
         }
 
@@ -257,6 +263,9 @@ void worker_handle_compact(task_t* _req)
                     memtable_add(&dumpsMem, tempMem.records, tempMem.recordsCount);
                     memtable_destroy(&tempMem);
                 }
+
+                if (!fs_table_dump_delete(data->tableName, dumpNumbers[i], true, NULL))
+                    goto failed;
             }
             memtable_preprocess(&dumpsMem);
         }
@@ -268,7 +277,7 @@ void worker_handle_compact(task_t* _req)
         {
             // figure our how many records exist in our dumps memtable that fit in the current partition number.
             dumpsEntries = 0;
-            while (i == (dumpsMem.records[dumpsPos + dumpsEntries].key % table->meta.partitionsCount))
+            while ((dumpsPos + dumpsEntries) < dumpsMem.recordsCount && i == (dumpsMem.records[dumpsPos + dumpsEntries].key % table->meta.partitionsCount))
             {
                 dumpsEntries++;
             }
@@ -297,16 +306,20 @@ void worker_handle_compact(task_t* _req)
         cx_path_t tmpPath;
         for (uint16_t i = 0; i < table->meta.partitionsCount; i++)
         {
-            if (fs_table_get_part(data->tableName, i, false, &oldPartFile, &_req->err))
+            if (fs_table_part_get(data->tableName, i, false, &oldPartFile, &_req->err))
             {
-                if (!fs_file_delete(&oldPartFile, &_req->err))
-                    goto failed;
-            }
+                cx_str_copy(tmpPath, sizeof(tmpPath), oldPartFile.path);
+                cx_str_copy(&tmpPath[strlen(tmpPath) - (sizeof(LFS_PART_EXTENSION) - 1)], sizeof(tmpPath), LFS_PART_EXTENSION_COMPACTION);
 
-            cx_str_copy(tmpPath, sizeof(tmpPath), oldPartFile.path);
-            cx_str_copy(&tmpPath[strlen(tmpPath) - sizeof(LFS_PART_EXTENSION) - 1], sizeof(tmpPath), LFS_PART_EXTENSION_COMPACTION);
-            if (!cx_file_move(&tmpPath, &oldPartFile.path, &_req->err))
-                goto failed;
+                if (cx_file_exists(&tmpPath))
+                {
+                    if (!fs_file_delete(&oldPartFile, &_req->err))
+                        goto failed;
+
+                    if (!cx_file_move(&tmpPath, &oldPartFile.path, &_req->err))
+                        goto failed;
+                }
+            }
         }
     }
     else
@@ -319,14 +332,6 @@ failed:
     if (NULL != dumpNumbers) free(dumpNumbers);
     if (dumpsMemInitialized) memtable_destroy(&dumpsMem);
 
-    // lastly, ask the main thread to unblock this table for us
-    uint16_t taskHandle = lfs_task_create(TASK_ORIGIN_INTERNAL, TASK_MT_UNBLOCK, NULL, NULL);
-    if (INVALID_HANDLE != taskHandle)
-    {
-        g_ctx.tasks[taskHandle].tableHandle = table->handle;
-        g_ctx.tasks[taskHandle].state = TASK_STATE_NEW;
-    }
-
     _worker_parse_result(_req, table);
 }
 
@@ -334,26 +339,26 @@ failed:
 ***  PRIVATE FUNCTIONS
 ***************************************************************************************/
 
-static void _worker_parse_result(task_t* _req, table_t* _dependingTable)
+static void _worker_parse_result(task_t* _req, table_t* _affectedTable)
 {
-    if (LFS_ERR_TABLE_BLOCKED == _req->err.code)
+    if (NULL != _affectedTable)
     {
-        _req->state = TASK_STATE_BLOCKED_RESCHEDULE;
-
-        if (NULL != _dependingTable)
-        {
-            // this task depends on a table which is blocked
-            // we need to store the tableHandle so that the main thread knows on which
-            // blocked queue this task should be placed
-            _req->tableHandle = _dependingTable->handle;
-        }
-        else
-        {
-            _req->tableHandle = INVALID_HANDLE;
-        }
+        _req->tableHandle = _affectedTable->handle;
     }
     else
     {
+        _req->tableHandle = INVALID_HANDLE;
+    }
+
+    if (LFS_ERR_TABLE_BLOCKED == _req->err.code)
+    {
+        _req->state = TASK_STATE_BLOCKED_RESCHEDULE;
+    }
+    else
+    {
+        pthread_mutex_lock(&g_ctx.tasksCompletionKeyMutex);
+        _req->completionKey = g_ctx.tasksCompletionKeyLast++;
         _req->state = TASK_STATE_COMPLETED;
+        pthread_mutex_unlock(&g_ctx.tasksCompletionKeyMutex);
     }
 }

@@ -14,6 +14,7 @@
 #include <cx/cli.h>
 #include <cx/file.h>
 #include <cx/cdict.h>
+#include <cx/sort.h>
 
 #include <lfs/lfs_protocol.h>
 #include <commons/config.h>
@@ -54,12 +55,16 @@ static void         queue_process();
 static void         tasks_update();
 static void         task_completed(const task_t* _task);
 static void         task_free(task_t* _task);
+static int32_t      task_comp_completion(const void* _a, const void* _b, void* _userData);
 
 static void         api_response_create(const task_t* _task);
 static void         api_response_drop(const task_t* _task);
 static void         api_response_describe(const task_t* _task);
 static void         api_response_select(const task_t* _task);
 static void         api_response_insert(const task_t* _task);
+
+static void         table_unblock(table_t* _table);
+static void         table_free(table_t* _table);
 
 /****************************************************************************************
  ***  PUBLIC FUNCTIONS
@@ -69,6 +74,10 @@ int main(int _argc, char** _argv)
 {
     cx_init(PROJECT_NAME);
     CX_MEM_ZERO(g_ctx);
+
+    double timeCounter = 0;
+    double timeCounterPrev = 0;
+    double timeDelta = 0;
 
     cx_err_t err;
 
@@ -83,12 +92,14 @@ int main(int _argc, char** _argv)
     if (0 == err.code)
     {
         cx_cli_cmd_t* cmd = NULL;
-        cx_time_update();
+        timeCounterPrev = cx_time_counter();
 
         while (g_ctx.isRunning)
         {
-            cx_time_update();
-            CX_WARN(cx_time_delta() < 0.1, "server is running slow! timeDelta=%fs", cx_time_delta()); // check we're at least at 10hz/s
+            timeCounter = cx_time_counter();
+            timeDelta = timeCounter - timeCounterPrev;
+            timeCounterPrev = timeCounter;
+            CX_WARN(timeDelta < 0.1, "server is running slow! timeDelta=%fs", timeDelta); // check we're at least at 10hz/s
 
             // poll cli events
             if (cx_cli_command_begin(&cmd))
@@ -105,6 +116,9 @@ int main(int _argc, char** _argv)
 
             // process main-thread queue
             queue_process();
+
+            // pass control back to the os scheduler
+            sleep(0);
         }
     }
     else if (NULL != g_ctx.log)
@@ -332,10 +346,10 @@ static void cfg_destroy()
 
 static bool lfs_init(cx_err_t* _err)
 {
-    g_ctx.tasksMutexI = (0 == pthread_mutex_init(&g_ctx.tasksMutex, NULL));
-    if (!g_ctx.tasksMutexI)
+    g_ctx.tasksMutexInited = (0 == pthread_mutex_init(&g_ctx.tasksMutex, NULL));
+    if (!g_ctx.tasksMutexInited)
     {
-        CX_ERR_SET(_err, LFS_ERR_INIT_MTX, "tasks mutex creation failed.");
+        CX_ERR_SET(_err, LFS_ERR_INIT_MTX, "tasksMutex creation failed.");
         return false;
     }
 
@@ -350,6 +364,14 @@ static bool lfs_init(cx_err_t* _err)
     {
         g_ctx.tasks[i].handle = i;
         g_ctx.tasks[i].clientHandle = INVALID_HANDLE;
+    }
+
+    g_ctx.tasksCompletionKeyLast = 0;
+    g_ctx.tasksCompletionKeyMutexInited = (0 == pthread_mutex_init(&g_ctx.tasksCompletionKeyMutex, NULL));
+    if (!g_ctx.tasksCompletionKeyMutexInited)
+    {
+        CX_ERR_SET(_err, LFS_ERR_INIT_MTX, "tasksCompletionKeyMutex creation failed.");
+        return false;
     }
 
     g_ctx.tablesHalloc = cx_halloc_init(MAX_TABLES);
@@ -397,10 +419,10 @@ static void lfs_destroy()
     task_t* request = NULL;
     table_t* table = NULL;
 
-    if (g_ctx.tasksMutexI)
+    if (g_ctx.tasksMutexInited)
     {
         pthread_mutex_destroy(&g_ctx.tasksMutex);
-        g_ctx.tasksMutexI = false;
+        g_ctx.tasksMutexInited = false;
     }
 
     if (NULL != g_ctx.tasksHalloc)
@@ -414,6 +436,12 @@ static void lfs_destroy()
         }
         cx_halloc_destroy(g_ctx.tasksHalloc);
         g_ctx.tasksHalloc = NULL;
+    }
+
+    if (g_ctx.tasksCompletionKeyMutexInited)
+    {
+        pthread_mutex_destroy(&g_ctx.tasksCompletionKeyMutex);
+        g_ctx.tasksCompletionKeyMutexInited = false;
     }
 
     if (NULL != g_ctx.tablesHalloc)
@@ -639,46 +667,63 @@ static bool handle_mt_task(task_t* _task)
 
     switch (_task->type)
     {
-    case TASK_MT_FREE:
-    {
-        table = &g_ctx.tables[_task->tableHandle];
-        if (0 == table->operations)
-        {
-            fs_table_destroy(table);
-            cx_handle_free(g_ctx.tablesHalloc, table->handle);
-            success = true;
-        }
-        break;
-    }
-
     case TASK_MT_COMPACT:
     {
         table = &g_ctx.tables[_task->tableHandle];
 
-        if (!table->blocked)
+        if (table->inUse)
         {
-            table->blocked = true;
-            table->blockedStartTime = cx_time_counter();
-        }
-
-        if (0 == table->operations)
-        {
-            taskHandle = lfs_task_create(TASK_ORIGIN_INTERNAL, TASK_WT_COMPACT, NULL, NULL);
-            if (INVALID_HANDLE != taskHandle)
+            if (!table->compacting)
             {
-                task = &(g_ctx.tasks[taskHandle]);
+                pthread_mutex_lock(&table->mtxOperations);
+                if (!table->blocked)
+                {
+                    table->blocked = true;
+                    table->blockedStartTime = cx_time_counter();
+                }
 
-                data_compact_t* data = CX_MEM_STRUCT_ALLOC(data);
-                cx_str_copy(data->tableName, sizeof(data->tableName), table->meta.name);
+                if (0 == table->operations)
+                {
+                    // at this point, our table is blocked (so new operations on it are being blocked and delayed)
+                    // and also there're zero pending operations on it. we can safely start compacting it now.
+                    table->compacting = true;
+                    pthread_mutex_unlock(&table->mtxOperations);
 
-                task->data = data;
-                task->state = TASK_STATE_NEW;
-                success = true;
+                    taskHandle = lfs_task_create(TASK_ORIGIN_INTERNAL, TASK_WT_COMPACT, NULL, NULL);
+                    if (INVALID_HANDLE != taskHandle)
+                    {
+                        task = &(g_ctx.tasks[taskHandle]);
+
+                        data_compact_t* data = CX_MEM_STRUCT_ALLOC(data);
+                        cx_str_copy(data->tableName, sizeof(data->tableName), table->meta.name);
+
+                        task->data = data;
+                        task->tableHandle = table->handle;
+                        task->state = TASK_STATE_NEW;
+                        success = true;
+                    }
+                    else
+                    {
+                        table_unblock(table);
+                    }
+                }
+                else
+                {
+                    pthread_mutex_unlock(&table->mtxOperations);
+                }
             }
             else
             {
-                //TODO if this handle allocation fails, we end up with a table blocked indefinitely
+                // we can safely ignore this one
+                // we don't really want multiple compactions to be performed at the same time
+                CX_INFO("Ignoring compaction for table '%s' (another thread is already compacting it).", table->meta.name);
+                success = true;
             }
+        }
+        else
+        {
+            // table no longer exists, (table might have been deleted and therefore no longer in use).
+            success = true;
         }
         break;
     }
@@ -709,28 +754,6 @@ static bool handle_mt_task(task_t* _task)
                 }
             }
         }
-        success = true;
-        break;
-    }
-
-    case TASK_MT_UNBLOCK:
-    {
-        table = &g_ctx.tables[_task->tableHandle];
-        table->blocked = false;
-
-        if (table->justCreated)
-        {
-            table->justCreated = false;
-            table->timerHandle = cx_timer_add(table->meta.compactionInterval, LFS_TIMER_COMPACT, table);
-            CX_CHECK(INVALID_HANDLE != table->timerHandle, "we ran out of timer handles for table '%s'!", table->meta.name);
-        }
-
-        while (!queue_is_empty(table->blockedQueue))
-        {
-            task = queue_pop(table->blockedQueue);
-            task->state = TASK_STATE_NEW;
-        }
-        
         success = true;
         break;
     }
@@ -776,13 +799,35 @@ static bool handle_timer_tick(uint64_t _expirations, uint32_t _type, void* _user
     return !stopTimer;
 }
 
-void tasks_update()
+static void table_unblock(table_t* _table)
+{
+    CX_CHECK(_table->blocked, "Table '%s' is not blocked!", _table->meta.name);
+
+    pthread_mutex_lock(&_table->mtxOperations);
+    _table->blocked = false;
+
+    task_t* task = NULL;
+    while (!queue_is_empty(_table->blockedQueue))
+    {
+        task = queue_pop(_table->blockedQueue);
+        task->state = TASK_STATE_NEW;
+    }
+    pthread_mutex_unlock(&_table->mtxOperations);
+}
+
+static void table_free(table_t* _table)
+{
+    fs_table_destroy(_table);
+    cx_handle_free(g_ctx.tablesHalloc, _table->handle);
+}
+
+static void tasks_update()
 {
     uint16_t max = cx_handle_count(g_ctx.tasksHalloc);
     uint16_t handle = INVALID_HANDLE;
     task_t*  task = NULL;
     table_t* table = NULL;
-    uint16_t removeCount = 0;
+    uint16_t completedCount = 0;
 
     for (uint16_t i = 0; i < max; i++)
     {
@@ -806,9 +851,7 @@ void tasks_update()
         }
         else if (TASK_STATE_COMPLETED == task->state)
         {
-            task_completed(task);
-            task_free(task);
-            m_auxHandles[removeCount++] = handle;
+            m_auxHandles[completedCount++] = handle;
         }
         else if (TASK_STATE_BLOCKED_RESCHEDULE == task->state)
         {
@@ -822,76 +865,137 @@ void tasks_update()
         }
     }
 
-    pthread_mutex_lock(&g_ctx.tasksMutex);
-    for (uint16_t i = 0; i < removeCount; i++)
-    {   
-        handle = m_auxHandles[i];
-        task = &(g_ctx.tasks[handle]);
-        cx_handle_free(g_ctx.tasksHalloc, handle);
+    if (completedCount > 0)
+    {
+        pthread_mutex_lock(&g_ctx.tasksMutex);
+        cx_sort_quick(m_auxHandles, sizeof(m_auxHandles[0]), completedCount, (cx_sort_comp_cb)task_comp_completion, NULL);
+
+        for (uint16_t i = 0; i < completedCount; i++)
+        {   
+            handle = m_auxHandles[i];
+
+            task = &(g_ctx.tasks[handle]);
+            task_completed(task);
+            task_free(task);
+
+            cx_handle_free(g_ctx.tasksHalloc, handle);
+        }
+        pthread_mutex_unlock(&g_ctx.tasksMutex);
     }
-    pthread_mutex_unlock(&g_ctx.tasksMutex);
 }
 
 static void task_completed(const task_t* _task)
 {
+    table_t* table = NULL;
+   
+    if (INVALID_HANDLE != _task->tableHandle)
+        table = &g_ctx.tables[_task->tableHandle];
+
     switch (_task->type)
     {
     case TASK_WT_CREATE:
+    {
+        if (table->deleted)
+        {
+            // the creation failed, we need to free this table now.
+            table_free(table);
+        }
+        else if (ERR_NONE == _task->err.code)
+        {
+            // table creation succeeded, let's create the compaction timer so that we get notified when we need to compact it.
+            table->timerHandle = cx_timer_add(table->meta.compactionInterval, LFS_TIMER_COMPACT, table);
+            CX_CHECK(INVALID_HANDLE != table->timerHandle, "we ran out of timer handles for table '%s'!", table->meta.name);
+
+            // unblock the table making it fully available!
+            table_unblock(table);
+        }
+
         if (TASK_ORIGIN_API == _task->origin)
             api_response_create(_task);
         else
             cli_report_create(_task);
         break;
+    }
 
     case TASK_WT_DROP:
+    {
+        if (ERR_NONE == _task->err.code)
+        {
+            // drop succeeded, free this table in a thread-safe way (this is the main-thread).
+            table_free(table);
+        }
+
         if (TASK_ORIGIN_API == _task->origin)
             api_response_drop(_task);
         else
             cli_report_drop(_task);
         break;
+    }
 
     case TASK_WT_DESCRIBE:
+    {
         if (TASK_ORIGIN_API == _task->origin)
             api_response_describe(_task);
         else
             cli_report_describe(_task);
         break;
+    }
 
     case TASK_WT_SELECT:
+    {
         if (TASK_ORIGIN_API == _task->origin)
             api_response_select(_task);
         else
             cli_report_select(_task);
         break;
+    }
 
     case TASK_WT_INSERT:
+    {
         if (TASK_ORIGIN_API == _task->origin)
             api_response_insert(_task);
         else
             cli_report_insert(_task);
         break;
+    }
 
     case TASK_WT_DUMP:
+    {
+        cli_report_dumped(_task, table->meta.name, "asd.tmp"); //TODO add resulting dump file name
         break;
+    }
 
     case TASK_WT_COMPACT:
-        break;
-
-    case TASK_MT_UNBLOCK:
-    {        
-        table_t* table = &g_ctx.tables[_task->tableHandle];        
-        cli_report_unblocked(table->meta.name, cx_time_counter() - table->blockedStartTime);
+    {
+        double blockedTime = 0;
+        if (NULL != table)
+        {
+            if (table->inUse)
+            {
+                table->compacting = false;
+                table_unblock(table);
+            }
+            blockedTime = cx_time_counter() - table->blockedStartTime;
+        }
+        else
+        {
+            blockedTime = 0;
+        }
+        cli_report_compact(_task, blockedTime);
         break;
     }
 
     case TASK_MT_DUMP:
+    {
+        //noop
         break;
+    }
 
     case TASK_MT_COMPACT:
+    {
+        //noop
         break;
-
-    case TASK_MT_FREE:
-        break;
+    }
 
     default:
         CX_WARN(CX_ALW, "undefined <completed> behaviour for request type #%d.", _task->type);
@@ -949,32 +1053,26 @@ static void task_free(task_t* _task)
     case TASK_WT_DUMP:
     {
         data_dump_t* data = (data_dump_t*)_task->data;
+        //noop
         break;
     }
 
     case TASK_WT_COMPACT:
     {
         data_compact_t* data = (data_compact_t*)_task->data;
-        break;
-    }
-
-    case TASK_MT_FREE:
-    {
+        //noop
         break;
     }
 
     case TASK_MT_COMPACT:
     {
+        //noop
         break;
     }
 
     case TASK_MT_DUMP:
     {
-        break;
-    }
-
-    case TASK_MT_UNBLOCK:
-    {
+        //noop
         break;
     }
 
@@ -987,11 +1085,23 @@ static void task_free(task_t* _task)
     
     // note that requests are statically allocated. we don't want to free them
     // here since we'll keep reusing them in subsequent requests.
-    _task->clientHandle = INVALID_HANDLE;
+    _task->startTime = 0;
+    _task->completionKey = 0;
     _task->state = TASK_STATE_NONE;
     _task->origin = TASK_ORIGIN_NONE;
     _task->type = TASK_TYPE_NONE;
+    _task->clientHandle = INVALID_HANDLE;
+    _task->tableHandle = INVALID_HANDLE;
+    _task->remoteId = 0;
+    CX_ERR_CLEAR(&_task->err);
     _task->data = NULL;
+}
+
+static int32_t task_comp_completion(const void* _a, const void* _b, void* _userData)
+{
+    task_t* a = &g_ctx.tasks[*((uint16_t*)_a)];
+    task_t* b = &g_ctx.tasks[*((uint16_t*)_b)];
+    return a->completionKey < b->completionKey ? -1 : 1;
 }
 
 static void queue_process()

@@ -49,17 +49,21 @@ bool                fs_table_create(table_t* _table, const char* _tableName, uin
 
 bool                fs_table_delete(const char* _tableName, table_t** _outTable, cx_err_t* _err);
 
-bool                fs_table_get_meta(const char* _tableName, table_meta_t* _outMeta, cx_err_t* _err);
+bool                fs_table_meta_get(const char* _tableName, table_meta_t* _outMeta, cx_err_t* _err);
 
-bool                fs_table_get_part(const char* _tableName, uint16_t _partNumber, bool _isDuringCompaction, fs_file_t* _outFile, cx_err_t* _err);
+bool                fs_table_part_get(const char* _tableName, uint16_t _partNumber, bool _isDuringCompaction, fs_file_t* _outFile, cx_err_t* _err);
 
-bool                fs_table_set_part(const char* _tableName, uint16_t _partNumber, bool _isDuringCompaction, fs_file_t* _file, cx_err_t* _err);
+bool                fs_table_part_set(const char* _tableName, uint16_t _partNumber, bool _isDuringCompaction, fs_file_t* _file, cx_err_t* _err);
 
-bool                fs_table_get_dump(const char* _tableName, uint16_t _dumpNumber, bool _isDuringCompaction, fs_file_t* _outFile, cx_err_t* _err);
+bool                fs_table_part_delete(const char* _tableName, uint16_t _partNumber, bool _isDuringCompaction, cx_err_t* _err);
 
-bool                fs_table_set_dump(const char* _tableName, uint16_t _dumpNumber, bool _isDuringCompaction, fs_file_t* _file, cx_err_t* _err);
+bool                fs_table_dump_get(const char* _tableName, uint16_t _dumpNumber, bool _isDuringCompaction, fs_file_t* _outFile, cx_err_t* _err);
 
-uint16_t            fs_table_get_dump_number_next(const char* _tableName);
+bool                fs_table_dump_set(const char* _tableName, uint16_t _dumpNumber, bool _isDuringCompaction, fs_file_t* _file, cx_err_t* _err);
+
+bool                fs_table_dump_delete(const char* _tableName, uint16_t _dumpNumber, bool _isDuringCompaction, cx_err_t* _err);
+
+uint16_t            fs_table_dump_number_next(const char* _tableName);
 
 cx_file_explorer_t*   fs_table_explorer(const char* _tableName, cx_err_t* _err);
 
