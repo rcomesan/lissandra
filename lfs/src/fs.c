@@ -65,7 +65,7 @@ bool fs_init(cx_err_t* _err)
             rootDirOk = _fs_is_lfs(&rootDir);
             if (!rootDirOk)
             {
-                CX_ERR_SET(_err, LFS_ERR_INIT_FS_ROOTDIR,
+                CX_ERR_SET(_err, ERR_INIT_FS_ROOTDIR,
                     "the given root dir '%s' exists but it's not a lissandra file system (%s file is missing).",
                     rootDir, LFS_ROOT_FILE_MARKER);
             }
@@ -73,7 +73,7 @@ bool fs_init(cx_err_t* _err)
         else
         {
             rootDirOk = false;
-            CX_ERR_SET(_err, LFS_ERR_INIT_FS_ROOTDIR, "the given root dir '%s' already exists and is a file!", rootDir);
+            CX_ERR_SET(_err, ERR_INIT_FS_ROOTDIR, "the given root dir '%s' already exists and is a file!", rootDir);
         }
     }
     else
@@ -172,7 +172,7 @@ bool fs_table_avail_guard_begin(table_t* _table, cx_err_t* _err, pthread_mutex_t
     pthread_mutex_lock(&_table->mtxOperations);
     if (_table->blocked || _table->compacting)
     {
-        CX_ERR_SET(_err, LFS_ERR_TABLE_BLOCKED, "Operation cannot be performed at this time since the table is blocked. Try agian later.");
+        CX_ERR_SET(_err, ERR_TABLE_BLOCKED, "Operation cannot be performed at this time since the table is blocked. Try agian later.");
         if (NULL != _mtx)
         {
             pthread_mutex_unlock(_mtx);
@@ -763,7 +763,7 @@ static bool _fs_bootstrap(cx_path_t* _rootDir, uint32_t _maxBlocks, uint32_t _bl
         }
         else
         {
-            CX_ERR_SET(_err, LFS_ERR_INIT_FS_BOOTSTRAP,
+            CX_ERR_SET(_err, ERR_INIT_FS_BOOTSTRAP,
                 "configuration file '%s' could not be created.", path);
         }
     }
@@ -835,12 +835,12 @@ static bool _fs_load_meta(cx_err_t* _err)
         return true;
 
     key_missing:
-        CX_ERR_SET(_err, LFS_ERR_INIT_FS_META, "key '%s' is missing in the filesystem metadata file '%s'.", key, metadataPath);
+        CX_ERR_SET(_err, ERR_INIT_FS_META, "key '%s' is missing in the filesystem metadata file '%s'.", key, metadataPath);
         config_destroy(meta);
     }
     else
     {
-        CX_ERR_SET(_err, LFS_ERR_INIT_FS_META, "filesystem metadata '%s' is missing or not readable.", metadataPath);
+        CX_ERR_SET(_err, ERR_INIT_FS_META, "filesystem metadata '%s' is missing or not readable.", metadataPath);
     }
     
     return false;
@@ -904,7 +904,7 @@ static bool _fs_load_tables(cx_err_t* _err)
         return true;
     }
 
-    CX_ERR_SET(_err, LFS_ERR_INIT_FS_TABLES,
+    CX_ERR_SET(_err, ERR_INIT_FS_TABLES,
         "Tables directory '%s' is not accessible.", tablesPath);
     return false;
 }
@@ -928,7 +928,7 @@ static bool _fs_load_blocks(cx_err_t* _err)
     }
     else
     {
-        CX_ERR_SET(_err, LFS_ERR_INIT_FS_BITMAP, "the amount of bytes expected and the "
+        CX_ERR_SET(_err, ERR_INIT_FS_BITMAP, "the amount of bytes expected and the "
             "amount of actual bytes read from the bitmap file '%s' do not match. "
             "the file might be corrupt at this point.", bitmapPath);
     }

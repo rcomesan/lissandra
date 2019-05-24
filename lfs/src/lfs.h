@@ -12,27 +12,6 @@
 #include <commons/collections/dictionary.h>
 #include <commons/collections/queue.h>
 
-typedef enum LFS_ERR_CODE
-{
-    LFS_ERR_NONE = 0,
-    LFS_ERR_GENERIC = 1,
-    LFS_ERR_LOGGER_FAILED,
-    LFS_ERR_INIT_MTX,
-    LFS_ERR_INIT_HALLOC,
-    LFS_ERR_INIT_THREADPOOL,
-    LFS_ERR_INIT_QUEUE,
-    LFS_ERR_INIT_TIMER,
-    LFS_ERR_INIT_FS_ROOTDIR,
-    LFS_ERR_INIT_FS_BOOTSTRAP,
-    LFS_ERR_INIT_FS_META,
-    LFS_ERR_INIT_FS_TABLES,
-    LFS_ERR_INIT_FS_BITMAP,
-    LFS_ERR_CFG_NOTFOUND,
-    LFS_ERR_CFG_MISSINGKEY,
-    LFS_ERR_NET_FAILED,
-    LFS_ERR_TABLE_BLOCKED,
-} LFS_ERRR_CODE;
-
 typedef enum LFS_TIMER
 {
     LFS_TIMER_DUMP = 0,
@@ -42,8 +21,8 @@ typedef enum LFS_TIMER
 typedef struct cfg_t
 {
     t_config*           handle;                 // pointer to so-commons-lib config adt.
-    char                listeningIp[16];        // ip address on which the LFS server will listen on.
-    uint16_t            listeningPort;          // tcp port on which the LFS server will listen on.
+    char                listeningIp[16];        // ip address on which this LFS server will listen on.
+    uint16_t            listeningPort;          // tcp port on which this LFS server will listen on.
     uint16_t            workers;                // number of worker threads to spawn to process requests.
     char                rootDir[PATH_MAX];      // initial root directory of our filesystem.
     uint32_t            blocksCount;            // maximum number of blocks available in our filesystem.
@@ -115,7 +94,7 @@ typedef struct table_t
 
 typedef struct lfs_ctx_t
 {
-    cfg_t               cfg;                                        // lfs configuration data.
+    cfg_t               cfg;                                        // lfs node configuration data.
     t_log*              log;                                        // pointer to so-commons-lib log adt.
     bool                isRunning;                                  // true if the server is running. false if it's shutting down.
     cx_net_ctx_sv_t*    sv;                                         // server context for serving API requests coming from MEM nodes.

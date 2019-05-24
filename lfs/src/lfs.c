@@ -6,6 +6,7 @@
 #include <ker/cli_parser.h>
 #include <ker/cli_reporter.h>
 #include <ker/taskman.h>
+#include <ker/logger.h>
 
 #include <cx/cx.h>
 #include <cx/timer.h>
@@ -30,9 +31,6 @@ lfs_ctx_t           g_ctx;                                  // global LFS contex
  ***  PRIVATE DECLARATIONS
  ***************************************************************************************/
 
-static bool         logger_init(cx_err_t* _err);
-static void         logger_destroy();
-
 static bool         cfg_init(const char* _cfgFilePath, cx_err_t* _err);
 static void         cfg_destroy();
 
@@ -41,9 +39,6 @@ static void         lfs_destroy();
 
 static bool         net_init(cx_err_t* _err);
 static void         net_destroy();
-
-static bool         cli_init();
-static void         cli_destroy();
 
 static void         handle_cli_command(const cx_cli_cmd_t* _cmd);
 static bool         handle_timer_tick(uint64_t _expirations, uint32_t _id, void* _userData);
@@ -80,12 +75,12 @@ int main(int _argc, char** _argv)
 
     g_ctx.isRunning = true
         && cx_timer_init(MAX_TABLES + 1, handle_timer_tick, &err)
-        && logger_init(&err)
+        && logger_init(&g_ctx.log, &err)
         && cfg_init("res/lfs.cfg", &err)
         && taskman_init(g_ctx.cfg.workers, task_run_mt, task_run_wk, task_completed, task_free, task_reschedule, &err)
         && lfs_init(&err)
         && net_init(&err)
-        && cli_init(&err);
+        && cx_cli_init(&err);
 
     if (0 == err.code)
     {
@@ -126,7 +121,7 @@ int main(int _argc, char** _argv)
     }
 
     CX_INFO("node is shutting down...", PROJECT_NAME);
-    cli_destroy();
+    cx_cli_destroy();
     net_destroy();
     lfs_destroy();
     taskman_destroy();
@@ -138,50 +133,13 @@ int main(int _argc, char** _argv)
     else
         CX_INFO("node terminated with error %d.", err.code);
     
-    logger_destroy();
+    logger_destroy(g_ctx.log);
     return err.code;
 }
 
 /****************************************************************************************
  ***  PRIVATE FUNCTIONS
  ***************************************************************************************/
-
-static bool logger_init(cx_err_t* _err)
-{
-    cx_timestamp_t timestamp;
-    cx_time_stamp(&timestamp);
-
-    cx_path_t path;
-    cx_file_path(&path, "logs");
-    if (cx_file_mkdir(&path, _err))
-    {
-        cx_file_path(&path, "logs/%s.txt", timestamp);
-        g_ctx.log = log_create(path, PROJECT_NAME, true, LOG_LEVEL_INFO);
-
-        if (NULL != g_ctx.log)
-        {
-            CX_INFO("log file: %s", path);
-            return true;
-        }
-
-        CX_ERR_SET(_err, LFS_ERR_LOGGER_FAILED, "%s log initialization failed (%s).", PROJECT_NAME, path);
-    }
-    else
-    {
-        CX_ERR_SET(_err, LFS_ERR_LOGGER_FAILED, "%s logs folder creation failed (%s).", PROJECT_NAME, path);
-    }
-    return false;
-}
-
-static void logger_destroy()
-{
-    if (NULL != g_ctx.log)
-    {
-        
-        log_destroy(g_ctx.log);
-        g_ctx.log = NULL;
-    }
-}
 
 static bool cfg_init(const char* _cfgFilePath, cx_err_t* _err)
 {
@@ -293,11 +251,11 @@ static bool cfg_init(const char* _cfgFilePath, cx_err_t* _err)
          return true;
 
      key_missing:
-         CX_ERR_SET(_err, LFS_ERR_CFG_MISSINGKEY, "key '%s' is missing in the configuration file.", key);
+         CX_ERR_SET(_err, ERR_CFG_MISSINGKEY, "key '%s' is missing in the configuration file.", key);
     }
     else
     {
-        CX_ERR_SET(_err, LFS_ERR_CFG_NOTFOUND, "configuration file '%s' is missing or not readable.", cfgPath);
+        CX_ERR_SET(_err, ERR_CFG_NOTFOUND, "configuration file '%s' is missing or not readable.", cfgPath);
     }
 
     return false;
@@ -318,7 +276,7 @@ static bool lfs_init(cx_err_t* _err)
     CX_MEM_ZERO(g_ctx.tables);
     if (NULL == g_ctx.tablesHalloc)
     {
-        CX_ERR_SET(_err, LFS_ERR_INIT_HALLOC, "tables handle allocator creation failed.");
+        CX_ERR_SET(_err, ERR_INIT_HALLOC, "tables handle allocator creation failed.");
         return false;
     }
     for (uint32_t i = 0; i < MAX_TABLES; i++)
@@ -329,7 +287,7 @@ static bool lfs_init(cx_err_t* _err)
     g_ctx.timerDump = cx_timer_add(g_ctx.cfg.dumpInterval, LFS_TIMER_DUMP, NULL);
     if (INVALID_HANDLE == g_ctx.timerDump)
     {
-        CX_ERR_SET(_err, LFS_ERR_INIT_TIMER, "thread pool creation failed.");
+        CX_ERR_SET(_err, ERR_INIT_TIMER, "thread pool creation failed.");
         return false;
     }
 
@@ -384,7 +342,7 @@ static bool net_init(cx_err_t* _err)
     }
     else
     {
-        CX_ERR_SET(_err, LFS_ERR_NET_FAILED, "could not start a listening server context on %s:%d.",
+        CX_ERR_SET(_err, ERR_NET_FAILED, "could not start a listening server context on %s:%d.",
             svCtxArgs.ip, svCtxArgs.port);
         return false;
     }
@@ -394,16 +352,6 @@ static void net_destroy()
 {
     cx_net_close(g_ctx.sv);
     g_ctx.sv = NULL;
-}
-
-static bool cli_init()
-{
-    return cx_cli_init();
-}
-
-static void cli_destroy()
-{
-    cx_cli_destroy();
 }
 
 static void handle_cli_command(const cx_cli_cmd_t* _cmd)

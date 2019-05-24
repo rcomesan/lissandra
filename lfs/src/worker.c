@@ -350,7 +350,7 @@ static void _worker_parse_result(task_t* _req, table_t* _affectedTable)
         _req->tableHandle = INVALID_HANDLE;
     }
 
-    if (LFS_ERR_TABLE_BLOCKED == _req->err.code)
+    if (ERR_TABLE_BLOCKED == _req->err.code)
     {
         _req->state = TASK_STATE_BLOCKED_RESCHEDULE;
     }
