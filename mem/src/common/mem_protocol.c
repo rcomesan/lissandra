@@ -1,9 +1,14 @@
-#include <ker/ker_protocol.h>
+#include <ker/common_protocol.h>
 #include <mem/mem_protocol.h>
 #include <lfs/lfs_protocol.h>
+#include <ker/defines.h>
+#include <ker/taskman.h>
 
 #include <cx/binr.h>
 #include <cx/binw.h>
+#include <cx/halloc.h>
+#include <cx/mem.h>
+#include <cx/str.h>
 
 /****************************************************************************************
  ***  MESSAGE HANDLERS
@@ -11,49 +16,51 @@
 
 #ifdef MEM
 
-void mem_handle_sum_request(const cx_net_common_t* _common, void* _passThrou, const char* _data, uint16_t _size)
+#include "../mem.h"
+
+void mem_handle_create(const cx_net_common_t* _common, void* _userData, const char* _buffer, uint16_t _bufferSize)
 {
-    cx_net_ctx_sv_t* svCtx = _common;
-    cx_net_client_t* client = _passThrou;
-    uint32_t pos = 0;
-
-    // read the message from KER
-    int32_t a = 0;
-    int32_t b = 0;
-    cx_binr_int32(_data, _size, &pos, &a);
-    cx_binr_int32(_data, _size, &pos, &b);
-
-    // build our message (pack the packet with the arguments for the sum operation)
-    pos = lfs_pack_sum_request(g_buffer, sizeof(g_buffer), a, b);
-
-    // forward the request to LFS
-    cx_net_send(g_lfsConn, LFSP_SUM_REQUEST, g_buffer, pos, INVALID_HANDLE);
+    REQ_BEGIN(TASK_WT_CREATE);
+    {
+        task->data = common_unpack_create(_buffer, _bufferSize, &bufferPos, &task->remoteId);
+    }
+    REQ_END;
 }
 
-void mem_handle_sum_result(const cx_net_common_t* _common, void* _passThrou, const char* _data, uint16_t _size)
+void mem_handle_drop(const cx_net_common_t* _common, void* _userData, const char* _buffer, uint16_t _bufferSize)
 {
-    cx_net_ctx_cl_t* clCtx = _common;
-    cx_net_client_t* client = _passThrou;
-    uint32_t pos = 0;
+    REQ_BEGIN(TASK_WT_DROP);
+    {
+        task->data = common_unpack_drop(_buffer, _bufferSize, &bufferPos, &task->remoteId);
+    }
+    REQ_END;
+}
 
-    // handle the message from LFS (it contains the result of our sum operation)
-    int32_t result = 0;
-    cx_binr_int32(_data, _size, &pos, &result);
+void mem_handle_describe(const cx_net_common_t* _common, void* _userData, const char* _buffer, uint16_t _bufferSize)
+{
+    REQ_BEGIN(TASK_WT_DESCRIBE);
+    {
+        task->data = common_unpack_describe(_buffer, _bufferSize, &bufferPos, &task->remoteId);
+    }
+    REQ_END;
+}
 
-    // build our message to send the result to KER (the requester of the sum op)
-    pos = ker_pack_sum_complete(g_buffer, sizeof(g_buffer), result);
+void mem_handle_select(const cx_net_common_t* _common, void* _userData, const char* _buffer, uint16_t _bufferSize)
+{
+    REQ_BEGIN(TASK_WT_SELECT);
+    {
+        task->data = common_unpack_select(_buffer, _bufferSize, &bufferPos, &task->remoteId);
+    }
+    REQ_END;
+}
 
-    // please note that this function handles a message coming from LFS to MEM
-    // we now need to send it from MEM to KER, so, we need to use g_api server context
-    // which holds a connection with KER (the requester of the sum op)
-
-    // since this is a server context which supports multiple clients, we need to specify
-    // the _clientHandle parameter, to let the lib know who is the receiver of the message 
-    //
-    // we'll use clientHandle = 0 just for simplicity (since we'll only have 1 kernel connected for now)
-    // but in the future we'll have to keep track of which client sent us the request to be able 
-    // to send out reply back to him once we have it
-    cx_net_send(g_api, KERP_SUM_COMPLETE, g_buffer, pos, 0);
+void mem_handle_insert(const cx_net_common_t* _common, void* _userData, const char* _buffer, uint16_t _bufferSize)
+{
+    REQ_BEGIN(TASK_WT_INSERT);
+    {
+        task->data = common_unpack_insert(_buffer, _bufferSize, &bufferPos, &task->remoteId);
+    }
+    REQ_END;
 }
 
 #endif // MEM
@@ -62,17 +69,27 @@ void mem_handle_sum_result(const cx_net_common_t* _common, void* _passThrou, con
  ***  MESSAGE PACKERS
  ***************************************************************************************/
 
-uint32_t mem_pack_sum_request(char* _buffer, uint16_t _size, int32_t _a, int32_t _b)
+uint32_t mem_pack_create(char* _buffer, uint16_t _size, uint16_t _remoteId, const char* _tableName, uint8_t _consistency, uint16_t _numPartitions, uint32_t _compactionInterval)
 {
-    uint32_t pos = 0;
-    cx_binw_int32(_buffer, _size, &pos, _a);
-    cx_binw_int32(_buffer, _size, &pos, _b);
-    return pos;
+    return common_pack_create(_buffer, _size, _remoteId, _tableName, _consistency, _numPartitions, _compactionInterval);
 }
 
-uint32_t mem_pack_sum_result(char* _buffer, uint16_t _size, int32_t _result)
+uint32_t mem_pack_drop(char* _buffer, uint16_t _size, uint16_t _remoteId, const char* _tableName)
 {
-    uint32_t pos = 0;
-    cx_binw_int32(_buffer, _size, &pos, _result);
-    return pos;
+    return common_pack_drop(_buffer, _size, _remoteId, _tableName);
+}
+
+uint32_t mem_pack_describe(char* _buffer, uint16_t _size, uint16_t _remoteId, const char* _tableName)
+{
+    return common_pack_describe(_buffer, _size, _remoteId, _tableName);
+}
+
+uint32_t mem_pack_select(char* _buffer, uint16_t _size, uint16_t _remoteId, const char* _tableName, uint16_t _key)
+{
+    return common_pack_select(_buffer, _size, _remoteId, _tableName, _key);
+}
+
+uint32_t mem_pack_insert(char* _buffer, uint16_t _size, uint16_t _remoteId, const char* _tableName, uint16_t _key, const char* _value, uint32_t _timestamp)
+{
+    return common_pack_insert(_buffer, _size, _remoteId, _tableName, _key, _value, _timestamp);
 }

@@ -10,7 +10,11 @@
 typedef enum
 {
     MEMP_SUM_REQUEST = 0,
-    MEMP_SUM_RESULT,
+    MEMP_CREATE,
+    MEMP_DROP,
+    MEMP_DESCRIBE,
+    MEMP_SELECT,
+    MEMP_INSERT,
 } MEM_PACKET_HEADERS;
 
 /****************************************************************************************
@@ -21,9 +25,15 @@ typedef enum
 
 #include "../../src/mem.h"
 
-void mem_handle_sum_request(const cx_net_common_t* _common, void* _passThrou, const char* _data, uint16_t _size);
+void mem_handle_create(const cx_net_common_t* _common, void* _userData, const char* _buffer, uint16_t _bufferSize);
 
-void mem_handle_sum_result(const cx_net_common_t* _common, void* _passThrou, const char* _data, uint16_t _size);
+void mem_handle_drop(const cx_net_common_t* _common, void* _userData, const char* _buffer, uint16_t _bufferSize);
+
+void mem_handle_describe(const cx_net_common_t* _common, void* _userData, const char* _buffer, uint16_t _bufferSize);
+
+void mem_handle_select(const cx_net_common_t* _common, void* _userData, const char* _buffer, uint16_t _bufferSize);
+
+void mem_handle_insert(const cx_net_common_t* _common, void* _userData, const char* _buffer, uint16_t _bufferSize);
 
 #endif // MEM
 
@@ -31,8 +41,14 @@ void mem_handle_sum_result(const cx_net_common_t* _common, void* _passThrou, con
  ***  MESSAGE PACKERS
  ***************************************************************************************/
 
-uint32_t mem_pack_sum_result(char* _buffer, uint16_t _size, int32_t _result);
+uint32_t mem_pack_create(char* _buffer, uint16_t _size, uint16_t _remoteId, const char* _tableName, uint8_t _consistency, uint16_t _numPartitions, uint32_t _compactionInterval);
 
-uint32_t mem_pack_sum_request(char* _buffer, uint16_t _size, int32_t _a, int32_t _b);
+uint32_t mem_pack_drop(char* _buffer, uint16_t _size, uint16_t _remoteId, const char* _tableName);
+
+uint32_t mem_pack_describe(char* _buffer, uint16_t _size, uint16_t _remoteId, const char* _tableName);
+
+uint32_t mem_pack_select(char* _buffer, uint16_t _size, uint16_t _remoteId, const char* _tableName, uint16_t _key);
+
+uint32_t mem_pack_insert(char* _buffer, uint16_t _size, uint16_t _remoteId, const char* _tableName, uint16_t _key, const char* _value, uint32_t _timestamp);
 
 #endif // MEM_PROTOCOL_H_
