@@ -22,6 +22,9 @@
     <None Include="res\.desc">
       <Filter>res</Filter>
     </None>
+    <None Include="res\mem.cfg">
+      <Filter>res</Filter>
+    </None>
   </ItemGroup>
   <ItemGroup>
     <ClCompile Include="src\mem.c">
@@ -30,12 +33,18 @@
     <ClCompile Include="src\common\mem_protocol.c">
       <Filter>src\common</Filter>
     </ClCompile>
+    <ClCompile Include="src\mem_worker.c">
+      <Filter>src</Filter>
+    </ClCompile>
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="include\mem\mem_protocol.h">
       <Filter>include\mem</Filter>
     </ClInclude>
     <ClInclude Include="src\mem.h">
+      <Filter>src</Filter>
+    </ClInclude>
+    <ClInclude Include="src\mem_worker.h">
       <Filter>src</Filter>
     </ClInclude>
   </ItemGroup>

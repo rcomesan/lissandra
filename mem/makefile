@@ -27,7 +27,8 @@ CFLAGS ?=                                 \
 	-D$(PROJECT_NAME_UCASE)               \
 	-g3 -Wall -Wextra                     \
 	-Wno-unused-variable                  \
-	-Wno-unused-parameter
+	-Wno-unused-parameter                 \
+	-Wno-address
 
 LDFLAGS ?= -Wl,-R -Wl,/home/utnso/lissandra/cx/build/$(TARGET)
 
