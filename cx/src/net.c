@@ -11,6 +11,7 @@
 #include <errno.h>
 #include <sys/epoll.h>
 #include <string.h>
+#include <pthread.h>
 
 /****************************************************************************************
  ***  PRIVATE DECLARATIONS
@@ -40,51 +41,60 @@ cx_net_ctx_sv_t* cx_net_listen(cx_net_args_t* _args)
     ctx->c.state = CX_NET_STATE_SERVER | CX_NET_STATE_ERROR;
     ctx->clientsMax = 1000;
 
-    sockaddr_in address;
-    if (_cx_net_parse_address(ctx->c.ip, ctx->c.port, &address))
+    if (_args->multiThreadedSend)
     {
-        CX_INFO("[%s<--] creating socket...", ctx->c.name);
-        ctx->c.sock = socket(AF_INET, SOCK_STREAM, 0);
-        if (INVALID_DESCRIPTOR != ctx->c.sock)
+        CX_INFO("[-->%s] initializing mutexes...", ctx->c.name);
+        ctx->c.mtxInitialized = (0 == pthread_mutex_init(&ctx->c.mtx, NULL));
+    }
+
+    if (!_args->multiThreadedSend || ctx->c.mtxInitialized)
+    {
+        sockaddr_in address;
+        if (_cx_net_parse_address(ctx->c.ip, ctx->c.port, &address))
         {
-            CX_INFO("[%s<--] setting socket options...", ctx->c.name);
-            if (-1 != setsockopt(ctx->c.sock, SOL_SOCKET, SO_REUSEADDR, &(int32_t){ 1 }, sizeof(int32_t))
-                && -1 != fcntl(ctx->c.sock, F_SETFL, fcntl(ctx->c.sock, F_GETFL, 0) | O_NONBLOCK))
+            CX_INFO("[%s<--] creating socket...", ctx->c.name);
+            ctx->c.sock = socket(AF_INET, SOCK_STREAM, 0);
+            if (INVALID_DESCRIPTOR != ctx->c.sock)
             {
-                CX_INFO("[%s<--] binding on port %d...", ctx->c.name, ctx->c.port);
-                if (-1 != bind(ctx->c.sock, (struct sockaddr*)&address, sizeof(address)))
+                CX_INFO("[%s<--] setting socket options...", ctx->c.name);
+                if (-1 != setsockopt(ctx->c.sock, SOL_SOCKET, SO_REUSEADDR, &(int32_t){ 1 }, sizeof(int32_t))
+                    && -1 != fcntl(ctx->c.sock, F_SETFL, fcntl(ctx->c.sock, F_GETFL, 0) | O_NONBLOCK))
                 {
-                    CX_INFO("[%s<--] listening on %s:%d...", ctx->c.name, ctx->c.ip, ctx->c.port);
-                    if (-1 != listen(ctx->c.sock, SOMAXCONN))
+                    CX_INFO("[%s<--] binding on port %d...", ctx->c.name, ctx->c.port);
+                    if (-1 != bind(ctx->c.sock, (struct sockaddr*)&address, sizeof(address)))
                     {
-                        CX_INFO("[%s<--] initializing event pooling...", ctx->c.name);
-                        ctx->c.epollDescriptor = epoll_create(ctx->clientsMax);
-                        if (INVALID_DESCRIPTOR != ctx->c.epollDescriptor)
+                        CX_INFO("[%s<--] listening on %s:%d...", ctx->c.name, ctx->c.ip, ctx->c.port);
+                        if (-1 != listen(ctx->c.sock, SOMAXCONN))
                         {
-                            ctx->c.epollEvents = CX_MEM_ARR_ALLOC(ctx->c.epollEvents, ctx->clientsMax);
-                            ctx->clients = CX_MEM_ARR_ALLOC(ctx->clients, ctx->clientsMax);
-                            ctx->clientsHalloc = cx_halloc_init(ctx->clientsMax);
+                            CX_INFO("[%s<--] initializing event pooling...", ctx->c.name);
+                            ctx->c.epollDescriptor = epoll_create(ctx->clientsMax);
+                            if (INVALID_DESCRIPTOR != ctx->c.epollDescriptor)
+                            {
+                                ctx->c.epollEvents = CX_MEM_ARR_ALLOC(ctx->c.epollEvents, ctx->clientsMax);
+                                ctx->clients = CX_MEM_ARR_ALLOC(ctx->clients, ctx->clientsMax);
+                                ctx->clientsHalloc = cx_halloc_init(ctx->clientsMax);
 
-                            // add an entry to the "interest list" of epoll containing our
-                            // listening socket file descriptor. the kernel will let us 
-                            // know when there's something to read on this socket 
-                            // (aka new client connected)
-                            epoll_event event;
-                            CX_MEM_ZERO(event);
-                            event.events = EPOLLIN;
-                            event.data.fd = ctx->c.sock;
-                            epoll_ctl(ctx->c.epollDescriptor, EPOLL_CTL_ADD, ctx->c.sock, &event);
+                                // add an entry to the "interest list" of epoll containing our
+                                // listening socket file descriptor. the kernel will let us 
+                                // know when there's something to read on this socket 
+                                // (aka new client connected)
+                                epoll_event event;
+                                CX_MEM_ZERO(event);
+                                event.events = EPOLLIN;
+                                event.data.fd = ctx->c.sock;
+                                epoll_ctl(ctx->c.epollDescriptor, EPOLL_CTL_ADD, ctx->c.sock, &event);
 
-                            ctx->c.state &= (~CX_NET_STATE_ERROR);
-                            ctx->c.state |= CX_NET_STATE_LISTENING;
-                            CX_INFO("[%s<--] started serving on %s:%d", ctx->c.name, ctx->c.ip, ctx->c.port);
+                                ctx->c.state &= (~CX_NET_STATE_ERROR);
+                                ctx->c.state |= CX_NET_STATE_LISTENING;
+                                CX_INFO("[%s<--] started serving on %s:%d", ctx->c.name, ctx->c.ip, ctx->c.port);
+                            }
                         }
                     }
                 }
             }
         }
     }
-    
+
     if (CX_NET_STATE_ERROR & ctx->c.state)
     {
         if (0 != ctx->c.sock)
@@ -118,36 +128,45 @@ cx_net_ctx_cl_t* cx_net_connect(cx_net_args_t* _args)
     epoll_event event;
     CX_MEM_ZERO(event);
 
-    sockaddr_in address;
-    if (_cx_net_parse_address(ctx->c.ip, ctx->c.port, &address))
+    if (_args->multiThreadedSend)
     {
-        CX_INFO("[-->%s] creating socket...", ctx->c.name);
-        ctx->c.sock = socket(AF_INET, SOCK_STREAM, 0);
-        if (-1 != ctx->c.sock)
-        {
-            CX_INFO("[-->%s] setting socket options...", ctx->c.name);
-            if (-1 != fcntl(ctx->c.sock, F_SETFL, fcntl(ctx->c.sock, F_GETFL, 0) | O_NONBLOCK))
-            {
-                CX_INFO("[-->%s] initializing event pooling...", ctx->c.name);
-                ctx->c.epollDescriptor = epoll_create(1);
-                if (INVALID_DESCRIPTOR != ctx->c.epollDescriptor)
-                {
-                    event.events = EPOLLIN;
-                    event.data.fd = ctx->c.sock;
+        CX_INFO("[-->%s] initializing mutexes...", ctx->c.name);
+        ctx->c.mtxInitialized = (0 == pthread_mutex_init(&ctx->c.mtx, NULL));
+    }
 
-                    CX_INFO("[-->%s] connecting to %s:%d...", ctx->c.name, ctx->c.ip, ctx->c.port);
-                    if (-1 != connect(ctx->c.sock, (struct sockaddr*)&address, sizeof(address)))
+    if (!_args->multiThreadedSend || ctx->c.mtxInitialized)
+    {
+        sockaddr_in address;
+        if (_cx_net_parse_address(ctx->c.ip, ctx->c.port, &address))
+        {
+            CX_INFO("[-->%s] creating socket...", ctx->c.name);
+            ctx->c.sock = socket(AF_INET, SOCK_STREAM, 0);
+            if (-1 != ctx->c.sock)
+            {
+                CX_INFO("[-->%s] setting socket options...", ctx->c.name);
+                if (-1 != fcntl(ctx->c.sock, F_SETFL, fcntl(ctx->c.sock, F_GETFL, 0) | O_NONBLOCK))
+                {
+                    CX_INFO("[-->%s] initializing event pooling...", ctx->c.name);
+                    ctx->c.epollDescriptor = epoll_create(1);
+                    if (INVALID_DESCRIPTOR != ctx->c.epollDescriptor)
                     {
-                        ctx->c.state &= ~CX_NET_STATE_ERROR;
-                        ctx->c.state |= CX_NET_STATE_CONNECTED;
-                        CX_INFO("[-->%s] connection established to server on %s:%d", ctx->c.name, ctx->c.ip, ctx->c.port);
-                    }
-                    else if (EINPROGRESS == errno || EAGAIN == errno)
-                    {
-                        // operation can't be performed right now, but epoll will let us know when it's done
-                        event.events |= EPOLLOUT;
-                        ctx->c.state &= ~CX_NET_STATE_ERROR;
-                        ctx->c.state |= CX_NET_STATE_CONNECTING;
+                        event.events = EPOLLIN;
+                        event.data.fd = ctx->c.sock;
+
+                        CX_INFO("[-->%s] connecting to %s:%d...", ctx->c.name, ctx->c.ip, ctx->c.port);
+                        if (-1 != connect(ctx->c.sock, (struct sockaddr*)&address, sizeof(address)))
+                        {
+                            ctx->c.state &= ~CX_NET_STATE_ERROR;
+                            ctx->c.state |= CX_NET_STATE_CONNECTED;
+                            CX_INFO("[-->%s] connection established to server on %s:%d", ctx->c.name, ctx->c.ip, ctx->c.port);
+                        }
+                        else if (EINPROGRESS == errno || EAGAIN == errno)
+                        {
+                            // operation can't be performed right now, but epoll will let us know when it's done
+                            event.events |= EPOLLOUT;
+                            ctx->c.state &= ~CX_NET_STATE_ERROR;
+                            ctx->c.state |= CX_NET_STATE_CONNECTING;
+                        }
                     }
                 }
             }
@@ -225,6 +244,12 @@ void cx_net_close(void* _ctx)
         ctx.c->sock = INVALID_DESCRIPTOR;
     }
 
+    // destroy mutexes
+    if (ctx.c->mtxInitialized)
+    {
+        pthread_mutex_destroy(&ctx.c->mtx);
+        ctx.c->mtxInitialized = false;
+    }
     free(_ctx);
 }
 
@@ -260,6 +285,8 @@ void cx_net_send(void* _ctx, uint8_t _header, const char* _payload, uint32_t _pa
     {
         cx_net_ctx_t ctx;
         ctx.c = _ctx;
+
+        if (ctx.c->mtxInitialized) pthread_mutex_lock(&ctx.c->mtx);
 
         uint32_t bytesRequired = MIN_PACKET_LEN + _payloadSize;
         char* buffer = NULL;
@@ -318,6 +345,8 @@ void cx_net_send(void* _ctx, uint8_t _header, const char* _payload, uint32_t _pa
             memcpy(&(buffer[*position]), _payload, _payloadSize);
             (*position) += _payloadSize;
         }
+
+        if (ctx.c->mtxInitialized) pthread_mutex_unlock(&ctx.c->mtx);
     }
 }
 

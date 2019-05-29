@@ -55,6 +55,8 @@ struct cx_net_common_t
     cx_net_handler_cb   msgHandlers[256];   // callback containing a message handler for each message header supported
     int32_t             epollDescriptor;    // file descriptor to the epoll instance
     epoll_event*        epollEvents;        // pre-allocated buffer for retrieving epoll events when calling epoll_wait
+    pthread_mutex_t     mtx;                // mutex for syncing cx_net_send.
+    bool                mtxInitialized;     // true if mtx is initialized.
 };
 
 struct cx_net_ctx_sv_t
@@ -67,26 +69,27 @@ struct cx_net_ctx_sv_t
 
 struct cx_net_ctx_cl_t
 {
-    cx_net_common_t     c;                  // client context common data
-    char                in[CX_NET_BUFLEN];  // pre-allocated buffer for inbound data
-    uint32_t            inPos;              // current position in the inbound buffer
-    char                out[CX_NET_BUFLEN]; // pre-allocated buffer for outbound data
-    uint32_t            outPos;             // current position in the outbound buffer
+    cx_net_common_t     c;                  // client context common data.
+    char                in[CX_NET_BUFLEN];  // pre-allocated buffer for inbound data.
+    uint32_t            inPos;              // current position in the inbound buffer.
+    char                out[CX_NET_BUFLEN]; // pre-allocated buffer for outbound data.
+    uint32_t            outPos;             // current position in the outbound buffer.
 };
 
 typedef union cx_net_ctx_t
 {
-    cx_net_common_t*    c;                  // casts pointer as cx_net_common_t 
-    cx_net_ctx_cl_t*    cl;                 // casts pointer as cx_net_ctx_cl_t
-    cx_net_ctx_sv_t*    sv;                 // casts pointer as cx_net_ctx_sv_t
+    cx_net_common_t*    c;                  // casts pointer as cx_net_common_t.
+    cx_net_ctx_cl_t*    cl;                 // casts pointer as cx_net_ctx_cl_t.
+    cx_net_ctx_sv_t*    sv;                 // casts pointer as cx_net_ctx_sv_t.
 } cx_net_ctx_t;
 
 struct cx_net_args_t
 {
-    char                name[32];           // descriptive socket name for debugging purposes
-    char                ip[16];             // ip address to either listen or connect to 
-    uint16_t            port;               // port to either listen or connect to
-    cx_net_handler_cb*  msgHandlers[256];   // callback containing a message handler for each message header supported
+    char                name[32];           // descriptive socket name for debugging purposes.
+    char                ip[16];             // ip address to either listen or connect to.
+    uint16_t            port;               // port to either listen or connect to.
+    bool                multiThreadedSend;  // true if multi-threaded send is needed.
+    cx_net_handler_cb*  msgHandlers[256];   // callback containing a message handler for each message header supported.
 };
 
 /****************************************************************************************
