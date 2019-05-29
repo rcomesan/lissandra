@@ -331,7 +331,11 @@ static bool net_init(cx_err_t* _err)
     svCtxArgs.port = g_ctx.cfg.listeningPort;
 
     // message headers to handlers mappings
-    //svCtxArgs.msgHandlers[LFSP_SUM_REQUEST] = (cx_net_handler_cb*)lfs_handle_sum_request;
+    svCtxArgs.msgHandlers[LFSP_REQ_CREATE] = (cx_net_handler_cb*)lfs_handle_req_create;
+    svCtxArgs.msgHandlers[LFSP_REQ_DROP] = (cx_net_handler_cb*)lfs_handle_req_drop;
+    svCtxArgs.msgHandlers[LFSP_REQ_DESCRIBE] = (cx_net_handler_cb*)lfs_handle_req_describe;
+    svCtxArgs.msgHandlers[LFSP_REQ_SELECT] = (cx_net_handler_cb*)lfs_handle_req_select;
+    svCtxArgs.msgHandlers[LFSP_REQ_INSERT] = (cx_net_handler_cb*)lfs_handle_req_insert;
 
     // start server context and start listening for requests
     g_ctx.sv = cx_net_listen(&svCtxArgs);
@@ -376,40 +380,40 @@ static void handle_cli_command(const cx_cli_cmd_t* _cmd)
     {
         if (cli_parse_create(_cmd, &err, &tableName, &consistency, &numPartitions, &compactionInterval))
         {
-            packetSize = lfs_pack_create(g_ctx.buffer, sizeof(g_ctx.buffer), 0, tableName, consistency, numPartitions, compactionInterval);
-            lfs_handle_create(g_ctx.sv, NULL, g_ctx.buffer, packetSize);
+            packetSize = lfs_pack_req_create(g_ctx.buffer, sizeof(g_ctx.buffer), 0, tableName, consistency, numPartitions, compactionInterval);
+            lfs_handle_req_create((cx_net_common_t*)g_ctx.sv, NULL, g_ctx.buffer, packetSize);
         }
     }
     else if (strcmp("DROP", _cmd->header) == 0)
     {
         if (cli_parse_drop(_cmd, &err, &tableName))
         {
-            packetSize = lfs_pack_drop(g_ctx.buffer, sizeof(g_ctx.buffer), 0, tableName);
-            lfs_handle_drop(g_ctx.sv, NULL, g_ctx.buffer, packetSize);
+            packetSize = lfs_pack_req_drop(g_ctx.buffer, sizeof(g_ctx.buffer), 0, tableName);
+            lfs_handle_req_drop((cx_net_common_t*)g_ctx.sv, NULL, g_ctx.buffer, packetSize);
         }
     }
     else if (strcmp("DESCRIBE", _cmd->header) == 0)
     {
         if (cli_parse_describe(_cmd, &err, &tableName))
         {
-            packetSize = lfs_pack_describe(g_ctx.buffer, sizeof(g_ctx.buffer), 0, tableName);
-            lfs_handle_describe(g_ctx.sv, NULL, g_ctx.buffer, packetSize);
+            packetSize = lfs_pack_req_describe(g_ctx.buffer, sizeof(g_ctx.buffer), 0, tableName);
+            lfs_handle_req_describe((cx_net_common_t*)g_ctx.sv, NULL, g_ctx.buffer, packetSize);
         }
     }
     else if (strcmp("SELECT", _cmd->header) == 0)
     {
         if (cli_parse_select(_cmd, &err, &tableName, &key))
         {
-            packetSize = lfs_pack_select(g_ctx.buffer, sizeof(g_ctx.buffer), 0, tableName, key);
-            lfs_handle_select(g_ctx.sv, NULL, g_ctx.buffer, packetSize);
+            packetSize = lfs_pack_req_select(g_ctx.buffer, sizeof(g_ctx.buffer), 0, tableName, key);
+            lfs_handle_req_select((cx_net_common_t*)g_ctx.sv, NULL, g_ctx.buffer, packetSize);
         }
     }
     else if (strcmp("INSERT", _cmd->header) == 0)
     {
         if (cli_parse_insert(_cmd, &err, &tableName, &key, &value, &timestamp))
         {
-            packetSize = lfs_pack_insert(g_ctx.buffer, sizeof(g_ctx.buffer), 0, tableName, key, value, timestamp);
-            lfs_handle_insert(g_ctx.sv, NULL, g_ctx.buffer, packetSize);
+            packetSize = lfs_pack_req_insert(g_ctx.buffer, sizeof(g_ctx.buffer), 0, tableName, key, value, timestamp);
+            lfs_handle_req_insert((cx_net_common_t*)g_ctx.sv, NULL, g_ctx.buffer, packetSize);
         }
     }
     else if (strcmp("DUMP", _cmd->header) == 0)

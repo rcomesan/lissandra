@@ -61,6 +61,7 @@ int main(int _argc, char** _argv)
     double timeCounter = 0;
     double timeCounterPrev = 0;
     double timeDelta = 0;
+    char* shutdownReason = "main thread finished";
 
     cx_err_t err;
 
@@ -93,6 +94,13 @@ int main(int _argc, char** _argv)
             cx_net_poll_events(g_ctx.sv);
             cx_net_poll_events(g_ctx.lfs);
 
+            if (!(CX_NET_STATE_CONNECTING & g_ctx.lfs->c.state) 
+                && !(CX_NET_STATE_CONNECTED & g_ctx.lfs->c.state))
+            {
+                shutdownReason = "lfs is unavailable";
+                g_ctx.isRunning = false;
+            }
+
             // poll timer events
             cx_timer_poll_events();
 
@@ -105,14 +113,16 @@ int main(int _argc, char** _argv)
     }
     else if (NULL != g_ctx.log)
     {
+        shutdownReason = "initialization failed";
         log_error(g_ctx.log, "initialization failed (errcode %d). %s", err.code, err.desc);
     }
     else
     {
+        shutdownReason = "fatal error";
         printf("[FATAL] (errcode %d) %s", err.code, err.desc);
     }
 
-    CX_INFO("node is shutting down...", PROJECT_NAME);
+    CX_INFO("node is shutting down. reason: %s.", shutdownReason);
     cx_cli_destroy();
     net_destroy();
     mem_destroy();
@@ -361,6 +371,7 @@ static bool net_init(cx_err_t* _err)
     cx_str_copy(lfsCtxArgs.name, sizeof(lfsCtxArgs.name), "lfs");
     cx_str_copy(lfsCtxArgs.ip, sizeof(lfsCtxArgs.ip), g_ctx.cfg.lfsIp);
     lfsCtxArgs.port = g_ctx.cfg.lfsPort;
+    lfsCtxArgs.multiThreadedSend = true;
 
     // message headers to handlers mappings
     //svCtxArgs.msgHandlers[LFSP_SUM_REQUEST] = (cx_net_handler_cb*)lfs_handle_sum_request;
@@ -379,6 +390,11 @@ static bool net_init(cx_err_t* _err)
 
 static void net_destroy()
 {
+    //TODO make sure there're no pending requests from KER node.
+    // we need to notify them in some way that we're shutting down!
+    
+    //TODO make sure to wake up all the threads waiting for LFS
+
     cx_net_close(g_ctx.sv);
     cx_net_close(g_ctx.lfs);
     g_ctx.sv = NULL;
@@ -407,40 +423,40 @@ static void handle_cli_command(const cx_cli_cmd_t* _cmd)
     {
         if (cli_parse_create(_cmd, &err, &tableName, &consistency, &numPartitions, &compactionInterval))
         {
-            packetSize = mem_pack_create(g_ctx.buffer, sizeof(g_ctx.buffer), 0, tableName, consistency, numPartitions, compactionInterval);
-            mem_handle_create((cx_net_common_t*)g_ctx.sv, NULL, g_ctx.buffer, packetSize);
+            packetSize = mem_pack_req_create(g_ctx.buffer, sizeof(g_ctx.buffer), 0, tableName, consistency, numPartitions, compactionInterval);
+            mem_handle_req_create((cx_net_common_t*)g_ctx.sv, NULL, g_ctx.buffer, packetSize);
         }
     }
     else if (strcmp("DROP", _cmd->header) == 0)
     {
         if (cli_parse_drop(_cmd, &err, &tableName))
         {
-            packetSize = mem_pack_drop(g_ctx.buffer, sizeof(g_ctx.buffer), 0, tableName);
-            mem_handle_drop((cx_net_common_t*)g_ctx.sv, NULL, g_ctx.buffer, packetSize);
+            packetSize = mem_pack_req_drop(g_ctx.buffer, sizeof(g_ctx.buffer), 0, tableName);
+            mem_handle_req_drop((cx_net_common_t*)g_ctx.sv, NULL, g_ctx.buffer, packetSize);
         }
     }
     else if (strcmp("DESCRIBE", _cmd->header) == 0)
     {
         if (cli_parse_describe(_cmd, &err, &tableName))
         {
-            packetSize = mem_pack_describe(g_ctx.buffer, sizeof(g_ctx.buffer), 0, tableName);
-            mem_handle_describe((cx_net_common_t*)g_ctx.sv, NULL, g_ctx.buffer, packetSize);
+            packetSize = mem_pack_req_describe(g_ctx.buffer, sizeof(g_ctx.buffer), 0, tableName);
+            mem_handle_req_describe((cx_net_common_t*)g_ctx.sv, NULL, g_ctx.buffer, packetSize);
         }
     }
     else if (strcmp("SELECT", _cmd->header) == 0)
     {
         if (cli_parse_select(_cmd, &err, &tableName, &key))
         {
-            packetSize = mem_pack_select(g_ctx.buffer, sizeof(g_ctx.buffer), 0, tableName, key);
-            mem_handle_select((cx_net_common_t*)g_ctx.sv, NULL, g_ctx.buffer, packetSize);
+            packetSize = mem_pack_req_select(g_ctx.buffer, sizeof(g_ctx.buffer), 0, tableName, key);
+            mem_handle_req_select((cx_net_common_t*)g_ctx.sv, NULL, g_ctx.buffer, packetSize);
         }
     }
     else if (strcmp("INSERT", _cmd->header) == 0)
     {
         if (cli_parse_insert(_cmd, &err, &tableName, &key, &value, &timestamp))
         {
-            packetSize = mem_pack_insert(g_ctx.buffer, sizeof(g_ctx.buffer), 0, tableName, key, value, timestamp);
-            mem_handle_insert((cx_net_common_t*)g_ctx.sv, NULL, g_ctx.buffer, packetSize);
+            packetSize = mem_pack_req_insert(g_ctx.buffer, sizeof(g_ctx.buffer), 0, tableName, key, value, timestamp);
+            mem_handle_req_insert((cx_net_common_t*)g_ctx.sv, NULL, g_ctx.buffer, packetSize);
         }
     }
     else

@@ -43,7 +43,7 @@ typedef struct mem_ctx_t
     bool                isRunning;                                  // true if the server is running. false if it's shutting down.
     cx_net_ctx_sv_t*    sv;                                         // server context for serving API requests coming from KER nodes.
     cx_net_ctx_cl_t*    lfs;                                        // client context for connecting to the LFS node.
-    char                buffer[MAX_PACKET_LEN - MIN_PACKET_LEN];    // temporary pre-allocated buffer for building packets.
+    payload_t           buffer;                                     // temporary pre-allocated buffer for building packets.
 } mem_ctx_t;
 
 extern mem_ctx_t        g_ctx;

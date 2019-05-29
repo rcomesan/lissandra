@@ -29,28 +29,28 @@
  ***  COMMON MESSAGE PACKERS
  ***************************************************************************************/
 
-uint32_t common_pack_create(char* _buffer, uint16_t _size, uint16_t _remoteId, const char* _tableName, uint8_t _consistency, uint16_t _numPartitions, uint32_t _compactionInterval);
+uint32_t common_pack_req_create(char* _buffer, uint16_t _size, uint16_t _remoteId, const char* _tableName, uint8_t _consistency, uint16_t _numPartitions, uint32_t _compactionInterval);
 
-uint32_t common_pack_drop(char* _buffer, uint16_t _size, uint16_t _remoteId, const char* _tableName);
+uint32_t common_pack_req_drop(char* _buffer, uint16_t _size, uint16_t _remoteId, const char* _tableName);
 
-uint32_t common_pack_describe(char* _buffer, uint16_t _size, uint16_t _remoteId, const char* _tableName);
+uint32_t common_pack_req_describe(char* _buffer, uint16_t _size, uint16_t _remoteId, const char* _tableName);
 
-uint32_t common_pack_select(char* _buffer, uint16_t _size, uint16_t _remoteId, const char* _tableName, uint16_t _key);
+uint32_t common_pack_req_select(char* _buffer, uint16_t _size, uint16_t _remoteId, const char* _tableName, uint16_t _key);
 
-uint32_t common_pack_insert(char* _buffer, uint16_t _size, uint16_t _remoteId, const char* _tableName, uint16_t _key, const char* _value, uint32_t _timestamp);
+uint32_t common_pack_req_insert(char* _buffer, uint16_t _size, uint16_t _remoteId, const char* _tableName, uint16_t _key, const char* _value, uint32_t _timestamp);
 
 /****************************************************************************************
  ***  COMMON MESSAGE UNPACKERS
  ***************************************************************************************/
 
-data_create_t*      common_unpack_create(const char* _buffer, uint16_t _bufferSize, uint32_t* _bufferPos, uint16_t* _outRemoteId);
+data_create_t*      common_unpack_req_create(const char* _buffer, uint16_t _bufferSize, uint32_t* _bufferPos, uint16_t* _outRemoteId);
 
-data_drop_t*        common_unpack_drop(const char* _buffer, uint16_t _bufferSize, uint32_t* _bufferPos, uint16_t* _outRemoteId);
+data_drop_t*        common_unpack_req_drop(const char* _buffer, uint16_t _bufferSize, uint32_t* _bufferPos, uint16_t* _outRemoteId);
 
-data_describe_t*    common_unpack_describe(const char* _buffer, uint16_t _bufferSize, uint32_t* _bufferPos, uint16_t* _outRemoteId);
+data_describe_t*    common_unpack_req_describe(const char* _buffer, uint16_t _bufferSize, uint32_t* _bufferPos, uint16_t* _outRemoteId);
 
-data_select_t*      common_unpack_select(const char* _buffer, uint16_t _bufferSize, uint32_t* _bufferPos, uint16_t* _outRemoteId);
+data_select_t*      common_unpack_req_select(const char* _buffer, uint16_t _bufferSize, uint32_t* _bufferPos, uint16_t* _outRemoteId);
 
-data_insert_t*      common_unpack_insert(const char* _buffer, uint16_t _bufferSize, uint32_t* _bufferPos, uint16_t* _outRemoteId);
+data_insert_t*      common_unpack_req_insert(const char* _buffer, uint16_t _bufferSize, uint32_t* _bufferPos, uint16_t* _outRemoteId);
 
 #endif // COMMON_PROTOCOL_H_
