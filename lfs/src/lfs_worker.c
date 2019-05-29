@@ -1,4 +1,4 @@
-#include "worker.h"
+#include "lfs_worker.h"
 #include "memtable.h"
 #include "fs.h"
 

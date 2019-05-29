@@ -69,7 +69,7 @@
     <ClCompile Include="src\fs.c" />
     <ClCompile Include="src\lfs.c" />
     <ClCompile Include="src\memtable.c" />
-    <ClCompile Include="src\worker.c" />
+    <ClCompile Include="src\lfs_worker.c" />
   </ItemGroup>
   <ItemGroup>
     <None Include="makefile" />
@@ -86,7 +86,7 @@
     <ClInclude Include="src\fs.h" />
     <ClInclude Include="src\lfs.h" />
     <ClInclude Include="src\memtable.h" />
-    <ClInclude Include="src\worker.h" />
+    <ClInclude Include="src\lfs_worker.h" />
   </ItemGroup>
   <ItemDefinitionGroup Condition="'$(Configuration)|$(Platform)'=='Debug|x86'">
     <PreBuildEvent>

@@ -1,5 +1,5 @@
-#ifndef LFS_WORKER_H
-#define LFS_WORKER_H
+#ifndef LFS_WORKER_H_
+#define LFS_WORKER_H_
 
 #include "fs.h"
 
@@ -23,4 +23,4 @@ void        worker_handle_dump(task_t* _req);
 
 void        worker_handle_compact(task_t* _req);
 
-#endif // LFS_WORKER_H
+#endif // LFS_WORKER_H_

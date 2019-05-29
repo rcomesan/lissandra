@@ -1,6 +1,6 @@
 #include "lfs.h"
 #include "memtable.h"
-#include "worker.h"
+#include "lfs_worker.h"
 #include "fs.h"
 
 #include <ker/cli_parser.h>
@@ -331,7 +331,7 @@ static bool net_init(cx_err_t* _err)
     svCtxArgs.port = g_ctx.cfg.listeningPort;
 
     // message headers to handlers mappings
-    svCtxArgs.msgHandlers[LFSP_SUM_REQUEST] = (cx_net_handler_cb*)lfs_handle_sum_request;
+    //svCtxArgs.msgHandlers[LFSP_SUM_REQUEST] = (cx_net_handler_cb*)lfs_handle_sum_request;
 
     // start server context and start listening for requests
     g_ctx.sv = cx_net_listen(&svCtxArgs);

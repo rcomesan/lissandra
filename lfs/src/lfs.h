@@ -21,7 +21,7 @@ typedef enum LFS_TIMER
 typedef struct cfg_t
 {
     t_config*           handle;                 // pointer to so-commons-lib config adt.
-    char                listeningIp[16];        // ip address on which this LFS server will listen on.
+    ipv4_t              listeningIp;            // ip address on which this LFS server will listen on.
     uint16_t            listeningPort;          // tcp port on which this LFS server will listen on.
     uint16_t            workers;                // number of worker threads to spawn to process requests.
     char                rootDir[PATH_MAX];      // initial root directory of our filesystem.

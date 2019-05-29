@@ -39,7 +39,7 @@
     <ClCompile Include="src\fs.c">
       <Filter>src</Filter>
     </ClCompile>
-    <ClCompile Include="src\worker.c">
+    <ClCompile Include="src\lfs_worker.c">
       <Filter>src</Filter>
     </ClCompile>
   </ItemGroup>
@@ -56,7 +56,7 @@
     <ClInclude Include="src\fs.h">
       <Filter>src</Filter>
     </ClInclude>
-    <ClInclude Include="src\worker.h">
+    <ClInclude Include="src\lfs_worker.h">
       <Filter>src</Filter>
     </ClInclude>
   </ItemGroup>
