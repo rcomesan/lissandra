@@ -434,6 +434,7 @@ static void _cx_net_poll_events_client(cx_net_ctx_cl_t* _ctx)
     {
         if (EPOLLIN & _ctx->c.epollEvents[0].events)
         {
+            errno = 0;
             bytesRead = recv(_ctx->c.sock, &(_ctx->in[_ctx->inPos]), MAX_PACKET_LEN - _ctx->inPos, 0);
             
             if (0 == bytesRead)
@@ -445,6 +446,12 @@ static void _cx_net_poll_events_client(cx_net_ctx_cl_t* _ctx)
             else if (bytesRead > 0)
             {
                 _cx_net_process_stream(&_ctx->c, NULL, _ctx->in, _ctx->inPos + bytesRead, &_ctx->inPos);
+            }
+            else if (-1 == bytesRead && errno == ECONNREFUSED)
+            {
+                CX_INFO("[-->%s] the server refused the connection", _ctx->c.name);
+                _ctx->c.state &= ~(CX_NET_STATE_CONNECTING | CX_NET_STATE_CONNECTED);
+                close(_ctx->c.sock);
             }
             else
             {
@@ -572,6 +579,7 @@ static void _cx_net_poll_events_server(cx_net_ctx_sv_t* _ctx)
 
                 if (EPOLLIN & _ctx->c.epollEvents[i].events)
                 {
+                    errno = 0;
                     bytesRead = recv(client->sock, &(client->in[client->inPos]), CX_NET_BUFLEN - client->inPos, 0);
 
                     if (0 == bytesRead)
