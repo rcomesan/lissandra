@@ -82,7 +82,6 @@ typedef struct table_t
     bool                inUse;                  // true if this handle has a table assigned to, false if it doesn't.
     table_meta_t        meta;                   // table metadata.
     memtable_t          memtable;               // memtable for this table.
-    bool                deleted;                // true if this table is marked as deleted (pending to be removed).
     bool                compacting;             // true if this table is performing a compaction.
     bool                blocked;                // true if this table is marked as blocked (pending to be compacted).
     double              blockedStartTime;       // time counter value of when the table block started.

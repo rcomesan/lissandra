@@ -141,7 +141,7 @@ table_meta_t* fs_describe(uint16_t* _outTablesCount, cx_err_t* _err)
 
         while (cx_cdict_iter_next(m_fsCtx->tablesMap, &key, (void**)&table))
         {
-            if (!table->deleted)
+            if (table->inUse)
                 memcpy(&(tables[i++]), &(table->meta), sizeof(tables[0]));
         }
     }
@@ -203,7 +203,7 @@ bool fs_table_exists(const char* _tableName, table_t** _outTable)
 {
     table_t* table;
 
-    if (cx_cdict_get(m_fsCtx->tablesMap, _tableName, (void**)&table) && !table->deleted)
+    if (cx_cdict_get(m_fsCtx->tablesMap, _tableName, (void**)&table))
     {
         if (NULL != _outTable)
         {
@@ -942,16 +942,18 @@ bool fs_table_init(table_t* _outTable, const char* _tableName, cx_err_t* _err)
 {
     CX_CHECK(strlen(_tableName) > 0, "invalid table name!");
 
-    _outTable->inUse = true;
     _outTable->operations = 0;
     _outTable->timerHandle = INVALID_HANDLE;
     _outTable->blockedQueue = queue_create();
     
-    return true
+    bool success = true
         && fs_table_meta_get(_tableName, &_outTable->meta, _err)
         && memtable_init(_tableName, true, &_outTable->memtable, _err)
         && NULL != _outTable->blockedQueue
         && (0 == pthread_mutex_init(&_outTable->mtxOperations, NULL));
+
+    if (success) _outTable->inUse = true;
+    return success;
 }
 
 void fs_table_destroy(table_t* _table)
@@ -980,7 +982,6 @@ void fs_table_destroy(table_t* _table)
         CX_MEM_ZERO(_table->memtable);
 
         _table->inUse = false;
-        _table->deleted = false;
         _table->compacting = false;
         _table->blocked = false;
         _table->blockedStartTime = 0;

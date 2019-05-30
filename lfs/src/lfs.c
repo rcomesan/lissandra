@@ -629,17 +629,14 @@ static bool task_run_mt(task_t* _task)
             handle = cx_handle_at(g_ctx.tablesHalloc, i);
             table = &(g_ctx.tables[handle]);
 
-            if (!table->deleted)
+            task = taskman_create(TASK_ORIGIN_INTERNAL, TASK_WT_DUMP, NULL, NULL);
+            if (NULL != task)
             {
-                task = taskman_create(TASK_ORIGIN_INTERNAL, TASK_WT_DUMP, NULL, NULL);
-                if (NULL != task)
-                {
-                    data = CX_MEM_STRUCT_ALLOC(data);
-                    cx_str_copy(data->tableName, sizeof(data->tableName), table->meta.name);
+                data = CX_MEM_STRUCT_ALLOC(data);
+                cx_str_copy(data->tableName, sizeof(data->tableName), table->meta.name);
 
-                    task->data = data;
-                    task->state = TASK_STATE_NEW;
-                }
+                task->data = data;
+                task->state = TASK_STATE_NEW;
             }
         }
         success = true;
@@ -680,12 +677,7 @@ static bool task_completed(task_t* _task)
     {
     case TASK_WT_CREATE:
     {
-        if (table->deleted)
-        {
-            // the creation failed, we need to free this table now.
-            table_free(table);
-        }
-        else if (ERR_NONE == _task->err.code)
+        if (ERR_NONE == _task->err.code)
         {
             // table creation succeeded, let's create the compaction timer so that we get notified when we need to compact it.
             table->timerHandle = cx_timer_add(table->meta.compactionInterval, LFS_TIMER_COMPACT, table);
@@ -693,6 +685,11 @@ static bool task_completed(task_t* _task)
 
             // unblock the table making it fully available!
             table_unblock(table);
+        }
+        else
+        {
+            // the creation failed, we need to free this table slot now.
+            table_free(table);
         }
 
         if (TASK_ORIGIN_API == _task->origin)
