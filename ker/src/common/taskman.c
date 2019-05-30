@@ -28,7 +28,13 @@ bool taskman_init(uint16_t _numWorkers, taskman_cb _runMt, taskman_cb _runWk, ta
     m_taskmanCtx.taskFree = _free;
     m_taskmanCtx.taskReschedule = _reschedule;
 
-    m_taskmanCtx.mtxInitialized = (0 == pthread_mutex_init(&m_taskmanCtx.mtx, NULL));
+    // make this mutex reentrant, so that we can safely insert tasks inside tasks update loop
+    pthread_mutexattr_t attr;
+    m_taskmanCtx.mtxInitialized = true
+        && (0 == pthread_mutexattr_init(&attr))
+        && (0 == pthread_mutexattr_settype(&attr, PTHREAD_MUTEX_RECURSIVE))
+        && (0 == pthread_mutex_init(&m_taskmanCtx.mtx, &attr));
+    pthread_mutexattr_destroy(&attr);
     if (!m_taskmanCtx.mtxInitialized)
     {
         CX_ERR_SET(_err, 1, "taskman mutex creation failed.");
