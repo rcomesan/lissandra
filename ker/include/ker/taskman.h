@@ -37,6 +37,7 @@ typedef enum TASK_TYPE
     // Main-thread tasks ----------------------------------------------------------------
     TASK_MT_COMPACT =   TASK_MT | UINT8_C(01), // main thread task to compact a table when it's no longer in use.
     TASK_MT_DUMP =      TASK_MT | UINT8_C(02), // main thread task to dump all the existing tables.
+    TASK_MT_FREE =      TASK_MT | UINT8_C(03), // main thread task to free a resource when it's no longer in use.
     // Worker-thread tasks --------------------------------------------------------------
     TASK_WT_CREATE =    TASK_WT | UINT8_C(01), // worker thread task to create a table.
     TASK_WT_DROP =      TASK_WT | UINT8_C(02), // worker thread task to drop a table.

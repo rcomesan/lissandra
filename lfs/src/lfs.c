@@ -502,8 +502,15 @@ static void table_unblock(table_t* _table)
 
 static void table_free(table_t* _table)
 {
-    fs_table_destroy(_table);
-    cx_handle_free(g_ctx.tablesHalloc, _table->handle);
+    data_free_t* data = CX_MEM_STRUCT_ALLOC(data);
+    data->resourceType = RESOURCE_TYPE_TABLE;
+    data->resourceHandle = _table->handle;
+
+    task_t* task = taskman_create(TASK_ORIGIN_INTERNAL, TASK_MT_FREE, data, NULL);
+    if (NULL != task)
+    {
+        task->state = TASK_STATE_NEW;
+    }
 }
 
 static bool task_run_wk(task_t* _task)
@@ -563,11 +570,11 @@ static bool task_run_mt(task_t* _task)
     {
         table = &g_ctx.tables[_task->tableHandle];
 
+        pthread_mutex_lock(&table->mtxOperations);
         if (table->inUse)
         {
             if (!table->compacting)
             {
-                pthread_mutex_lock(&table->mtxOperations);
                 if (!table->blocked)
                 {
                     table->blocked = true;
@@ -579,7 +586,6 @@ static bool task_run_mt(task_t* _task)
                     // at this point, our table is blocked (so new operations on it are being blocked and delayed)
                     // and also there're zero pending operations on it. we can safely start compacting it now.
                     table->compacting = true;
-                    pthread_mutex_unlock(&table->mtxOperations);
 
                     task = taskman_create(TASK_ORIGIN_INTERNAL, TASK_WT_COMPACT, NULL, NULL);
                     if (NULL != task)
@@ -594,12 +600,9 @@ static bool task_run_mt(task_t* _task)
                     }
                     else
                     {
+                        // task creation failed. unblock this table and skip this task.
                         table_unblock(table);
                     }
-                }
-                else
-                {
-                    pthread_mutex_unlock(&table->mtxOperations);
                 }
             }
             else
@@ -615,6 +618,7 @@ static bool task_run_mt(task_t* _task)
             // table no longer exists, (table might have been deleted and therefore no longer in use).
             success = true;
         }
+        pthread_mutex_unlock(&table->mtxOperations);
         break;
     }
 
@@ -640,6 +644,28 @@ static bool task_run_mt(task_t* _task)
             }
         }
         success = true;
+        break;
+    }
+
+    case TASK_MT_FREE:
+    {
+        data_free_t* data = _task->data;
+
+        if (RESOURCE_TYPE_TABLE == data->resourceType)
+        {
+            table = &g_ctx.tables[data->resourceHandle];
+
+            pthread_mutex_lock(&table->mtxOperations);
+            bool canBeFreed = (0 == table->operations);
+            pthread_mutex_unlock(&table->mtxOperations);
+
+            if (canBeFreed)
+            {
+                fs_table_destroy(table);
+                cx_handle_free(g_ctx.tablesHalloc, table->handle);
+                success = true;
+            }
+        }
         break;
     }
 
@@ -782,6 +808,12 @@ static bool task_completed(task_t* _task)
         break;
     }
 
+    case TASK_MT_FREE:
+    {
+        //noop
+        break;
+    }
+
     default:
         CX_WARN(CX_ALW, "undefined <completed> behaviour for request type #%d.", _task->type);
         break;
@@ -858,6 +890,12 @@ static bool task_free(task_t* _task)
     }
 
     case TASK_MT_DUMP:
+    {
+        //noop
+        break;
+    }
+
+    case TASK_MT_FREE:
     {
         //noop
         break;

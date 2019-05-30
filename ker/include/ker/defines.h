@@ -44,6 +44,8 @@ typedef enum ERR_CODE
 } ERRR_CODE;
 
 
+#define RESOURCE_TYPE_TABLE 1
+
 #define CONSISTENCY_STRONG 1
 #define CONSISTENCY_STRONG_HASH 2
 #define CONSISTENCY_EVENTUAL 3
@@ -108,6 +110,12 @@ typedef struct data_compact_t
 {
     table_name_t    tableName;
 } data_compact_t;
+
+typedef struct data_free_t
+{
+    uint8_t         resourceType;
+    uint16_t        resourceHandle;
+} data_free_t;
 
 typedef struct data_run_t
 {
