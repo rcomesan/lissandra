@@ -355,7 +355,11 @@ static bool net_init(cx_err_t* _err)
     svCtxArgs.port = g_ctx.cfg.listeningPort;
 
     // message headers to handlers mappings
-    //svCtxArgs.msgHandlers[LFSP_SUM_REQUEST] = (cx_net_handler_cb*)lfs_handle_sum_request;
+    svCtxArgs.msgHandlers[MEMP_REQ_CREATE] = (cx_net_handler_cb*)mem_handle_req_create;
+    svCtxArgs.msgHandlers[MEMP_REQ_DROP] = (cx_net_handler_cb*)mem_handle_req_drop;
+    svCtxArgs.msgHandlers[MEMP_REQ_DESCRIBE] = (cx_net_handler_cb*)mem_handle_req_describe;
+    svCtxArgs.msgHandlers[MEMP_REQ_SELECT] = (cx_net_handler_cb*)mem_handle_req_select;
+    svCtxArgs.msgHandlers[MEMP_REQ_INSERT] = (cx_net_handler_cb*)mem_handle_req_insert;
 
     // start server context and start listening for requests
     g_ctx.sv = cx_net_listen(&svCtxArgs);
@@ -374,7 +378,11 @@ static bool net_init(cx_err_t* _err)
     lfsCtxArgs.multiThreadedSend = true;
 
     // message headers to handlers mappings
-    //svCtxArgs.msgHandlers[LFSP_SUM_REQUEST] = (cx_net_handler_cb*)lfs_handle_sum_request;
+    lfsCtxArgs.msgHandlers[MEMP_RES_CREATE] = (cx_net_handler_cb*)mem_handle_res_create;
+    lfsCtxArgs.msgHandlers[MEMP_RES_DROP] = (cx_net_handler_cb*)mem_handle_res_drop;
+    lfsCtxArgs.msgHandlers[MEMP_RES_DESCRIBE] = (cx_net_handler_cb*)mem_handle_res_describe;
+    lfsCtxArgs.msgHandlers[MEMP_RES_SELECT] = (cx_net_handler_cb*)mem_handle_res_select;
+    lfsCtxArgs.msgHandlers[MEMP_RES_INSERT] = (cx_net_handler_cb*)mem_handle_res_insert;
 
     // start server context and start listening for requests
     g_ctx.lfs = cx_net_connect(&lfsCtxArgs);
@@ -423,40 +431,40 @@ static void handle_cli_command(const cx_cli_cmd_t* _cmd)
     {
         if (cli_parse_create(_cmd, &err, &tableName, &consistency, &numPartitions, &compactionInterval))
         {
-            packetSize = mem_pack_req_create(g_ctx.buffer, sizeof(g_ctx.buffer), 0, tableName, consistency, numPartitions, compactionInterval);
-            mem_handle_req_create((cx_net_common_t*)g_ctx.sv, NULL, g_ctx.buffer, packetSize);
+            packetSize = mem_pack_req_create(g_ctx.buff1, sizeof(g_ctx.buff1), 0, tableName, consistency, numPartitions, compactionInterval);
+            mem_handle_req_create((cx_net_common_t*)g_ctx.sv, NULL, g_ctx.buff1, packetSize);
         }
     }
     else if (strcmp("DROP", _cmd->header) == 0)
     {
         if (cli_parse_drop(_cmd, &err, &tableName))
         {
-            packetSize = mem_pack_req_drop(g_ctx.buffer, sizeof(g_ctx.buffer), 0, tableName);
-            mem_handle_req_drop((cx_net_common_t*)g_ctx.sv, NULL, g_ctx.buffer, packetSize);
+            packetSize = mem_pack_req_drop(g_ctx.buff1, sizeof(g_ctx.buff1), 0, tableName);
+            mem_handle_req_drop((cx_net_common_t*)g_ctx.sv, NULL, g_ctx.buff1, packetSize);
         }
     }
     else if (strcmp("DESCRIBE", _cmd->header) == 0)
     {
         if (cli_parse_describe(_cmd, &err, &tableName))
         {
-            packetSize = mem_pack_req_describe(g_ctx.buffer, sizeof(g_ctx.buffer), 0, tableName);
-            mem_handle_req_describe((cx_net_common_t*)g_ctx.sv, NULL, g_ctx.buffer, packetSize);
+            packetSize = mem_pack_req_describe(g_ctx.buff1, sizeof(g_ctx.buff1), 0, tableName);
+            mem_handle_req_describe((cx_net_common_t*)g_ctx.sv, NULL, g_ctx.buff1, packetSize);
         }
     }
     else if (strcmp("SELECT", _cmd->header) == 0)
     {
         if (cli_parse_select(_cmd, &err, &tableName, &key))
         {
-            packetSize = mem_pack_req_select(g_ctx.buffer, sizeof(g_ctx.buffer), 0, tableName, key);
-            mem_handle_req_select((cx_net_common_t*)g_ctx.sv, NULL, g_ctx.buffer, packetSize);
+            packetSize = mem_pack_req_select(g_ctx.buff1, sizeof(g_ctx.buff1), 0, tableName, key);
+            mem_handle_req_select((cx_net_common_t*)g_ctx.sv, NULL, g_ctx.buff1, packetSize);
         }
     }
     else if (strcmp("INSERT", _cmd->header) == 0)
     {
         if (cli_parse_insert(_cmd, &err, &tableName, &key, &value, &timestamp))
         {
-            packetSize = mem_pack_req_insert(g_ctx.buffer, sizeof(g_ctx.buffer), 0, tableName, key, value, timestamp);
-            mem_handle_req_insert((cx_net_common_t*)g_ctx.sv, NULL, g_ctx.buffer, packetSize);
+            packetSize = mem_pack_req_insert(g_ctx.buff1, sizeof(g_ctx.buff1), 0, tableName, key, value, timestamp);
+            mem_handle_req_insert((cx_net_common_t*)g_ctx.sv, NULL, g_ctx.buff1, packetSize);
         }
     }
     else
@@ -511,14 +519,6 @@ static bool task_run_wk(task_t* _task)
 
     case TASK_WT_INSERT:
         worker_handle_insert(_task);
-        break;
-
-    case TASK_WT_DUMP:
-        worker_handle_dump(_task);
-        break;
-
-    case TASK_WT_COMPACT:
-        worker_handle_compact(_task);
         break;
 
     default:
@@ -654,32 +654,6 @@ static bool task_free(task_t* _task)
         data_insert_t* data = (data_insert_t*)_task->data;
         free(data->record.value);
         data->record.value = NULL;
-        break;
-    }
-
-    case TASK_WT_DUMP:
-    {
-        data_dump_t* data = (data_dump_t*)_task->data;
-        //noop
-        break;
-    }
-
-    case TASK_WT_COMPACT:
-    {
-        data_compact_t* data = (data_compact_t*)_task->data;
-        //noop
-        break;
-    }
-
-    case TASK_MT_COMPACT:
-    {
-        //noop
-        break;
-    }
-
-    case TASK_MT_DUMP:
-    {
-        //noop
         break;
     }
 

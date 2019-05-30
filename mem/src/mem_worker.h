@@ -17,8 +17,4 @@ void        worker_handle_select(task_t* _req);
 
 void        worker_handle_insert(task_t* _req);
 
-void        worker_handle_dump(task_t* _req);
-
-void        worker_handle_compact(task_t* _req);
-
 #endif // MEM_WORKER_H_

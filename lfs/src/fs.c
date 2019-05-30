@@ -170,7 +170,7 @@ bool fs_table_avail_guard_begin(table_t* _table, cx_err_t* _err, pthread_mutex_t
     bool result = false;
     
     pthread_mutex_lock(&_table->mtxOperations);
-    if (_table->blocked || _table->compacting)
+    if (_table->blocked || _table->compacting || !_table->inUse)
     {
         CX_ERR_SET(_err, ERR_TABLE_BLOCKED, "Operation cannot be performed at this time since the table is blocked. Try agian later.");
         if (NULL != _mtx)

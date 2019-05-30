@@ -100,7 +100,8 @@ typedef struct lfs_ctx_t
     cx_net_ctx_sv_t*    sv;                                         // server context for serving API requests coming from MEM nodes.
     table_t             tables[MAX_TABLES];                         // container for storing tables.
     cx_handle_alloc_t*  tablesHalloc;                               // handle allocator for tables container.
-    char                buffer[MAX_PACKET_LEN - MIN_PACKET_LEN];    // temporary pre-allocated buffer for building packets.
+    payload_t           buff1;                                      // temporary pre-allocated buffer for building packets.
+    payload_t           buff2;                                      // temporary pre-allocated buffer for building packets.
     uint16_t            timerDump;                                  // dump operation timer handle.
 } lfs_ctx_t;
 

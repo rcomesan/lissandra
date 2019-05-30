@@ -56,6 +56,85 @@ uint32_t common_pack_req_insert(char* _buffer, uint16_t _size, uint16_t _remoteI
     return pos;
 }
 
+uint32_t common_pack_res_create(char* _buffer, uint16_t _size, uint16_t _remoteId, uint32_t _errCode, const char* _errDesc)
+{
+    uint32_t pos = 0;
+    cx_binw_uint16(_buffer, _size, &pos, _remoteId);
+    cx_binw_uint32(_buffer, _size, &pos, _errCode);
+
+    if (ERR_NONE != _errCode)
+    {
+        cx_binw_str(_buffer, _size, &pos, _errDesc);
+    }
+
+    return pos;
+}
+
+uint32_t common_pack_res_drop(char* _buffer, uint16_t _size, uint16_t _remoteId, uint32_t _errCode, const char* _errDesc)
+{
+    uint32_t pos = 0;
+    cx_binw_uint16(_buffer, _size, &pos, _remoteId);
+    cx_binw_uint32(_buffer, _size, &pos, _errCode);
+
+    if (ERR_NONE != _errCode)
+    {
+        cx_binw_str(_buffer, _size, &pos, _errDesc);
+    }
+
+    return pos;
+}
+
+uint32_t common_pack_res_select(char* _buffer, uint16_t _size, uint16_t _remoteId, uint32_t _errCode, const char* _errDesc, table_record_t* _record)
+{
+    uint32_t pos = 0;
+    cx_binw_uint16(_buffer, _size, &pos, _remoteId);
+    cx_binw_uint32(_buffer, _size, &pos, _errCode);
+
+    if (ERR_NONE == _errCode)
+    {
+        pos += common_pack_table_record(&_buffer[pos], _size - pos, _record);
+    }
+    else
+    {
+        cx_binw_str(_buffer, _size, &pos, _errDesc);
+    }
+
+    return pos;
+}
+
+uint32_t common_pack_res_insert(char* _buffer, uint16_t _size, uint16_t _remoteId, uint32_t _errCode, const char* _errDesc)
+{
+    uint32_t pos = 0;
+    cx_binw_uint16(_buffer, _size, &pos, _remoteId);
+    cx_binw_uint32(_buffer, _size, &pos, _errCode);
+
+    if (ERR_NONE != _errCode)
+    {
+        cx_binw_str(_buffer, _size, &pos, _errDesc);
+    }
+
+    return pos;
+}
+
+uint32_t common_pack_table_meta(char* _buffer, uint16_t _size, table_meta_t* _table)
+{
+    uint32_t pos = 0;
+    cx_binw_str(_buffer, _size, &pos, _table->name);
+    cx_binw_uint8(_buffer, _size, &pos, _table->consistency);
+    cx_binw_uint16(_buffer, _size, &pos, _table->partitionsCount);
+    cx_binw_uint32(_buffer, _size, &pos, _table->compactionInterval);
+    return pos;
+}
+
+uint32_t common_pack_table_record(char* _buffer, uint16_t _size, table_record_t* _record)
+{
+    uint32_t pos = 0;
+    cx_binw_uint16(_buffer, _size, &pos, _record->key);
+    cx_binw_str(_buffer, _size, &pos, _record->value);
+    cx_binw_uint32(_buffer, _size, &pos, _record->timestamp);
+    return pos;
+}
+
 /****************************************************************************************
  ***  COMMON MESSAGE UNPACKERS
  ***************************************************************************************/
@@ -115,12 +194,28 @@ data_insert_t* common_unpack_req_insert(const char* _buffer, uint16_t _bufferSiz
     data_insert_t* data = CX_MEM_STRUCT_ALLOC(data);
     cx_binr_uint16(_buffer, _bufferSize, _bufferPos, _outRemoteId);
     cx_binr_str(_buffer, _bufferSize, _bufferPos, data->tableName, sizeof(data->tableName));
-    cx_binr_uint16(_buffer, _bufferSize, _bufferPos, &data->record.key);
 
-    uint16_t valueLen = cx_binr_str(_buffer, _bufferSize, _bufferPos, NULL, 0) + 1;
-    data->record.value = malloc(valueLen);
-    cx_binr_str(_buffer, _bufferSize, _bufferPos, data->record.value, valueLen);
+    common_unpack_table_record(_buffer, _bufferSize, _bufferPos, &data->record);
 
-    cx_binr_uint32(_buffer, _bufferSize, _bufferPos, &data->record.timestamp);
     return data;
 }
+
+void common_unpack_table_meta(const char* _buffer, uint16_t _bufferSize, uint32_t* _bufferPos, table_meta_t* _outTable)
+{
+    cx_binr_str(_buffer, _bufferSize, _bufferPos, _outTable->name, sizeof(_outTable->name));
+    cx_binr_uint8(_buffer, _bufferSize, _bufferPos, &_outTable->consistency);
+    cx_binr_uint16(_buffer, _bufferSize, _bufferPos, &_outTable->partitionsCount);
+    cx_binr_uint32(_buffer, _bufferSize, _bufferPos, &_outTable->compactionInterval);
+}
+
+void common_unpack_table_record(const char* _buffer, uint16_t _bufferSize, uint32_t* _bufferPos, table_record_t* _outRecord)
+{
+    cx_binr_uint16(_buffer, _bufferSize, _bufferPos, &_outRecord->key);
+
+    uint16_t valueLen = cx_binr_str(_buffer, _bufferSize, _bufferPos, NULL, 0) + 1;
+    _outRecord->value = malloc(valueLen);
+    cx_binr_str(_buffer, _bufferSize, _bufferPos, _outRecord->value, valueLen);
+
+    cx_binr_uint32(_buffer, _bufferSize, _bufferPos, &_outRecord->timestamp);
+}
+

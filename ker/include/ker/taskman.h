@@ -23,6 +23,7 @@ typedef enum TASK_STATE
     TASK_STATE_NEW,                 // the task was just created, but it's not yet assigned to the primary queue.
     TASK_STATE_READY,               // the task is ready to be executed and waiting in the queue.
     TASK_STATE_RUNNING,             // the task is being processed by a worker thread.
+    TASK_STATE_RUNNING_AWAITING,    // the task is being processed by a worker thread, but it's awaiting for some other node's reply.
     TASK_STATE_COMPLETED,           // the task is completed. check c->err to handle errors (if any).
     TASK_STATE_BLOCKED_RESCHEDULE,  // the task cannot be performed at this time since the table is blocked and it must be re-rescheduled.
     TASK_STATE_BLOCKED_AWAITING,    // the task is awaiting in a table's blocked queue. as soon as the table is unblocked it will be moved to the main queue.
@@ -57,9 +58,18 @@ typedef struct task_t
     cx_err_t            err;                    // if the task failed, err contains the error number and the error description for logging purposes.
     uint16_t            clientHandle;           // the handle to the client which requested this task in our server context. INVALID_HANDLE means a CLI-issued task.
     uint16_t            remoteId;               // the remote identifier for this remote task/request. (only if origin is TASK_ORIGIN_API)
-    // task data ---------------------------------------------------------------------------------------------------------------------------------------------------
-    uint16_t            tableHandle;            // temp variable for specific tasks which operate on a specific table and therefore we need to store its handle.
     void*               data;                   // the data (arguments and results) of the requested operation. see data_*_t structures in ker/defines.h.
+
+    // ker/mem data -----------------------------------------------------------------------------------------------------------------------------------------------
+#if defined(MEM) || defined(KER)
+    pthread_mutex_t     responseMtx;            // mutex for protecting cond signaling.
+    pthread_cond_t      responseCond;           // condition to signal the worker thread to wake up when the response of the request is available.
+#endif
+
+    // lfs data ---------------------------------------------------------------------------------------------------------------------------------------------------
+#ifdef LFS
+    uint16_t            tableHandle;            // temp variable for specific tasks which operate on a specific table and therefore we need to store its handle.
+#endif
 } task_t;
 
 typedef bool(*taskman_cb)(task_t* _task);
@@ -96,5 +106,7 @@ task_t*     taskman_create(TASK_ORIGIN _origin, TASK_TYPE _type, void* _data, cx
 void        taskman_update();
 
 void        taskman_completion(task_t* _task);
+
+task_t*     taskman_get(uint16_t _taskHandle);
 
 #endif // TASKMAN_H

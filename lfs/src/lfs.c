@@ -17,8 +17,11 @@
 #include <cx/file.h>
 #include <cx/cdict.h>
 #include <cx/sort.h>
+#include <cx/binw.h> //TODO sacar esto una vez que mueva api_response_describe a common
 
+#include <ker/common_protocol.h>
 #include <lfs/lfs_protocol.h>
+#include <mem/mem_protocol.h>
 #include <commons/config.h>
 
 #include <stdio.h>
@@ -380,40 +383,40 @@ static void handle_cli_command(const cx_cli_cmd_t* _cmd)
     {
         if (cli_parse_create(_cmd, &err, &tableName, &consistency, &numPartitions, &compactionInterval))
         {
-            packetSize = lfs_pack_req_create(g_ctx.buffer, sizeof(g_ctx.buffer), 0, tableName, consistency, numPartitions, compactionInterval);
-            lfs_handle_req_create((cx_net_common_t*)g_ctx.sv, NULL, g_ctx.buffer, packetSize);
+            packetSize = lfs_pack_req_create(g_ctx.buff1, sizeof(g_ctx.buff1), 0, tableName, consistency, numPartitions, compactionInterval);
+            lfs_handle_req_create((cx_net_common_t*)g_ctx.sv, NULL, g_ctx.buff1, packetSize);
         }
     }
     else if (strcmp("DROP", _cmd->header) == 0)
     {
         if (cli_parse_drop(_cmd, &err, &tableName))
         {
-            packetSize = lfs_pack_req_drop(g_ctx.buffer, sizeof(g_ctx.buffer), 0, tableName);
-            lfs_handle_req_drop((cx_net_common_t*)g_ctx.sv, NULL, g_ctx.buffer, packetSize);
+            packetSize = lfs_pack_req_drop(g_ctx.buff1, sizeof(g_ctx.buff1), 0, tableName);
+            lfs_handle_req_drop((cx_net_common_t*)g_ctx.sv, NULL, g_ctx.buff1, packetSize);
         }
     }
     else if (strcmp("DESCRIBE", _cmd->header) == 0)
     {
         if (cli_parse_describe(_cmd, &err, &tableName))
         {
-            packetSize = lfs_pack_req_describe(g_ctx.buffer, sizeof(g_ctx.buffer), 0, tableName);
-            lfs_handle_req_describe((cx_net_common_t*)g_ctx.sv, NULL, g_ctx.buffer, packetSize);
+            packetSize = lfs_pack_req_describe(g_ctx.buff1, sizeof(g_ctx.buff1), 0, tableName);
+            lfs_handle_req_describe((cx_net_common_t*)g_ctx.sv, NULL, g_ctx.buff1, packetSize);
         }
     }
     else if (strcmp("SELECT", _cmd->header) == 0)
     {
         if (cli_parse_select(_cmd, &err, &tableName, &key))
         {
-            packetSize = lfs_pack_req_select(g_ctx.buffer, sizeof(g_ctx.buffer), 0, tableName, key);
-            lfs_handle_req_select((cx_net_common_t*)g_ctx.sv, NULL, g_ctx.buffer, packetSize);
+            packetSize = lfs_pack_req_select(g_ctx.buff1, sizeof(g_ctx.buff1), 0, tableName, key);
+            lfs_handle_req_select((cx_net_common_t*)g_ctx.sv, NULL, g_ctx.buff1, packetSize);
         }
     }
     else if (strcmp("INSERT", _cmd->header) == 0)
     {
         if (cli_parse_insert(_cmd, &err, &tableName, &key, &value, &timestamp))
         {
-            packetSize = lfs_pack_req_insert(g_ctx.buffer, sizeof(g_ctx.buffer), 0, tableName, key, value, timestamp);
-            lfs_handle_req_insert((cx_net_common_t*)g_ctx.sv, NULL, g_ctx.buffer, packetSize);
+            packetSize = lfs_pack_req_insert(g_ctx.buff1, sizeof(g_ctx.buff1), 0, tableName, key, value, timestamp);
+            lfs_handle_req_insert((cx_net_common_t*)g_ctx.sv, NULL, g_ctx.buff1, packetSize);
         }
     }
     else if (strcmp("DUMP", _cmd->header) == 0)
@@ -743,7 +746,10 @@ static bool task_completed(task_t* _task)
 
     case TASK_WT_DUMP:
     {
-        cli_report_dumped(_task, table->meta.name, "asd.tmp"); //TODO add resulting dump file name
+        if (NULL != table)
+        {
+            cli_report_dumped(_task, table->meta.name, "asd.tmp"); //TODO add resulting dump file name
+        }
         break;
     }
 
@@ -870,25 +876,80 @@ static bool task_free(task_t* _task)
 
 static void api_response_create(const task_t* _task)
 {
-    //TODO. reply back to the MEM node that requested this query.
+    uint32_t payloadSize = mem_pack_res_create(g_ctx.buff1, sizeof(g_ctx.buff1), 
+        _task->remoteId, _task->err.code, _task->err.desc);    
+
+    cx_net_send(g_ctx.sv, MEMP_RES_CREATE, g_ctx.buff1, payloadSize, _task->clientHandle);
 }
 
 static void api_response_drop(const task_t* _task)
 {
-    //TODO. reply back to the MEM node that requested this query.
+    uint32_t payloadSize = mem_pack_res_drop(g_ctx.buff1, sizeof(g_ctx.buff1),
+        _task->remoteId, _task->err.code, _task->err.desc);
+
+    cx_net_send(g_ctx.sv, MEMP_RES_DROP, g_ctx.buff1, payloadSize, _task->clientHandle);
 }
 
 static void api_response_describe(const task_t* _task)
 {
-    //TODO. reply back to the MEM node that requested this query.
+    data_describe_t* data = _task->data;
+
+    uint32_t tableSize = 0;
+    uint32_t pos = 0;
+    cx_binw_uint16(g_ctx.buff1, sizeof(g_ctx.buff1), &pos, _task->remoteId);
+    cx_binw_uint16(g_ctx.buff1, sizeof(g_ctx.buff1), &pos, data->tablesCount);
+
+    if (1 == data->tablesCount)
+    {
+        cx_binw_uint32(g_ctx.buff1, sizeof(g_ctx.buff1), &pos, _task->err.code);
+        if (ERR_NONE != _task->err.code)
+        {
+            cx_binw_str(g_ctx.buff1, sizeof(g_ctx.buff1), &pos, _task->err.desc);
+            cx_net_send(g_ctx.sv, MEMP_RES_DESCRIBE, g_ctx.buff1, pos, _task->clientHandle);
+            return;
+        }
+    }
+
+    // start sending them in chunks
+    for (uint16_t i = 0; i < data->tablesCount; i++)
+    {
+        // pack this table's metadata into temp buffer #2
+        tableSize = common_pack_table_meta(g_ctx.buff2, sizeof(g_ctx.buff2), &data->tables[i]);
+        
+        if (tableSize > sizeof(g_ctx.buff1) - pos)
+        {
+            // not enough space to append this one, flush our packet
+            cx_net_send(g_ctx.sv, MEMP_RES_DESCRIBE, g_ctx.buff1, pos, _task->clientHandle);
+
+            // start a new packet
+            pos = 0;
+            cx_binw_uint16(g_ctx.buff1, sizeof(g_ctx.buff1), &pos, _task->remoteId);
+        }
+        
+        // append it
+        memcpy(&g_ctx.buff1[pos], g_ctx.buff2, tableSize);
+        pos += tableSize;
+    }
+    
+    if (pos > sizeof(uint16_t))
+    {
+        cx_net_send(g_ctx.sv, MEMP_RES_DESCRIBE, g_ctx.buff1, pos, _task->clientHandle);
+    }
 }
 
 static void api_response_select(const task_t* _task)
 {
-    //TODO. reply back to the MEM node that requested this query.
+    data_select_t* data = _task->data;
+    uint32_t payloadSize = mem_pack_res_select(g_ctx.buff1, sizeof(g_ctx.buff1),
+        _task->remoteId, _task->err.code, _task->err.desc, &data->record);
+
+    cx_net_send(g_ctx.sv, MEMP_RES_SELECT, g_ctx.buff1, payloadSize, _task->clientHandle);
 }
 
 static void api_response_insert(const task_t* _task)
 {
-    //TODO. reply back to the MEM node that requested this query.
+    uint32_t payloadSize = mem_pack_res_insert(g_ctx.buff1, sizeof(g_ctx.buff1),
+        _task->remoteId, _task->err.code, _task->err.desc);
+    
+    cx_net_send(g_ctx.sv, MEMP_RES_INSERT, g_ctx.buff1, payloadSize, _task->clientHandle);
 }

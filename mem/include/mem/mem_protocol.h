@@ -1,6 +1,7 @@
 #ifndef MEM_PROTOCOL_H_
 #define MEM_PROTOCOL_H_
 
+#include <ker/defines.h>
 #include <cx/net.h>
 
 /****************************************************************************************
@@ -40,6 +41,16 @@ void mem_handle_req_select(const cx_net_common_t* _common, void* _userData, cons
 
 void mem_handle_req_insert(const cx_net_common_t* _common, void* _userData, const char* _buffer, uint16_t _bufferSize);
 
+void mem_handle_res_create(const cx_net_common_t* _common, void* _userData, const char* _buffer, uint16_t _bufferSize);
+
+void mem_handle_res_drop(const cx_net_common_t* _common, void* _userData, const char* _buffer, uint16_t _bufferSize);
+
+void mem_handle_res_describe(const cx_net_common_t* _common, void* _userData, const char* _buffer, uint16_t _bufferSize);
+
+void mem_handle_res_select(const cx_net_common_t* _common, void* _userData, const char* _buffer, uint16_t _bufferSize);
+
+void mem_handle_res_insert(const cx_net_common_t* _common, void* _userData, const char* _buffer, uint16_t _bufferSize);
+
 #endif // MEM
 
 /****************************************************************************************
@@ -55,5 +66,13 @@ uint32_t mem_pack_req_describe(char* _buffer, uint16_t _size, uint16_t _remoteId
 uint32_t mem_pack_req_select(char* _buffer, uint16_t _size, uint16_t _remoteId, const char* _tableName, uint16_t _key);
 
 uint32_t mem_pack_req_insert(char* _buffer, uint16_t _size, uint16_t _remoteId, const char* _tableName, uint16_t _key, const char* _value, uint32_t _timestamp);
+
+uint32_t mem_pack_res_create(char* _buffer, uint16_t _size, uint16_t _remoteId, uint32_t _errCode, const char* _errDesc);
+
+uint32_t mem_pack_res_drop(char* _buffer, uint16_t _size, uint16_t _remoteId, uint32_t _errCode, const char* _errDesc);
+
+uint32_t mem_pack_res_select(char* _buffer, uint16_t _size, uint16_t _remoteId, uint32_t _errCode, const char* _errDesc, table_record_t* _record);
+
+uint32_t mem_pack_res_insert(char* _buffer, uint16_t _size, uint16_t _remoteId, uint32_t _errCode, const char* _errDesc);
 
 #endif // MEM_PROTOCOL_H_

@@ -46,6 +46,10 @@ bool taskman_init(uint16_t _numWorkers, taskman_cb _runMt, taskman_cb _runWk, ta
     {
         m_taskmanCtx.tasks[i].handle = i;
         m_taskmanCtx.tasks[i].clientHandle = INVALID_HANDLE;
+#if defined(MEM) || defined(KER)
+        pthread_mutex_init(&m_taskmanCtx.tasks[i].responseMtx, NULL);
+        pthread_cond_init(&m_taskmanCtx.tasks[i].responseCond, NULL);
+#endif
     }
 
     m_taskmanCtx.completionKeyLast = 0;
@@ -93,6 +97,11 @@ void taskman_destroy()
             handle = cx_handle_at(m_taskmanCtx.halloc, i);
             task = &(m_taskmanCtx.tasks[handle]);
             _taskman_free_task(task);
+
+#if defined(MEM) || defined(KER)
+            pthread_mutex_destroy(&m_taskmanCtx.tasks[i].responseMtx);
+            pthread_cond_destroy(&m_taskmanCtx.tasks[i].responseCond);
+#endif
         }
         cx_halloc_destroy(m_taskmanCtx.halloc);
         m_taskmanCtx.halloc = NULL;
@@ -214,6 +223,15 @@ void taskman_completion(task_t* _task)
     pthread_mutex_unlock(&m_taskmanCtx.completionKeyMtx);
 }
 
+task_t* taskman_get(uint16_t _taskHandle)
+{
+    if (cx_handle_is_valid(m_taskmanCtx.halloc, _taskHandle))
+    {
+        return &m_taskmanCtx.tasks[_taskHandle];
+    }
+    return NULL;
+}
+
 /****************************************************************************************
  ***  PRIVATE DECLARATIONS
  ***************************************************************************************/
@@ -267,9 +285,12 @@ static void _taskman_free_task(task_t* _task)
     _task->origin = TASK_ORIGIN_NONE;
     _task->type = TASK_TYPE_NONE;
     _task->clientHandle = INVALID_HANDLE;
-    _task->tableHandle = INVALID_HANDLE;
     _task->remoteId = 0;
     CX_ERR_CLEAR(&_task->err);
+
+#ifdef LFS
+    _task->tableHandle = INVALID_HANDLE;
+#endif
     
     cx_handle_free(m_taskmanCtx.halloc, _task->handle);
 }
