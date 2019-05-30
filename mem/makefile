@@ -30,6 +30,7 @@ CFLAGS ?=                                 \
 	-Wno-unused-parameter                 \
 	-Wno-address
 
+LIBS := -l:$(LIB_COMMONS) -l:$(LIB_CX) -l:libpthread.so -l:libm.so
 LDFLAGS ?= -Wl,-R -Wl,/home/utnso/lissandra/cx/build/$(TARGET)
 
 # Paths
@@ -112,16 +113,16 @@ valgrind: debug
 	@echo ""
 
 $(PATH_BUILD).obj/common/ker/%.o: $(PATH_COMMON_KER)%.c
-	$(CC) $(CFLAGS) -c $< -o $@ -l:$(LIB_COMMONS) -l:$(LIB_CX)
+	$(CC) $(CFLAGS) -c $< -o $@
 
 $(PATH_BUILD).obj/common/lfs/%.o: $(PATH_COMMON_LFS)%.c
-	$(CC) $(CFLAGS) -c $< -o $@ -l:$(LIB_COMMONS) -l:$(LIB_CX)
+	$(CC) $(CFLAGS) -c $< -o $@
 
 $(PATH_BUILD).obj/%.o: $(PATH_SRC)%.c
-	$(CC) $(CFLAGS) -c $< -o $@ -l:$(LIB_COMMONS) -l:$(LIB_CX)
+	$(CC) $(CFLAGS) -c $< -o $@
 
 $(PATH_BUILD)$(BIN_OUTPUT): $(FILES_O)
-	$(CC) $(CFLAGS) $(FILES_O) -o $(PATH_BUILD)$(BIN_OUTPUT) $(LDFLAGS) -l:$(LIB_COMMONS) -l:$(LIB_CX)
+	$(CC) $(CFLAGS) $(FILES_O) -o $(PATH_BUILD)$(BIN_OUTPUT) $(LDFLAGS) $(LIBS)
 
 .PHONY: dependency
 dependency:
