@@ -65,6 +65,22 @@ void cx_cdict_set(cx_cdict_t* _cdict, const char* _key, void* _data)
     pthread_mutex_unlock(&_cdict->mutex);
 }
 
+void cx_cdict_getoradd(cx_cdict_t* _cdict, const char* _key, void* _data, void** _outData)
+{
+    CX_CHECK_NOT_NULL(_cdict);
+    CX_CHECK_NOT_NULL(_outData);
+
+    pthread_mutex_lock(&_cdict->mutex);
+    (*_outData) = dictionary_get(_cdict->handle, _key);
+
+    if (NULL == (*_outData))
+    {
+        dictionary_put(_cdict->handle, _key, _data);
+        (*_outData) = dictionary_get(_cdict->handle, _key);
+    }
+    pthread_mutex_unlock(&_cdict->mutex);
+}
+
 bool cx_cdict_tryadd(cx_cdict_t* _cdict, const char* _key, void* _data)
 {
     CX_CHECK_NOT_NULL(_cdict);
