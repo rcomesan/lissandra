@@ -16,12 +16,17 @@ cx_cdict_t* cx_cdict_init()
 
     if (NULL != dict->handle)
     {
-        dict->mutexInitialized = (0 == pthread_mutex_init(&dict->mutex, NULL));
-        CX_CHECK(dict->mutexInitialized, "mutex initialization failed!");
+        pthread_mutexattr_t attr;
+        dict->mtxInitialized = true
+            && (0 == pthread_mutexattr_init(&attr))
+            && (0 == pthread_mutexattr_settype(&attr, PTHREAD_MUTEX_RECURSIVE))
+            && (0 == pthread_mutex_init(&dict->mtx, &attr));
+        pthread_mutexattr_destroy(&attr);
+        CX_CHECK(dict->mtxInitialized, "mutex initialization failed!");
     }
     CX_CHECK(NULL != dict->handle, "commons dictionary creation failed!");
 
-    if (NULL != dict->handle && dict->mutexInitialized)
+    if (NULL != dict->handle && dict->mtxInitialized)
     {
         return dict;
     }
@@ -34,10 +39,10 @@ void cx_cdict_destroy(cx_cdict_t* _cdict, cx_destroyer_cb _cb)
 {
     if (NULL == _cdict) return;
 
-    if (_cdict->mutexInitialized)
+    if (_cdict->mtxInitialized)
     {
-        pthread_mutex_destroy(&_cdict->mutex);
-        _cdict->mutexInitialized = false;
+        pthread_mutex_destroy(&_cdict->mtx);
+        _cdict->mtxInitialized = false;
     }
 
     dictionary_destroy_and_destroy_elements(_cdict->handle, _cb);
@@ -50,9 +55,9 @@ bool cx_cdict_get(cx_cdict_t* _cdict, const char* _key, void** _outData)
 {
     CX_CHECK_NOT_NULL(_cdict);
 
-    pthread_mutex_lock(&_cdict->mutex);
+    pthread_mutex_lock(&_cdict->mtx);
     (*_outData) = dictionary_get(_cdict->handle, _key);
-    pthread_mutex_unlock(&_cdict->mutex);
+    pthread_mutex_unlock(&_cdict->mtx);
     return NULL != (*_outData);
 }
 
@@ -60,9 +65,9 @@ void cx_cdict_set(cx_cdict_t* _cdict, const char* _key, void* _data)
 {
     CX_CHECK_NOT_NULL(_cdict);
 
-    pthread_mutex_lock(&_cdict->mutex);
+    pthread_mutex_lock(&_cdict->mtx);
     dictionary_put(_cdict->handle, _key, _data);
-    pthread_mutex_unlock(&_cdict->mutex);
+    pthread_mutex_unlock(&_cdict->mtx);
 }
 
 void cx_cdict_getoradd(cx_cdict_t* _cdict, const char* _key, void* _data, void** _outData)
@@ -70,7 +75,7 @@ void cx_cdict_getoradd(cx_cdict_t* _cdict, const char* _key, void* _data, void**
     CX_CHECK_NOT_NULL(_cdict);
     CX_CHECK_NOT_NULL(_outData);
 
-    pthread_mutex_lock(&_cdict->mutex);
+    pthread_mutex_lock(&_cdict->mtx);
     (*_outData) = dictionary_get(_cdict->handle, _key);
 
     if (NULL == (*_outData))
@@ -78,7 +83,7 @@ void cx_cdict_getoradd(cx_cdict_t* _cdict, const char* _key, void* _data, void**
         dictionary_put(_cdict->handle, _key, _data);
         (*_outData) = dictionary_get(_cdict->handle, _key);
     }
-    pthread_mutex_unlock(&_cdict->mutex);
+    pthread_mutex_unlock(&_cdict->mtx);
 }
 
 bool cx_cdict_tryadd(cx_cdict_t* _cdict, const char* _key, void* _data)
@@ -87,13 +92,13 @@ bool cx_cdict_tryadd(cx_cdict_t* _cdict, const char* _key, void* _data)
 
     bool result = false;
 
-    pthread_mutex_lock(&_cdict->mutex);
+    pthread_mutex_lock(&_cdict->mtx);
     if (!dictionary_has_key(_cdict->handle, _key))
     {
         dictionary_put(_cdict->handle, _key, _data);
         result = true;
     }
-    pthread_mutex_unlock(&_cdict->mutex);
+    pthread_mutex_unlock(&_cdict->mtx);
 
     return result;
 }
@@ -105,13 +110,13 @@ bool cx_cdict_tryremove(cx_cdict_t* _cdict, const char* _key, void** _outData)
     void* data = NULL;
     bool result = false;
 
-    pthread_mutex_lock(&_cdict->mutex);
+    pthread_mutex_lock(&_cdict->mtx);
     if (dictionary_has_key(_cdict->handle, _key))
     {
         data = dictionary_remove(_cdict->handle, _key);
         result = true;
     }
-    pthread_mutex_unlock(&_cdict->mutex);
+    pthread_mutex_unlock(&_cdict->mtx);
 
     if (NULL != _outData) (*_outData) = data;
     return result;
@@ -121,7 +126,7 @@ void* cx_cdict_erase(cx_cdict_t* _cdict, const char* _key, cx_destroyer_cb _cb)
 {
     CX_CHECK_NOT_NULL(_cdict);
 
-    pthread_mutex_lock(&_cdict->mutex);
+    pthread_mutex_lock(&_cdict->mtx);
 
     void* data = NULL;
     data = dictionary_remove(_cdict->handle, _key);
@@ -132,7 +137,7 @@ void* cx_cdict_erase(cx_cdict_t* _cdict, const char* _key, cx_destroyer_cb _cb)
         data = NULL;
     }
 
-    pthread_mutex_unlock(&_cdict->mutex);
+    pthread_mutex_unlock(&_cdict->mtx);
 
     return data;
 }
@@ -143,9 +148,9 @@ bool cx_cdict_contains(cx_cdict_t* _cdict, const char* _key)
     
     bool result = false;
 
-    pthread_mutex_lock(&_cdict->mutex);
+    pthread_mutex_lock(&_cdict->mtx);
     result = dictionary_has_key(_cdict->handle, _key);
-    pthread_mutex_unlock(&_cdict->mutex);
+    pthread_mutex_unlock(&_cdict->mtx);
 
     return result;
 }
@@ -182,16 +187,16 @@ void cx_cdict_clear(cx_cdict_t* _cdict, cx_destroyer_cb _cb)
     }
     else
     {
-        pthread_mutex_lock(&_cdict->mutex);
+        pthread_mutex_lock(&_cdict->mtx);
         dictionary_clean(_cdict->handle);
-        pthread_mutex_unlock(&_cdict->mutex);
+        pthread_mutex_unlock(&_cdict->mtx);
     }    
 }
 
 void cx_cdict_iter_begin(cx_cdict_t* _cdict)
 {
     CX_CHECK_NOT_NULL(_cdict);
-    pthread_mutex_lock(&_cdict->mutex);
+    pthread_mutex_lock(&_cdict->mtx);
     
     cx_cdict_iter_first(_cdict);
 }
@@ -199,7 +204,7 @@ void cx_cdict_iter_begin(cx_cdict_t* _cdict)
 void cx_cdict_iter_first(cx_cdict_t* _cdict)
 {
     CX_CHECK_NOT_NULL(_cdict);
-    CX_CHECK(syscall(__NR_gettid) == _cdict->mutex.__data.__owner, "you do not own this mutex! you must call cx_cdict_iter_begin first!");
+    CX_CHECK(syscall(__NR_gettid) == _cdict->mtx.__data.__owner, "you do not own this mutex! you must call cx_cdict_iter_begin first!");
 
     _cdict->iterTableIndex = 0;
     _cdict->iterElement = NULL;
@@ -208,7 +213,7 @@ void cx_cdict_iter_first(cx_cdict_t* _cdict)
 bool cx_cdict_iter_next(cx_cdict_t* _cdict, char** _outKey, void** _outData)
 {
     CX_CHECK_NOT_NULL(_cdict);
-    CX_CHECK(syscall(__NR_gettid) == _cdict->mutex.__data.__owner, "you do not own this mutex! you must call cx_cdict_iter_begin first!");
+    CX_CHECK(syscall(__NR_gettid) == _cdict->mtx.__data.__owner, "you do not own this mutex! you must call cx_cdict_iter_begin first!");
     
     for (; _cdict->iterTableIndex < _cdict->handle->table_max_size; _cdict->iterTableIndex++)
     {
@@ -234,5 +239,5 @@ bool cx_cdict_iter_next(cx_cdict_t* _cdict, char** _outKey, void** _outData)
 void cx_cdict_iter_end(cx_cdict_t* _cdict)
 {
     CX_CHECK_NOT_NULL(_cdict);
-    pthread_mutex_unlock(&_cdict->mutex);
+    pthread_mutex_unlock(&_cdict->mtx);
 }

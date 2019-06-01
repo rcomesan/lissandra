@@ -10,8 +10,8 @@
 typedef struct cx_cdict_t
 {
     t_dictionary*       handle;             // pointer to so-commons-lib dictionary adt.
-    pthread_mutex_t     mutex;              // mutex for thread safety.
-    bool                mutexInitialized;   // true if the mutex was successfully initialized.
+    pthread_mutex_t     mtx;                // mutex for thread safety.
+    bool                mtxInitialized;     // true if the mutex was successfully initialized.
     int32_t             iterTableIndex;     // current iterator table index. (bucket of the hashtable)
     t_hash_element*     iterElement;        // current iterator table element.
 } cx_cdict_t;
