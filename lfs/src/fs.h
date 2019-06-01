@@ -23,6 +23,8 @@
 #define LFS_DUMP_EXTENSION_COMPACTION "tmpc"
 #define LFS_DUMP_PREFIX "D"
 
+typedef void(*fs_func_cb)(const char* _tableName, table_t* _table, void* _userData);
+
 /****************************************************************************************
  ***  PUBLIC FUNCTIONS
  ***************************************************************************************/
@@ -33,7 +35,7 @@ void                fs_destroy();
 
 table_meta_t*       fs_describe(uint16_t* _outTablesCount, cx_err_t* _err);
 
-bool                fs_table_init(table_t* _outTable, const char* _tableName, cx_err_t* _err);
+bool                fs_table_init(table_t** _outTable, const char* _tableName, cx_err_t* _err);
 
 void                fs_table_destroy(table_t* _table);
 
@@ -41,11 +43,11 @@ bool                fs_table_exists(const char* _tableName, table_t** _outTable)
 
 uint16_t            fs_table_handle(const char* _tableName);
 
-bool                fs_table_avail_guard_begin(table_t* _table, cx_err_t* _err, pthread_mutex_t* _mtx);
+bool                fs_table_avail_guard_begin(const char* _tableName, cx_err_t* _err, table_t** _outTable);
 
 void                fs_table_avail_guard_end(table_t* _table);
 
-bool                fs_table_create(table_t* _table, const char* _tableName, uint8_t _consistency, uint16_t _partitions, uint32_t _compactionInterval, cx_err_t* _err);
+bool                fs_table_create(table_t** _outTable, const char* _tableName, uint8_t _consistency, uint16_t _partitions, uint32_t _compactionInterval, cx_err_t* _err);
 
 bool                fs_table_delete(const char* _tableName, table_t** _outTable, cx_err_t* _err);
 
@@ -66,6 +68,8 @@ bool                fs_table_dump_delete(const char* _tableName, uint16_t _dumpN
 uint16_t            fs_table_dump_number_next(const char* _tableName);
 
 cx_file_explorer_t* fs_table_explorer(const char* _tableName, cx_err_t* _err);
+
+void                fs_tables_foreach(fs_func_cb _func, void* _userData);
 
 uint32_t            fs_block_alloc(uint32_t _blocksCount, uint32_t* _outBlocksArr);
 

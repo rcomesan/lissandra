@@ -6,6 +6,7 @@
 #include <cx/file.h>
 #include <cx/net.h>
 #include <cx/cdict.h>
+#include <cx/reslock.h>
 
 #include <commons/config.h>
 #include <commons/log.h>
@@ -60,7 +61,8 @@ typedef struct fs_ctx_t
 
 typedef enum MEMTABLE_TYPE
 {
-    MEMTABLE_TYPE_MEM = 1,
+    MEMTABLE_TYPE_NONE = 0,
+    MEMTABLE_TYPE_MEM,
     MEMTABLE_TYPE_DISK,
 } MEMTABLE_TYPE;
 
@@ -79,16 +81,12 @@ typedef struct memtable_t
 typedef struct table_t
 {
     uint16_t            handle;                 // handle of this table entry in the tables container (index).
-    bool                inUse;                  // true if this handle has a table assigned to, false if it doesn't.
     table_meta_t        meta;                   // table metadata.
     memtable_t          memtable;               // memtable for this table.
     bool                compacting;             // true if this table is performing a compaction.
-    bool                blocked;                // true if this table is marked as blocked (pending to be compacted).
-    double              blockedStartTime;       // time counter value of when the table block started.
-    uint16_t            timerHandle;            // handle to the timer created with the desired compaction interval for this table.
     t_queue*            blockedQueue;           // queue with tasks which are awaiting for this table to become unblocked.
-    uint16_t            operations;             // number of operations being performed on this table (number of current jobs which depend on its availability).
-    pthread_mutex_t     mtxOperations;          // mutex to protect operations/blocked/compacting variables when being accessed/modified by multiple threads.
+    uint16_t            timerHandle;            // handle to the timer created with the desired compaction interval for this table.
+    cx_reslock_t        reslock;                // resource lock to protect this table.
 } table_t;
 
 typedef struct lfs_ctx_t
@@ -97,8 +95,6 @@ typedef struct lfs_ctx_t
     t_log*              log;                                        // pointer to so-commons-lib log adt.
     bool                isRunning;                                  // true if the server is running. false if it's shutting down.
     cx_net_ctx_sv_t*    sv;                                         // server context for serving API requests coming from MEM nodes.
-    table_t             tables[MAX_TABLES];                         // container for storing tables.
-    cx_handle_alloc_t*  tablesHalloc;                               // handle allocator for tables container.
     payload_t           buff1;                                      // temporary pre-allocated buffer for building packets.
     payload_t           buff2;                                      // temporary pre-allocated buffer for building packets.
     uint16_t            timerDump;                                  // dump operation timer handle.

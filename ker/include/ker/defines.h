@@ -41,6 +41,7 @@ typedef enum ERR_CODE
     ERR_CFG_MISSINGKEY,
     ERR_NET_FAILED,
     ERR_TABLE_BLOCKED,
+    ERR_MEMORY_BLOCKED,
 } ERRR_CODE;
 
 
@@ -114,7 +115,7 @@ typedef struct data_compact_t
 typedef struct data_free_t
 {
     uint8_t         resourceType;
-    uint16_t        resourceHandle;
+    void*           resourcePtr;
 } data_free_t;
 
 typedef struct data_run_t

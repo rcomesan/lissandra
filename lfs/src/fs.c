@@ -141,8 +141,12 @@ table_meta_t* fs_describe(uint16_t* _outTablesCount, cx_err_t* _err)
 
         while (cx_cdict_iter_next(m_fsCtx->tablesMap, &key, (void**)&table))
         {
-            if (table->inUse)
+            if (fs_table_avail_guard_begin(key, NULL, &table))
+            {
+                //TODO FIXME!!
                 memcpy(&(tables[i++]), &(table->meta), sizeof(tables[0]));
+                fs_table_avail_guard_end(table);
+            }
         }
     }
     cx_cdict_iter_end(m_fsCtx->tablesMap);
@@ -165,38 +169,29 @@ table_meta_t* fs_describe(uint16_t* _outTablesCount, cx_err_t* _err)
     return tables;
 }
 
-bool fs_table_avail_guard_begin(table_t* _table, cx_err_t* _err, pthread_mutex_t* _mtx)
+bool fs_table_avail_guard_begin(const char* _tableName, cx_err_t* _err, table_t** _outTable)
 {
-    bool result = false;
-    
-    pthread_mutex_lock(&_table->mtxOperations);
-    if (_table->blocked || _table->compacting || !_table->inUse)
+    bool available = false;
+
+    pthread_mutex_lock(&m_fsCtx->tablesMap->mtx);
+    if (fs_table_exists(_tableName, _outTable))
     {
-        CX_ERR_SET(_err, ERR_TABLE_BLOCKED, "Operation cannot be performed at this time since the table is blocked. Try agian later.");
-        if (NULL != _mtx)
-        {
-            pthread_mutex_unlock(_mtx);
-        }
-        result = false;
+        available = cx_reslock_avail_guard_begin(&(*_outTable)->reslock);
+        if (!available)
+            CX_ERR_SET(_err, ERR_TABLE_BLOCKED, "Operation cannot be performed at this time since the table is blocked. Try agian later.");
     }
     else
     {
-        // increment the amount of running jobs that depend on this table's availability (not blocked)
-        _table->operations++;
-        result = true;
+        CX_ERR_SET(_err, ERR_GENERIC, "Table '%s' does not exist.", _tableName);
     }
-    pthread_mutex_unlock(&_table->mtxOperations);
+    pthread_mutex_unlock(&m_fsCtx->tablesMap->mtx);
 
-    return result;
+    return available;
 }
 
 void fs_table_avail_guard_end(table_t* _table)
 {
-    // decrement the amount of running jobs that depend on this table's availability (not blocked)
-    pthread_mutex_lock(&_table->mtxOperations);
-    CX_CHECK(_table->operations > 0, "Something is wrong here...");
-    _table->operations--;
-    pthread_mutex_unlock(&_table->mtxOperations);
+    cx_reslock_avail_guard_end(&_table->reslock);
 }
 
 bool fs_table_exists(const char* _tableName, table_t** _outTable)
@@ -225,7 +220,7 @@ uint16_t fs_table_handle(const char* _tableName)
     return INVALID_HANDLE;
 }
 
-bool fs_table_create(table_t* _table, const char* _tableName, uint8_t _consistency, uint16_t _partitions, uint32_t _compactionInterval, cx_err_t* _err)
+bool fs_table_create(table_t** _outTable, const char* _tableName, uint8_t _consistency, uint16_t _partitions, uint32_t _compactionInterval, cx_err_t* _err)
 {
     CX_CHECK(strlen(_tableName) > 0, "Invalid _tableName!");
     CX_ERR_CLEAR(_err);
@@ -234,72 +229,70 @@ bool fs_table_create(table_t* _table, const char* _tableName, uint8_t _consisten
     cx_path_t path;
     t_config* meta = NULL;
 
-    _table->blocked = true;
-
-    if (cx_cdict_tryadd(m_fsCtx->tablesMap, _tableName, _table))
+    if (fs_table_init(_outTable, _tableName, _err))
     {
-        cx_file_path(&path, "%s/%s/%s", m_fsCtx->rootDir, LFS_DIR_TABLES, _tableName);
-        if (cx_file_mkdir(&path, _err))
+        if (cx_cdict_tryadd(m_fsCtx->tablesMap, _tableName, (*_outTable)))
         {
-            cx_file_path(&path, "%s/%s/%s/%s", m_fsCtx->rootDir, LFS_DIR_TABLES, _tableName, LFS_DIR_METADATA);
-            if (cx_file_touch(&path, _err))
+            cx_file_path(&path, "%s/%s/%s", m_fsCtx->rootDir, LFS_DIR_TABLES, _tableName);
+            if (cx_file_mkdir(&path, _err))
             {
-                meta = config_create(path);
-                if (NULL != meta)
+                cx_file_path(&path, "%s/%s/%s/%s", m_fsCtx->rootDir, LFS_DIR_TABLES, _tableName, LFS_DIR_METADATA);
+                if (cx_file_touch(&path, _err))
                 {
-                    char temp[32];
-
-                    cx_str_from_uint8(_consistency, temp, sizeof(temp));
-                    config_set_value(meta, "consistency", temp);
-
-                    cx_str_from_uint16(_partitions, temp, sizeof(temp));
-                    config_set_value(meta, "partitionsCount", temp);
-
-                    cx_str_from_uint32(_compactionInterval, temp, sizeof(temp));
-                    config_set_value(meta, "compactionInterval", temp);
-
-                    config_save(meta);
-
-                    if (fs_table_init(_table, _tableName, _err))
+                    meta = config_create(path);
+                    if (NULL != meta)
                     {
-                        fs_file_t partFile;
-                        for (uint16_t i = 0; i < _table->meta.partitionsCount; i++)
-                        {
-                            CX_MEM_ZERO(partFile);
-                            partFile.size = 0;
-                            partFile.blocksCount = fs_block_alloc(1, partFile.blocks);
+                        char temp[32];
 
-                            if (1 == partFile.blocksCount)
+                        // create initial metadata
+                        cx_str_from_uint8(_consistency, temp, sizeof(temp));
+                        config_set_value(meta, "consistency", temp);
+                        cx_str_from_uint16(_partitions, temp, sizeof(temp));
+                        config_set_value(meta, "partitionsCount", temp);
+                        cx_str_from_uint32(_compactionInterval, temp, sizeof(temp));
+                        config_set_value(meta, "compactionInterval", temp);
+                        config_save(meta);
+
+                        if (fs_table_meta_get(_tableName, &(*_outTable)->meta, _err)
+                            && memtable_init(_tableName, true, &(*_outTable)->memtable, _err))
+                        {
+                            fs_file_t partFile;
+                            for (uint16_t i = 0; i < (*_outTable)->meta.partitionsCount; i++)
                             {
-                                if (fs_table_part_set(_tableName, i, false, &partFile, _err))
+                                CX_MEM_ZERO(partFile);
+                                partFile.size = 0;
+                                partFile.blocksCount = fs_block_alloc(1, partFile.blocks);
+
+                                if (1 == partFile.blocksCount)
                                 {
-                                    success = true;
+                                    if (!fs_table_part_set(_tableName, i, false, &partFile, _err))
+                                    {
+                                        CX_ERR_SET(_err, 1, "Partition #%d for table '%s' could not be written!", i, _tableName);
+                                        break;
+                                    }
                                 }
                                 else
                                 {
-                                    CX_ERR_SET(_err, 1, "Partition #%d for table '%s' could not be written!", i, _tableName);
+                                    CX_ERR_SET(_err, 1, "An initial block for table '%s' partition #%d could not be allocated."
+                                        "we may have ran out of blocks!", _tableName, i);
                                     break;
                                 }
                             }
-                            else
-                            {
-                                CX_ERR_SET(_err, 1, "An initial block for table '%s' partition #%d could not be allocated."
-                                    "we may have ran out of blocks!", _tableName, i);
-                                break;
-                            }
+
+                            success = true;
                         }
                     }
-                }
-                else
-                {
-                    CX_ERR_SET(_err, 1, "Table metadata file '%s' could not be created.", path);
+                    else
+                    {
+                        CX_ERR_SET(_err, 1, "Table metadata file '%s' could not be created.", path);
+                    }
                 }
             }
         }
-    }
-    else
-    {
-        CX_ERR_SET(_err, 1, "Table '%s' already exists.", _tableName);
+        else
+        {
+            CX_ERR_SET(_err, 1, "Table '%s' already exists.", _tableName);
+        }
     }
 
     if (NULL != meta) config_destroy(meta);
@@ -507,6 +500,22 @@ cx_file_explorer_t* fs_table_explorer(const char* _tableName, cx_err_t* _err)
     return explorer;
 }
 
+void fs_tables_foreach(fs_func_cb _func, void* _userData)
+{
+    char* tableName = NULL;
+    table_t* table = NULL;
+
+    cx_cdict_iter_begin(m_fsCtx->tablesMap);
+    while (cx_cdict_iter_next(m_fsCtx->tablesMap, &tableName, (void**)&table))
+    {
+        if (fs_table_avail_guard_begin(tableName, NULL, &table))
+        {
+            _func(tableName, table, _userData);
+            fs_table_avail_guard_end(table);
+        }
+    }
+    cx_cdict_iter_end(m_fsCtx->tablesMap);
+}
 
 uint32_t fs_block_alloc(uint32_t _blocksCount, uint32_t* _outBlocksArr)
 {
@@ -865,7 +874,6 @@ static bool _fs_load_tables(cx_err_t* _err)
     cx_file_explorer_t* explorer = cx_file_explorer_init(&tablesPath, _err);
     cx_path_t tableFolderPath;
     cx_path_t tableName;
-    uint16_t tableHandle = INVALID_HANDLE;
     table_t* table = NULL;
     uint32_t count = 0;
 
@@ -875,26 +883,20 @@ static bool _fs_load_tables(cx_err_t* _err)
         {
             cx_file_get_name(&tableFolderPath, false, &tableName);
             
-            tableHandle = cx_handle_alloc(g_ctx.tablesHalloc);
-            if (INVALID_HANDLE != tableHandle)
+            if (fs_table_init(&table, tableName, _err))
             {
-                table = &(g_ctx.tables[tableHandle]);
-                if (fs_table_init(table, tableName, _err))
-                {
-                    table->timerHandle = cx_timer_add(table->meta.compactionInterval, LFS_TIMER_COMPACT, table);
-                    CX_CHECK(INVALID_HANDLE != table->timerHandle, "we ran out of timer handles for table '%s'!", table->meta.name);
+                table->timerHandle = cx_timer_add(table->meta.compactionInterval, LFS_TIMER_COMPACT, table);
+                CX_CHECK(INVALID_HANDLE != table->timerHandle, "we ran out of timer handles for table '%s'!", table->meta.name);
+                
+                // unlock the resource (our table initiates blocked)
+                cx_reslock_unblock(&table->reslock);
 
-                    cx_cdict_set(m_fsCtx->tablesMap, tableName, table);
-                    count++;
-                }
-                else
-                {
-                    CX_WARN(CX_ALW, "Table '%s' skipped. %s", _err->desc);
-                }
+                cx_cdict_set(m_fsCtx->tablesMap, tableName, table);
+                count++;
             }
             else
             {
-                CX_WARN(CX_ALW, "Table '%s' skipped, we ran out of table handles!", _err->desc);
+                CX_WARN(CX_ALW, "Table '%s' skipped. %s", _err->desc);
             }
         }
 
@@ -938,21 +940,26 @@ static bool _fs_load_blocks(cx_err_t* _err)
     return false;
 }
 
-bool fs_table_init(table_t* _outTable, const char* _tableName, cx_err_t* _err)
+bool fs_table_init(table_t** _outTable, const char* _tableName, cx_err_t* _err)
 {
-    CX_CHECK(strlen(_tableName) > 0, "invalid table name!");
-
-    _outTable->operations = 0;
-    _outTable->timerHandle = INVALID_HANDLE;
-    _outTable->blockedQueue = queue_create();
+    CX_CHECK(strlen(_tableName) > 0, "Invalid table name!");
     
-    bool success = true
-        && fs_table_meta_get(_tableName, &_outTable->meta, _err)
-        && memtable_init(_tableName, true, &_outTable->memtable, _err)
-        && NULL != _outTable->blockedQueue
-        && (0 == pthread_mutex_init(&_outTable->mtxOperations, NULL));
+    bool success = false;
+    table_t* table = CX_MEM_STRUCT_ALLOC(table);
+   
+    table->timerHandle = INVALID_HANDLE;
 
-    if (success) _outTable->inUse = true;
+    table->blockedQueue = queue_create();
+    CX_CHECK_NOT_NULL(table->blockedQueue);
+        
+    success = true 
+        && NULL != table->blockedQueue
+        && cx_reslock_init(&table->reslock, true);
+
+    if (!success)
+        CX_ERR_SET(_err, ERR_GENERIC, "Table initialization failed.")
+
+    (*_outTable) = success ? table : NULL;
     return success;
 }
 
@@ -963,8 +970,8 @@ void fs_table_destroy(table_t* _table)
     if (NULL != _table)
     {
         memtable_destroy(&_table->memtable);
-
-        pthread_mutex_destroy(&_table->mtxOperations);
+        cx_reslock_destroy(&_table->reslock);
+        queue_clean(_table->blockedQueue);
 
         if (NULL != _table->blockedQueue)
         {
@@ -978,14 +985,7 @@ void fs_table_destroy(table_t* _table)
             _table->timerHandle = INVALID_HANDLE;
         }
 
-        CX_MEM_ZERO(_table->meta);
-        CX_MEM_ZERO(_table->memtable);
-
-        _table->inUse = false;
-        _table->compacting = false;
-        _table->blocked = false;
-        _table->blockedStartTime = 0;
-        _table->operations = 0;
+        free(_table);
     }
 }
 

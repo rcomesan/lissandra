@@ -60,16 +60,11 @@ typedef struct task_t
     uint16_t            clientHandle;           // the handle to the client which requested this task in our server context. INVALID_HANDLE means a CLI-issued task.
     uint16_t            remoteId;               // the remote identifier for this remote task/request. (only if origin is TASK_ORIGIN_API)
     void*               data;                   // the data (arguments and results) of the requested operation. see data_*_t structures in ker/defines.h.
-
+    void*               table;                  // temp variable for specific tasks which operate on a specific table.
     // ker/mem data -----------------------------------------------------------------------------------------------------------------------------------------------
 #if defined(MEM) || defined(KER)
     pthread_mutex_t     responseMtx;            // mutex for protecting cond signaling.
     pthread_cond_t      responseCond;           // condition to signal the worker thread to wake up when the response of the request is available.
-#endif
-
-    // lfs data ---------------------------------------------------------------------------------------------------------------------------------------------------
-#ifdef LFS
-    uint16_t            tableHandle;            // temp variable for specific tasks which operate on a specific table and therefore we need to store its handle.
 #endif
 } task_t;
 

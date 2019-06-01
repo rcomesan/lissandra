@@ -60,6 +60,7 @@ static void         api_response_insert(const task_t* _task);
 
 static void         table_unblock(table_t* _table);
 static void         table_free(table_t* _table);
+static void         table_create_task_dump(const char* _tableName, table_t* _table, void* _userData);
 
 /****************************************************************************************
  ***  PUBLIC FUNCTIONS
@@ -275,18 +276,6 @@ static void cfg_destroy()
 
 static bool lfs_init(cx_err_t* _err)
 {
-    g_ctx.tablesHalloc = cx_halloc_init(MAX_TABLES);
-    CX_MEM_ZERO(g_ctx.tables);
-    if (NULL == g_ctx.tablesHalloc)
-    {
-        CX_ERR_SET(_err, ERR_INIT_HALLOC, "tables handle allocator creation failed.");
-        return false;
-    }
-    for (uint32_t i = 0; i < MAX_TABLES; i++)
-    {
-        g_ctx.tables[i].handle = i;
-    }
-
     g_ctx.timerDump = cx_timer_add(g_ctx.cfg.dumpInterval, LFS_TIMER_DUMP, NULL);
     if (INVALID_HANDLE == g_ctx.timerDump)
     {
@@ -300,23 +289,6 @@ static bool lfs_init(cx_err_t* _err)
 static void lfs_destroy()
 {
     fs_destroy();
-
-    uint16_t max = 0; 
-    uint16_t handle = INVALID_HANDLE;
-    table_t* table = NULL;
-
-    if (NULL != g_ctx.tablesHalloc)
-    {
-        max = cx_handle_count(g_ctx.tablesHalloc);
-        for (uint16_t i = 0; i < max; i++)
-        {
-            handle = cx_handle_at(g_ctx.tablesHalloc, i);
-            table = &(g_ctx.tables[handle]);
-            fs_table_destroy(table);
-        }
-        cx_halloc_destroy(g_ctx.tablesHalloc);
-        g_ctx.tablesHalloc = NULL;
-    }
 
     if (INVALID_HANDLE != g_ctx.timerDump)
     {
@@ -470,7 +442,10 @@ static bool handle_timer_tick(uint64_t _expirations, uint32_t _type, void* _user
         task = taskman_create(TASK_ORIGIN_INTERNAL, TASK_MT_COMPACT, NULL, NULL);
         if (NULL != task)
         {
-            task->tableHandle = ((table_t*)_userData)->handle;
+            data_compact_t* data = CX_MEM_STRUCT_ALLOC(data);
+            cx_str_copy(data->tableName, sizeof(data->tableName), ((table_t*)_userData)->meta.name);
+
+            task->data = data;
             task->state = TASK_STATE_NEW;
         }
         break;
@@ -486,29 +461,39 @@ static bool handle_timer_tick(uint64_t _expirations, uint32_t _type, void* _user
 
 static void table_unblock(table_t* _table)
 {
-    CX_CHECK(_table->blocked, "Table '%s' is not blocked!", _table->meta.name);
-
-    pthread_mutex_lock(&_table->mtxOperations);
-    _table->blocked = false;
-
+    // make the resource (our table) available again
+    cx_reslock_unblock(&_table->reslock);
+    
     task_t* task = NULL;
     while (!queue_is_empty(_table->blockedQueue))
     {
         task = queue_pop(_table->blockedQueue);
         task->state = TASK_STATE_NEW;
     }
-    pthread_mutex_unlock(&_table->mtxOperations);
 }
 
 static void table_free(table_t* _table)
 {
     data_free_t* data = CX_MEM_STRUCT_ALLOC(data);
     data->resourceType = RESOURCE_TYPE_TABLE;
-    data->resourceHandle = _table->handle;
+    data->resourcePtr = _table;
 
     task_t* task = taskman_create(TASK_ORIGIN_INTERNAL, TASK_MT_FREE, data, NULL);
     if (NULL != task)
     {
+        task->state = TASK_STATE_NEW;
+    }
+}
+
+static void table_create_task_dump(const char* _tableName, table_t* _table, void* _userData)
+{
+    task_t* task = taskman_create(TASK_ORIGIN_INTERNAL, TASK_WT_DUMP, NULL, NULL);
+    if (NULL != task)
+    {
+        data_dump_t* data = CX_MEM_STRUCT_ALLOC(data);
+        cx_str_copy(data->tableName, sizeof(data->tableName), _table->meta.name);
+        
+        task->data = data;
         task->state = TASK_STATE_NEW;
     }
 }
@@ -568,23 +553,22 @@ static bool task_run_mt(task_t* _task)
     {
     case TASK_MT_COMPACT:
     {
-        table = &g_ctx.tables[_task->tableHandle];
-
-        pthread_mutex_lock(&table->mtxOperations);
-        if (table->inUse)
+        data_compact_t* data = _task->data;
+        
+        if (fs_table_avail_guard_begin(data->tableName, NULL, &table))
         {
             if (!table->compacting)
             {
-                if (!table->blocked)
+                if (!cx_reslock_is_blocked(&table->reslock))
                 {
-                    table->blocked = true;
-                    table->blockedStartTime = cx_time_counter();
+                    // if the table is not blocked, block it now to start denying tasks
+                    cx_reslock_block(&table->reslock);
                 }
 
-                if (0 == table->operations)
+                if (1 == cx_reslock_counter(&table->reslock))
                 {
                     // at this point, our table is blocked (so new operations on it are being blocked and delayed)
-                    // and also there're zero pending operations on it. we can safely start compacting it now.
+                    // and also there's just only 1 pending operation on it (that's us) we can safely start compacting it now.
                     table->compacting = true;
 
                     task = taskman_create(TASK_ORIGIN_INTERNAL, TASK_WT_COMPACT, NULL, NULL);
@@ -594,7 +578,7 @@ static bool task_run_mt(task_t* _task)
                         cx_str_copy(data->tableName, sizeof(data->tableName), table->meta.name);
 
                         task->data = data;
-                        task->tableHandle = table->handle;
+                        task->table = table;
                         task->state = TASK_STATE_NEW;
                         success = true;
                     }
@@ -612,37 +596,21 @@ static bool task_run_mt(task_t* _task)
                 CX_INFO("Ignoring compaction for table '%s' (another thread is already compacting it).", table->meta.name);
                 success = true;
             }
+
+            fs_table_avail_guard_end(table);
         }
         else
         {
             // table no longer exists, (table might have been deleted and therefore no longer in use).
             success = true;
         }
-        pthread_mutex_unlock(&table->mtxOperations);
         break;
     }
 
     case TASK_MT_DUMP:
     {
-        uint16_t max = cx_handle_count(g_ctx.tablesHalloc);
-        uint16_t handle = INVALID_HANDLE;
-        data_dump_t* data = NULL;
+        fs_tables_foreach((fs_func_cb)table_create_task_dump, NULL);        
 
-        for (uint16_t i = 0; i < max; i++)
-        {
-            handle = cx_handle_at(g_ctx.tablesHalloc, i);
-            table = &(g_ctx.tables[handle]);
-
-            task = taskman_create(TASK_ORIGIN_INTERNAL, TASK_WT_DUMP, NULL, NULL);
-            if (NULL != task)
-            {
-                data = CX_MEM_STRUCT_ALLOC(data);
-                cx_str_copy(data->tableName, sizeof(data->tableName), table->meta.name);
-
-                task->data = data;
-                task->state = TASK_STATE_NEW;
-            }
-        }
         success = true;
         break;
     }
@@ -653,16 +621,22 @@ static bool task_run_mt(task_t* _task)
 
         if (RESOURCE_TYPE_TABLE == data->resourceType)
         {
-            table = &g_ctx.tables[data->resourceHandle];
+            table = (table_t*)data->resourcePtr;
 
-            pthread_mutex_lock(&table->mtxOperations);
-            bool canBeFreed = (0 == table->operations);
-            pthread_mutex_unlock(&table->mtxOperations);
-
-            if (canBeFreed)
+            if (0 == cx_reslock_counter(&table->reslock))
             {
+                // at this point the table no longer exist (it's not part of the tablesMap dictionary)
+                // remove and re-schedule all the tasks in the blocked queue
+                // so that they finally complete with 'table does not exist' error.
+                task_t* task = NULL;
+                while (!queue_is_empty(table->blockedQueue))
+                {
+                    task = queue_pop(table->blockedQueue);
+                    task->state = TASK_STATE_NEW;
+                }
+
+                // destroy & deallocate table
                 fs_table_destroy(table);
-                cx_handle_free(g_ctx.tablesHalloc, table->handle);
                 success = true;
             }
         }
@@ -679,13 +653,9 @@ static bool task_run_mt(task_t* _task)
 
 static bool task_reschedule(task_t* _task)
 {
-    table_t* table = NULL;
-
-    if (INVALID_HANDLE != _task->tableHandle)
+    if (NULL != _task->table)
     {
-        table = &g_ctx.tables[_task->tableHandle];
-
-        queue_push(table->blockedQueue, _task);
+        queue_push(((table_t*)_task->table)->blockedQueue, _task);
         _task->state = TASK_STATE_BLOCKED_AWAITING;
     }
 
@@ -694,10 +664,7 @@ static bool task_reschedule(task_t* _task)
 
 static bool task_completed(task_t* _task)
 {
-    table_t* table = NULL;
-   
-    if (INVALID_HANDLE != _task->tableHandle)
-        table = &g_ctx.tables[_task->tableHandle];
+    table_t* table = _task->table;
 
     switch (_task->type)
     {
@@ -781,12 +748,9 @@ static bool task_completed(task_t* _task)
         double blockedTime = 0;
         if (NULL != table)
         {
-            if (table->inUse)
-            {
-                table->compacting = false;
-                table_unblock(table);
-            }
-            blockedTime = cx_time_counter() - table->blockedStartTime;
+            table->compacting = false;
+            table_unblock(table);
+            blockedTime = cx_reslock_blocked_time(&table->reslock);
         }
         else
         {

@@ -9,6 +9,7 @@
 #include <cx/halloc.h>
 #include <cx/mem.h>
 #include <cx/str.h>
+#include <cx/reslock.h>
 
 /****************************************************************************************
  ***  MESSAGE HANDLERS
@@ -23,13 +24,6 @@ void lfs_handle_req_create(const cx_net_common_t* _common, void* _userData, cons
     REQ_BEGIN(TASK_WT_CREATE);
     {
         task->data = common_unpack_req_create(_buffer, _bufferSize, &bufferPos, &task->remoteId);
-        task->tableHandle = cx_handle_alloc(g_ctx.tablesHalloc);
-        if (INVALID_HANDLE == task->tableHandle)
-        {
-            CX_WARN(CX_ALW, "we ran out of table handles! %d are not enough!", MAX_TABLES);
-            CX_ERR_SET(&task->err, 1, "Table creation cannot be performed at this time (out of memory).");
-            task->state = TASK_STATE_COMPLETED;
-        }
     }
     REQ_END;
 }

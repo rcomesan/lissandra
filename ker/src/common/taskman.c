@@ -282,6 +282,7 @@ static void _taskman_free_task(task_t* _task)
 
     free(_task->data);
     _task->data = NULL;
+    _task->table = NULL;
 
     // note that requests are statically allocated. we don't want to free them
     // here since we'll keep reusing them in subsequent requests.
@@ -293,10 +294,6 @@ static void _taskman_free_task(task_t* _task)
     _task->clientHandle = INVALID_HANDLE;
     _task->remoteId = 0;
     CX_ERR_CLEAR(&_task->err);
-
-#ifdef LFS
-    _task->tableHandle = INVALID_HANDLE;
-#endif
     
     cx_handle_free(m_taskmanCtx.halloc, _task->handle);
 }

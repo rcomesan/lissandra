@@ -96,6 +96,8 @@ void memtable_destroy(memtable_t* _table)
 {
     CX_CHECK_NOT_NULL(_table);
 
+    if (MEMTABLE_TYPE_NONE) return;
+
     if (MEMTABLE_TYPE_MEM == _table->type)
     {
         CX_WARN(0 == _table->recordsCount, "destroying memtable from table '%s' with %d entries pending to be dumped!", 
