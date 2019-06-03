@@ -618,10 +618,18 @@ static void _cx_net_poll_events_client(cx_net_ctx_cl_t* _ctx, int32_t _timeout)
         }
     }
 
-    //TODO fixme, do this only every 16ms or so
-    if (_ctx->outPos > 0)
+    if ((CX_NET_STATE_CONNECTED & _ctx->c.state))
     {
-        cx_net_flush(_ctx, INVALID_HANDLE);
+        if (time - _ctx->lastPacketTime > (CX_NET_INACTIVITY_TIMEOUT * 0.5))
+        {
+            cx_net_send(_ctx, CX_NETP_PING, NULL, 0, INVALID_HANDLE);
+        }
+
+        //TODO fixme, do this only every 16ms or so
+        if (_ctx->outPos > 0)
+        {
+            cx_net_flush(_ctx, INVALID_HANDLE);
+        }
     }
 }
 
@@ -801,7 +809,9 @@ static bool _cx_net_process_stream(cx_net_common_t* _common, void* _userData,
         if ((_bufferSize - bytesParsed) >= packetLength)
         {
             // we have enough bytes to process this 
-            packetHandler = _common->msgHandlers[packetHeader];
+            packetHandler = packetHeader > _CX_NETP_BEGIN_
+                ? _common->msgHandlers[packetHeader]
+                : NULL;
 
             packetValid = false
                 || ((CX_NET_STATE_SERVER & ctx.c->state) && (false
@@ -814,6 +824,16 @@ static bool _cx_net_process_stream(cx_net_common_t* _common, void* _userData,
             if (packetValid && NULL != packetHandler)
             {
                 packetHandler(_common, _userData, &(_buffer[bytesParsed]), packetLength);
+            }
+            else if (CX_NETP_PING == packetHeader)
+            {
+                cx_net_send((void*)ctx.c, CX_NETP_PONG, NULL, 0, CX_NET_STATE_SERVER & ctx.c->state 
+                    ? ((cx_net_client_t*)_userData)->handle
+                    : INVALID_HANDLE);
+            }
+            else if (CX_NETP_PONG == packetHeader)
+            {
+                //noop.
             }
             else
             {
@@ -831,7 +851,7 @@ static bool _cx_net_process_stream(cx_net_common_t* _common, void* _userData,
             break;
         }
     }
-
+    
     if (bytesParsed < _bufferSize)
     {
         // there're still some remaining bytes in our buffer that need to be parsed in

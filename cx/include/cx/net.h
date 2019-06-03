@@ -9,7 +9,7 @@
 #define MAX_PACKET_LEN 4096
 #define MIN_PACKET_LEN 3
 #define CX_NET_BUFLEN (2 * MAX_PACKET_LEN)
-#define CX_NET_INACTIVITY_TIMEOUT 5
+#define CX_NET_INACTIVITY_TIMEOUT 10
 
 typedef struct cx_net_client_t cx_net_client_t;
 typedef struct cx_net_common_t cx_net_common_t;
@@ -32,11 +32,11 @@ typedef void(*cx_net_on_disconnected_cb)(const cx_net_ctx_cl_t* _ctx);
 
 typedef enum CX_NET_PACKET
 {
-    CX_NETP_AUTH = 0,                               // sends an authentication request.
-    CX_NETP_ACK,                                    // acknowledges an authentication.
-    CX_NETP_PING,                                   // sends a ping to keep the connection alive.
+    CX_NETP_PING = 0,                               // sends a ping to keep the connection alive.
     CX_NETP_PONG,                                   // sends a pong (ping-reply) to keep the connection alive.
-    CX_NETP_COUNT
+    _CX_NETP_BEGIN_,                                // end of reserved packets. begins the user-defined enum of packets.
+    CX_NETP_AUTH,                                   // sends an authentication request.
+    CX_NETP_ACK                                     // acknowledges an authentication.
 } CX_NET_PACKET;
 
 typedef enum
