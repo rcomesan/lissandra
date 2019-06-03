@@ -29,6 +29,15 @@ typedef void(*cx_net_on_disconnection_cb)(const cx_net_ctx_sv_t* _ctx, cx_net_cl
 typedef void(*cx_net_on_connected_cb)(const cx_net_ctx_cl_t* _ctx);
 typedef void(*cx_net_on_disconnected_cb)(const cx_net_ctx_cl_t* _ctx);
 
+typedef enum CX_NET_PACKET
+{
+    CX_NETP_AUTH = 0,                               // sends an authentication request.
+    CX_NETP_ACK,                                    // acknowledges an authentication.
+    CX_NETP_PING,                                   // sends a ping to keep the connection alive.
+    CX_NETP_PONG,                                   // sends a pong (ping-reply) to keep the connection alive.
+    CX_NETP_COUNT
+} CX_NET_PACKET;
+
 typedef enum
 {
     CX_NET_STATE_NONE           = 0x0,              // default initial value.
@@ -44,6 +53,8 @@ struct cx_net_client_t
 {
     uint16_t                    handle;             // handle/identifier for this client in our clients array.
     bool                        validated;          // true if this client was validated. if a client is not validated before the timeout is exceeded the connection is terminated.
+    double                      connStartedTime;    // time counter value of when the connection was established.
+    double                      lastPacketTime;     // time counter value of when the last packet arrived.
     ipv4_t                      ip;                 // ipv4 string of the client.
     int32_t                     sock;               // file descriptor for communicating between client and server.
     char                        in[CX_NET_BUFLEN];  // pre-allocated buffer for inbound data.
@@ -80,6 +91,9 @@ struct cx_net_ctx_sv_t
 struct cx_net_ctx_cl_t
 {
     cx_net_common_t             c;                  // client context common data.
+    bool                        validated;          // true if this client was validated. if a client is not validated before the timeout is exceeded the connection is terminated.
+    double                      connStartedTime;    // time counter value of when the connection was established.
+    double                      lastPacketTime;     // time counter value of when the last packet arrived.
     char                        in[CX_NET_BUFLEN];  // pre-allocated buffer for inbound data.
     uint32_t                    inPos;              // current position in the inbound buffer.
     char                        out[CX_NET_BUFLEN]; // pre-allocated buffer for outbound data.
@@ -128,6 +142,8 @@ void                    cx_net_close(void* _ctx);
 void                    cx_net_poll_events(void* _ctx);
 
 void                    cx_net_send(void* _ctx, uint8_t _header, const char* _payload, uint32_t _payloadSize, uint16_t _clientHandle);
+
+void                    cx_net_validate(void* _ctx, uint16_t _clientHandle);
 
 bool                    cx_net_flush(void* _ctx, uint16_t _clientHandle);
 

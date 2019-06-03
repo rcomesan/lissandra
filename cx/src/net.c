@@ -4,6 +4,7 @@
 #include "str.h"
 #include "binr.h"
 #include "binw.h"
+#include "timer.h"
 
 #include <fcntl.h>
 #include <arpa/inet.h>
@@ -23,7 +24,7 @@ static void             _cx_net_poll_events_client(cx_net_ctx_cl_t* _ctx, int32_
 
 static void             _cx_net_poll_events_server(cx_net_ctx_sv_t* _ctx, int32_t _timeout);
 
-static void             _cx_net_process_stream(const cx_net_common_t* _common, void* _userData, char* _buffer, uint32_t _bufferSize, uint32_t* _inOutPos);
+static bool             _cx_net_process_stream(const cx_net_common_t* _common, void* _userData, char* _buffer, uint32_t _bufferSize, uint32_t* _inOutPos);
 
 static void             _cx_net_epoll_mod(int32_t _epollDescriptor, int32_t _sock, bool _in, bool _out);
 
@@ -207,9 +208,8 @@ void cx_net_close(void* _ctx)
 {
     if (NULL == _ctx) return;
 
-    cx_net_ctx_t ctx;
-    ctx.c = _ctx;
-
+    cx_net_ctx_t ctx = { _ctx };
+    
     if (CX_NET_STATE_SERVER & ctx.c->state)
     {
         cx_net_ctx_sv_t* svCtx = ctx.sv;
@@ -292,8 +292,7 @@ void cx_net_send(void* _ctx, uint8_t _header, const char* _payload, uint32_t _pa
 
     if (_payloadSize <= MAX_PACKET_LEN - MIN_PACKET_LEN)
     {
-        cx_net_ctx_t ctx;
-        ctx.c = _ctx;
+        cx_net_ctx_t ctx = { _ctx };
 
         if (ctx.c->mtxInitialized) pthread_mutex_lock(&ctx.c->mtx);
 
@@ -356,6 +355,24 @@ void cx_net_send(void* _ctx, uint8_t _header, const char* _payload, uint32_t _pa
         }
 
         if (ctx.c->mtxInitialized) pthread_mutex_unlock(&ctx.c->mtx);
+    }
+}
+
+void cx_net_validate(void* _ctx, uint16_t _clientHandle)
+{
+    CX_CHECK_NOT_NULL(_ctx);
+    cx_net_ctx_t ctx = { _ctx };
+
+    if (CX_NET_STATE_SERVER & ctx.c->state)
+    {
+        cx_net_client_t* client = &ctx.sv->clients[_clientHandle];
+        CX_CHECK(!client->validated, "client connection is already validated!");
+        client->validated = true;
+    }
+    else if (CX_NET_STATE_CLIENT & ctx.c->state)
+    {
+        CX_CHECK(!ctx.cl->validated, "server connection is already validated!");
+        ctx.cl->validated = true;
     }
 }
 
@@ -557,6 +574,7 @@ static void _cx_net_poll_events_server(cx_net_ctx_sv_t* _ctx, int32_t _timeout)
     epoll_event event;
     sockaddr_in address;
     ipv4_t ipv4;
+    double time = cx_time_counter();
 
     int32_t bytesRead = 0;
     int32_t clientSock = 0;
@@ -593,6 +611,8 @@ static void _cx_net_poll_events_server(cx_net_ctx_sv_t* _ctx, int32_t _timeout)
 
                         _ctx->clients[clientHandle].handle = clientHandle;
                         _ctx->clients[clientHandle].validated = false;
+                        _ctx->clients[clientHandle].connStartedTime = time;
+                        _ctx->clients[clientHandle].lastPacketTime = time;
                         _ctx->clients[clientHandle].sock = clientSock;
                         _ctx->clients[clientHandle].inPos = 0;
                         _ctx->clients[clientHandle].outPos = 0;
@@ -690,13 +710,16 @@ static void _cx_net_poll_events_server(cx_net_ctx_sv_t* _ctx, int32_t _timeout)
         }
     }
 }
-static void _cx_net_process_stream(const cx_net_common_t* _common, void* _userData,
+static bool _cx_net_process_stream(const cx_net_common_t* _common, void* _userData,
     char* _buffer, uint32_t _bufferSize, uint32_t* _outPos)
 {   
+    cx_net_ctx_t ctx = { _common };
+    bool     success = true;
     uint32_t bytesParsed = 0;       // current amount of bytes parsed from the given buffer
     uint32_t bytesRemaining = 0;    // remaining bytes that can't be parsed at this time (incomplete buffer)
-    uint8_t packetHeader = 0;       // 8-bit unsigned integer packet identifier
+    uint8_t  packetHeader = 0;      // 8-bit unsigned integer packet identifier
     uint16_t packetLength = 0;      // length of the "body" of the packet (does not include the header/length bytes)
+    bool     packetValid = false;   // true if the packet is valid, and can be handled.
     cx_net_handler_cb packetHandler = NULL;
 
     while ((_bufferSize - bytesParsed) >= MIN_PACKET_LEN)
@@ -706,13 +729,26 @@ static void _cx_net_process_stream(const cx_net_common_t* _common, void* _userDa
         
         if ((_bufferSize - bytesParsed) >= packetLength)
         {
-            // we have enough bytes to process this packet
+            // we have enough bytes to process this 
             packetHandler = _common->msgHandlers[packetHeader];
-            if (NULL != packetHandler)
+
+            packetValid = false
+                || ((CX_NET_STATE_SERVER & ctx.c->state) && (false
+                    || ((cx_net_client_t*)_userData)->validated 
+                    || packetHeader == CX_NETP_AUTH))
+                || ((CX_NET_STATE_CLIENT & ctx.c->state) && (false
+                    || ctx.cl->validated
+                    || packetHeader == CX_NETP_ACK));
+        
+            if (packetValid && NULL != packetHandler)
             {
                 packetHandler(_common, _userData, &(_buffer[bytesParsed]), packetLength);
             }
-            CX_WARN(NULL != packetHandler, "[%s<--] message handler for packet #%d is not defined", _common->name, packetHeader);
+            else
+            {
+                success = false;
+                CX_WARN(NULL != packetHandler, "[%s<--] message handler for packet #%d is not defined", _common->name, packetHeader);
+            }
 
             bytesParsed += packetLength;
         }
@@ -737,6 +773,8 @@ static void _cx_net_process_stream(const cx_net_common_t* _common, void* _userDa
     {
         (*_outPos) = 0;
     }
+
+    return success;
 }
 
 static void _cx_net_epoll_mod(int32_t _epollDescriptor, int32_t _sock, bool _in, bool _out)
