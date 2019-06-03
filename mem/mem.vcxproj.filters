@@ -36,6 +36,9 @@
     <ClCompile Include="src\mem_worker.c">
       <Filter>src</Filter>
     </ClCompile>
+    <ClCompile Include="src\mm.c">
+      <Filter>src</Filter>
+    </ClCompile>
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="include\mem\mem_protocol.h">
@@ -45,6 +48,9 @@
       <Filter>src</Filter>
     </ClInclude>
     <ClInclude Include="src\mem_worker.h">
+      <Filter>src</Filter>
+    </ClInclude>
+    <ClInclude Include="src\mm.h">
       <Filter>src</Filter>
     </ClInclude>
   </ItemGroup>

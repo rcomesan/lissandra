@@ -1,5 +1,6 @@
 #include "mem.h"
 #include "mem_worker.h"
+#include "mm.h"
 
 #include <ker/cli_parser.h>
 #include <ker/cli_reporter.h>
@@ -19,7 +20,7 @@
 #include <string.h>
 #include <unistd.h>
 
-mem_ctx_t           g_ctx;                                  // global MEM context
+mem_ctx_t           g_ctx;
 
 /****************************************************************************************
  ***  PRIVATE DECLARATIONS
@@ -70,8 +71,8 @@ int main(int _argc, char** _argv)
         && logger_init(&g_ctx.log, &err)
         && cfg_init("res/mem.cfg", &err)
         && taskman_init(g_ctx.cfg.workers, task_run_mt, task_run_wk, task_completed, task_free, task_reschedule, &err)
-        && mem_init(&err)
         && net_init(&err)
+        && mem_init(&err)
         && cx_cli_init(&err);
 
     if (0 == err.code)
@@ -338,16 +339,43 @@ static void cfg_destroy()
 
 static bool mem_init(cx_err_t* _err)
 {
-    return true;
+    return mm_init(g_ctx.cfg.memSize, g_ctx.cfg.valueSize, _err);
 }
 
 static void mem_destroy()
 {
-
+    mm_destroy();
 }
 
 static bool net_init(cx_err_t* _err)
 {
+    cx_net_args_t lfsCtxArgs;
+    CX_MEM_ZERO(lfsCtxArgs);
+    cx_str_copy(lfsCtxArgs.name, sizeof(lfsCtxArgs.name), "lfs");
+    cx_str_copy(lfsCtxArgs.ip, sizeof(lfsCtxArgs.ip), g_ctx.cfg.lfsIp);
+    lfsCtxArgs.port = g_ctx.cfg.lfsPort;
+    lfsCtxArgs.multiThreadedSend = true;
+    lfsCtxArgs.connectBlocking = true;
+    lfsCtxArgs.connectTimeout = 15000;
+
+    // message headers to handlers mappings
+    lfsCtxArgs.msgHandlers[MEMP_RES_CREATE] = (cx_net_handler_cb*)mem_handle_res_create;
+    lfsCtxArgs.msgHandlers[MEMP_RES_DROP] = (cx_net_handler_cb*)mem_handle_res_drop;
+    lfsCtxArgs.msgHandlers[MEMP_RES_DESCRIBE] = (cx_net_handler_cb*)mem_handle_res_describe;
+    lfsCtxArgs.msgHandlers[MEMP_RES_SELECT] = (cx_net_handler_cb*)mem_handle_res_select;
+    lfsCtxArgs.msgHandlers[MEMP_RES_INSERT] = (cx_net_handler_cb*)mem_handle_res_insert;
+
+    // start client context
+    g_ctx.lfs = cx_net_connect(&lfsCtxArgs);
+    if (NULL == g_ctx.lfs || !(CX_NET_STATE_CONNECTED & g_ctx.lfs->c.state))
+    {
+        CX_ERR_SET(_err, ERR_NET_FAILED, "could not connect to lfs server on %s:%d.",
+            lfsCtxArgs.ip, lfsCtxArgs.port);
+        return false;
+    }
+
+    g_ctx.cfg.valueSize = 100;
+
     cx_net_args_t svCtxArgs;
     CX_MEM_ZERO(svCtxArgs);
     cx_str_copy(svCtxArgs.name, sizeof(svCtxArgs.name), "api");
@@ -361,35 +389,12 @@ static bool net_init(cx_err_t* _err)
     svCtxArgs.msgHandlers[MEMP_REQ_SELECT] = (cx_net_handler_cb*)mem_handle_req_select;
     svCtxArgs.msgHandlers[MEMP_REQ_INSERT] = (cx_net_handler_cb*)mem_handle_req_insert;
 
-    // start server context and start listening for requests
+    // start server context
     g_ctx.sv = cx_net_listen(&svCtxArgs);
     if (NULL == g_ctx.sv)
     {
         CX_ERR_SET(_err, ERR_NET_FAILED, "could not start a listening server context on %s:%d.",
             svCtxArgs.ip, svCtxArgs.port);
-        return false;
-    }
-
-    cx_net_args_t lfsCtxArgs;
-    CX_MEM_ZERO(lfsCtxArgs);
-    cx_str_copy(lfsCtxArgs.name, sizeof(lfsCtxArgs.name), "lfs");
-    cx_str_copy(lfsCtxArgs.ip, sizeof(lfsCtxArgs.ip), g_ctx.cfg.lfsIp);
-    lfsCtxArgs.port = g_ctx.cfg.lfsPort;
-    lfsCtxArgs.multiThreadedSend = true;
-
-    // message headers to handlers mappings
-    lfsCtxArgs.msgHandlers[MEMP_RES_CREATE] = (cx_net_handler_cb*)mem_handle_res_create;
-    lfsCtxArgs.msgHandlers[MEMP_RES_DROP] = (cx_net_handler_cb*)mem_handle_res_drop;
-    lfsCtxArgs.msgHandlers[MEMP_RES_DESCRIBE] = (cx_net_handler_cb*)mem_handle_res_describe;
-    lfsCtxArgs.msgHandlers[MEMP_RES_SELECT] = (cx_net_handler_cb*)mem_handle_res_select;
-    lfsCtxArgs.msgHandlers[MEMP_RES_INSERT] = (cx_net_handler_cb*)mem_handle_res_insert;
-
-    // start server context and start listening for requests
-    g_ctx.lfs = cx_net_connect(&lfsCtxArgs);
-    if (NULL == g_ctx.lfs)
-    {
-        CX_ERR_SET(_err, ERR_NET_FAILED, "could not connect to lfs server on %s:%d.",
-            lfsCtxArgs.ip, lfsCtxArgs.port);
         return false;
     }
 

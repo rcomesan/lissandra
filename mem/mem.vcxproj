@@ -68,6 +68,7 @@
     <ClCompile Include="src\common\mem_protocol.c" />
     <ClCompile Include="src\mem.c" />
     <ClCompile Include="src\mem_worker.c" />
+    <ClCompile Include="src\mm.c" />
   </ItemGroup>
   <ItemGroup>
     <None Include="makefile" />
@@ -82,6 +83,7 @@
   <ItemGroup>
     <ClInclude Include="include\mem\mem_protocol.h" />
     <ClInclude Include="src\mem.h" />
+    <ClInclude Include="src\mm.h" />
     <ClInclude Include="src\mem_worker.h" />
   </ItemGroup>
   <ItemDefinitionGroup Condition="'$(Configuration)|$(Platform)'=='Debug|x86'">
