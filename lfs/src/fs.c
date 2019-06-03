@@ -883,7 +883,9 @@ static bool _fs_load_tables(cx_err_t* _err)
         {
             cx_file_get_name(&tableFolderPath, false, &tableName);
             
-            if (fs_table_init(&table, tableName, _err))
+            if (fs_table_init(&table, tableName, _err)
+                && fs_table_meta_get(tableName, &table->meta, _err)
+                && memtable_init(tableName, true, &table->memtable, _err))
             {
                 table->timerHandle = cx_timer_add(table->meta.compactionInterval, LFS_TIMER_COMPACT, table);
                 CX_CHECK(INVALID_HANDLE != table->timerHandle, "we ran out of timer handles for table '%s'!", table->meta.name);
@@ -948,7 +950,7 @@ bool fs_table_init(table_t** _outTable, const char* _tableName, cx_err_t* _err)
     table_t* table = CX_MEM_STRUCT_ALLOC(table);
    
     table->timerHandle = INVALID_HANDLE;
-
+    
     table->blockedQueue = queue_create();
     CX_CHECK_NOT_NULL(table->blockedQueue);
         
