@@ -224,8 +224,8 @@ bool cx_cdict_iter_next(cx_cdict_t* _cdict, char** _outKey, void** _outData)
         
         if (NULL != _cdict->iterElement)
         {
-            (*_outKey) = _cdict->iterElement->key;
-            (*_outData) = _cdict->iterElement->data;
+            if (NULL != _outKey) (*_outKey) = _cdict->iterElement->key;
+            if (NULL != _outData) (*_outData) = _cdict->iterElement->data;
             
             _cdict->iterElement = _cdict->iterElement->next;
             if (NULL == _cdict->iterElement) _cdict->iterTableIndex++;
