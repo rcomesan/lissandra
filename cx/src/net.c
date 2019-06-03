@@ -39,7 +39,9 @@ cx_net_ctx_sv_t* cx_net_listen(cx_net_args_t* _args)
     memcpy(ctx->c.msgHandlers, _args->msgHandlers, sizeof(_args->msgHandlers));
     ctx->c.port = _args->port;
     ctx->c.state = CX_NET_STATE_SERVER | CX_NET_STATE_ERROR;
-    ctx->clientsMax = 1000;
+    ctx->clientsMax = _args->maxClients > 0 ? _args->maxClients : 1;
+    ctx->onConnection = _args->onConnection;
+    ctx->onDisconnection = _args->onDisconnection;
 
     if (_args->multiThreadedSend)
     {
@@ -124,6 +126,8 @@ cx_net_ctx_cl_t* cx_net_connect(cx_net_args_t* _args)
     memcpy(ctx->c.msgHandlers, _args->msgHandlers, sizeof(_args->msgHandlers));
     ctx->c.port = _args->port;
     ctx->c.state = CX_NET_STATE_CLIENT | CX_NET_STATE_ERROR;
+    ctx->onConnected = _args->onConnected;
+    ctx->onDisconnected = _args->onDisconnected;
 
     epoll_event event;
     CX_MEM_ZERO(event);
@@ -309,7 +313,7 @@ void cx_net_send(void* _ctx, uint8_t _header, const char* _payload, uint32_t _pa
         }
         else if (CX_NET_STATE_CLIENT & ctx.c->state)
         {
-            CX_CHECK(CX_NET_STATE_CONNECTED & ctx.c->state, "[-->%s] this ctx is not connected! you must check CX_NET_STATE_CONNECTED flag before calling send", ctx.c->name);
+            CX_CHECK(CX_NET_STATE_CONNECTED & ctx.c->state, "[-->%s] this ctx is not connected! you must check CX_NET_STATE_CONNECTED flag before calling send!", ctx.c->name);
 
             buffer = ctx.cl->out;
             bufferSize = sizeof(ctx.cl->out);
@@ -476,6 +480,7 @@ static void _cx_net_poll_events_client(cx_net_ctx_cl_t* _ctx, int32_t _timeout)
                 CX_INFO("[-->%s] the server closed the connection", _ctx->c.name);
                 _ctx->c.state &= ~(CX_NET_STATE_CONNECTING | CX_NET_STATE_CONNECTED);
                 close(_ctx->c.sock);
+                if (NULL != _ctx->onDisconnected) _ctx->onDisconnected(_ctx);
             }
             else if (bytesRead > 0)
             {
@@ -486,6 +491,7 @@ static void _cx_net_poll_events_client(cx_net_ctx_cl_t* _ctx, int32_t _timeout)
                 CX_INFO("[-->%s] the server refused the connection", _ctx->c.name);
                 _ctx->c.state &= ~(CX_NET_STATE_CONNECTING | CX_NET_STATE_CONNECTED);
                 close(_ctx->c.sock);
+                if (NULL != _ctx->onDisconnected) _ctx->onDisconnected(_ctx);
             }
             else
             {
@@ -520,6 +526,8 @@ static void _cx_net_poll_events_client(cx_net_ctx_cl_t* _ctx, int32_t _timeout)
 
                         CX_INFO("[-->%s] connection established with server on %s:%d", 
                             _ctx->c.name, _ctx->c.ip, _ctx->c.port);
+
+                        if (NULL != _ctx->onConnected) _ctx->onConnected(_ctx);
                     }
                 }
                 else
@@ -533,7 +541,6 @@ static void _cx_net_poll_events_client(cx_net_ctx_cl_t* _ctx, int32_t _timeout)
                     CX_WARN(CX_ALW, "[-->%s] connection with server on %s:%d failed - %s (errno %d)",
                         _ctx->c.name, _ctx->c.ip, _ctx->c.port, strerror(_ctx->c.errorNumber), _ctx->c.errorNumber);
                 }
-
             }
         }
     }
@@ -549,6 +556,7 @@ static void _cx_net_poll_events_server(cx_net_ctx_sv_t* _ctx, int32_t _timeout)
 {
     epoll_event event;
     sockaddr_in address;
+    ipv4_t ipv4;
 
     int32_t bytesRead = 0;
     int32_t clientSock = 0;
@@ -572,24 +580,35 @@ static void _cx_net_poll_events_server(cx_net_ctx_sv_t* _ctx, int32_t _timeout)
             clientSock = accept(_ctx->c.sock, (struct sockaddr * restrict)&address, &(socklen_t) { sizeof(address) });
             if (INVALID_DESCRIPTOR != clientSock)
             {
-                clientHandle = cx_handle_alloc_key(_ctx->clientsHalloc, clientSock);
-                if (INVALID_HANDLE != clientHandle)
+                inet_ntop(AF_INET, &(address.sin_addr), ipv4, INET_ADDRSTRLEN);
+
+                if (NULL == _ctx->onConnection || _ctx->onConnection(_ctx, ipv4))
                 {
-                    event.events = EPOLLIN;
-                    event.data.fd = clientSock;
-                    epoll_ctl(_ctx->c.epollDescriptor, EPOLL_CTL_ADD, clientSock, &event);
+                    clientHandle = cx_handle_alloc_key(_ctx->clientsHalloc, clientSock);
+                    if (INVALID_HANDLE != clientHandle)
+                    {
+                        event.events = EPOLLIN;
+                        event.data.fd = clientSock;
+                        epoll_ctl(_ctx->c.epollDescriptor, EPOLL_CTL_ADD, clientSock, &event);
 
-                    _ctx->clients[clientHandle].handle = clientHandle;
-                    _ctx->clients[clientHandle].sock = clientSock;
-                    _ctx->clients[clientHandle].inPos = 0;
-                    _ctx->clients[clientHandle].outPos = 0;
-                    inet_ntop(AF_INET, &(address.sin_addr), _ctx->clients[clientHandle].ip, INET_ADDRSTRLEN);
+                        _ctx->clients[clientHandle].handle = clientHandle;
+                        _ctx->clients[clientHandle].validated = false;
+                        _ctx->clients[clientHandle].sock = clientSock;
+                        _ctx->clients[clientHandle].inPos = 0;
+                        _ctx->clients[clientHandle].outPos = 0;
+                        cx_str_copy(_ctx->clients[clientHandle].ip, sizeof(ipv4), ipv4);
 
-                    CX_INFO("[%s<--] [handle: %d] client connected (ip: %s, socket: %d)", _ctx->c.name, clientHandle, _ctx->clients[clientHandle].ip, clientSock);
+                        CX_INFO("[%s<--] [handle: %d] client connected (ip: %s, socket: %d)", _ctx->c.name, clientHandle, _ctx->clients[clientHandle].ip, clientSock);
+                    }
+                    else
+                    {
+                        CX_WARN(CX_ALW, "[%s<--] the clients container is full. a new incoming connection was rejected. (socket %d)", _ctx->c.name, clientSock);
+                        close(clientSock);
+                    }
                 }
                 else
                 {
-                    CX_WARN(CX_ALW, "[%s<--] the clients container is full. a new incoming connection was rejected. (socket %d)", _ctx->c.name, clientSock);
+                    // connection rejected by user (onConnection callback returned false).
                     close(clientSock);
                 }
             }
@@ -620,6 +639,8 @@ static void _cx_net_poll_events_server(cx_net_ctx_sv_t* _ctx, int32_t _timeout)
                     {
                         CX_INFO("[%s<--] [handle: %d] client disconnected (ip: %s, socket: %d)",
                             _ctx->c.name, clientHandle, _ctx->clients[clientHandle].ip, clientSock);
+
+                        if (NULL != _ctx->onDisconnection) _ctx->onDisconnection(_ctx, &_ctx->clients[clientHandle]);
 
                         epoll_ctl(_ctx->c.epollDescriptor, EPOLL_CTL_DEL, client->sock, NULL);
                         close(client->sock);
