@@ -90,6 +90,8 @@ struct cx_net_args_t
     uint16_t            port;               // port to either listen or connect to.
     bool                multiThreadedSend;  // true if multi-threaded send is needed.
     cx_net_handler_cb*  msgHandlers[256];   // callback containing a message handler for each message header supported.
+    bool                connectBlocking;    // true if the client connect must be done synchronously.
+    uint16_t            connectTimeout;     // max amount of milliseconds to wait until a remote server connection is established.
 };
 
 /****************************************************************************************

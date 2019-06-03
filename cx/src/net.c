@@ -19,9 +19,9 @@
 
 static bool             _cx_net_parse_address(const char* _ipAddress, uint16_t _port, sockaddr_in* _outAddr);
 
-static void             _cx_net_poll_events_client(cx_net_ctx_cl_t* _ctx);
+static void             _cx_net_poll_events_client(cx_net_ctx_cl_t* _ctx, int32_t _timeout);
 
-static void             _cx_net_poll_events_server(cx_net_ctx_sv_t* _ctx);
+static void             _cx_net_poll_events_server(cx_net_ctx_sv_t* _ctx, int32_t _timeout);
 
 static void             _cx_net_process_stream(const cx_net_common_t* _common, void* _userData, char* _buffer, uint32_t _bufferSize, uint32_t* _inOutPos);
 
@@ -189,6 +189,11 @@ cx_net_ctx_cl_t* cx_net_connect(cx_net_args_t* _args)
         // register our desired events in the epoll instance
         epoll_ctl(ctx->c.epollDescriptor, EPOLL_CTL_ADD, ctx->c.sock, &event);
         ctx->c.epollEvents = CX_MEM_ARR_ALLOC(ctx->c.epollEvents, 1);
+
+        if (_args->connectBlocking)
+        {
+            _cx_net_poll_events_client(ctx, _args->connectTimeout);
+        }
     }
 
     return ctx;
@@ -264,14 +269,14 @@ void cx_net_poll_events(void* _ctx)
     {
         if (CX_NET_STATE_LISTENING & ctx.c->state)
         {
-            _cx_net_poll_events_server(ctx.sv);
+            _cx_net_poll_events_server(ctx.sv, 0);
         }
     }
     else if (CX_NET_STATE_CLIENT & ctx.c->state)
     {
         if ((CX_NET_STATE_CONNECTING | CX_NET_STATE_CONNECTED) & ctx.c->state)
         {
-            _cx_net_poll_events_client(ctx.cl);
+            _cx_net_poll_events_client(ctx.cl, 0);
         }
     }
 }
@@ -451,11 +456,11 @@ static bool _cx_net_parse_address(const char* _ipAddress, uint16_t _port, sockad
     return success;
 }
 
-static void _cx_net_poll_events_client(cx_net_ctx_cl_t* _ctx)
+static void _cx_net_poll_events_client(cx_net_ctx_cl_t* _ctx, int32_t _timeout)
 {
     int32_t bytesRead = 0;
 
-    int32_t eventsCount = epoll_wait(_ctx->c.epollDescriptor, _ctx->c.epollEvents, 1, 0);
+    int32_t eventsCount = epoll_wait(_ctx->c.epollDescriptor, _ctx->c.epollEvents, 1, _timeout);
     CX_WARN(-1 != eventsCount, "[-->%s] epoll_wait failed - %s", _ctx->c.name, strerror(errno));
 
     // handle epoll event
@@ -540,7 +545,7 @@ static void _cx_net_poll_events_client(cx_net_ctx_cl_t* _ctx)
     }
 }
 
-static void _cx_net_poll_events_server(cx_net_ctx_sv_t* _ctx)
+static void _cx_net_poll_events_server(cx_net_ctx_sv_t* _ctx, int32_t _timeout)
 {
     epoll_event event;
     sockaddr_in address;
@@ -551,7 +556,7 @@ static void _cx_net_poll_events_server(cx_net_ctx_sv_t* _ctx)
     cx_net_client_t* client = NULL;
 
     int32_t eventsCount = epoll_wait(_ctx->c.epollDescriptor,
-        _ctx->c.epollEvents, _ctx->clientsMax, 0);
+        _ctx->c.epollEvents, _ctx->clientsMax, _timeout);
 
     CX_WARN(-1 != eventsCount, "[%s<--] epoll_wait failed", _ctx->c.name);
 
