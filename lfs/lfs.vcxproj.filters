@@ -36,10 +36,10 @@
     <ClCompile Include="src\memtable.c">
       <Filter>src</Filter>
     </ClCompile>
-    <ClCompile Include="src\fs.c">
+    <ClCompile Include="src\lfs_worker.c">
       <Filter>src</Filter>
     </ClCompile>
-    <ClCompile Include="src\lfs_worker.c">
+    <ClCompile Include="src\fs.c">
       <Filter>src</Filter>
     </ClCompile>
   </ItemGroup>

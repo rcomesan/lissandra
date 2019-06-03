@@ -54,6 +54,9 @@
     <ClCompile Include="src\file.c">
       <Filter>src</Filter>
     </ClCompile>
+    <ClCompile Include="src\reslock.c">
+      <Filter>src</Filter>
+    </ClCompile>
   </ItemGroup>
   <ItemGroup>
     <None Include="makefile" />
@@ -108,6 +111,9 @@
       <Filter>include\cx</Filter>
     </ClInclude>
     <ClInclude Include="include\cx\file.h">
+      <Filter>include\cx</Filter>
+    </ClInclude>
+    <ClInclude Include="include\cx\reslock.h">
       <Filter>include\cx</Filter>
     </ClInclude>
   </ItemGroup>

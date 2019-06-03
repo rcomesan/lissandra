@@ -44,7 +44,7 @@ bool                cx_file_write(const cx_path_t* _path, const char* _buffer, u
 
 int32_t             cx_file_read(const cx_path_t* _path, char* _outBuffer, uint32_t _bufferSize, cx_err_t* _err);
 
-cx_file_explorer_t*   cx_file_explorer_init(const cx_path_t* _folderPath, cx_err_t* _err);
+cx_file_explorer_t* cx_file_explorer_init(const cx_path_t* _folderPath, cx_err_t* _err);
 
 void                cx_file_explorer_reset(cx_file_explorer_t* _explorer);
 

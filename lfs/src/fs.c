@@ -862,7 +862,7 @@ static bool _fs_load_tables(cx_err_t* _err)
     m_fsCtx->tablesMap = cx_cdict_init();
     if (NULL == m_fsCtx->tablesMap)
     {
-        CX_ERR_SET(_err, 1, "tablesMap concurrent dictionary creation failed.");
+        CX_ERR_SET(_err, ERR_INIT_CDICT, "tablesMap concurrent dictionary creation failed.");
         return false;
     }
 
