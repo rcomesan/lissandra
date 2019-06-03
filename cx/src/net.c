@@ -5,6 +5,7 @@
 #include "binr.h"
 #include "binw.h"
 #include "timer.h"
+#include "math.h"
 
 #include <fcntl.h>
 #include <arpa/inet.h>
@@ -24,7 +25,7 @@ static void             _cx_net_poll_events_client(cx_net_ctx_cl_t* _ctx, int32_
 
 static void             _cx_net_poll_events_server(cx_net_ctx_sv_t* _ctx, int32_t _timeout);
 
-static bool             _cx_net_process_stream(const cx_net_common_t* _common, void* _userData, char* _buffer, uint32_t _bufferSize, uint32_t* _inOutPos);
+static bool             _cx_net_process_stream(cx_net_common_t* _common, void* _userData, char* _buffer, uint32_t _bufferSize, uint32_t* _inOutPos);
 
 static void             _cx_net_epoll_mod(int32_t _epollDescriptor, int32_t _sock, bool _in, bool _out);
 
@@ -40,6 +41,7 @@ cx_net_ctx_sv_t* cx_net_listen(cx_net_args_t* _args)
     memcpy(ctx->c.msgHandlers, _args->msgHandlers, sizeof(_args->msgHandlers));
     ctx->c.port = _args->port;
     ctx->c.state = CX_NET_STATE_SERVER | CX_NET_STATE_ERROR;
+    ctx->c.validationTimeout = cx_math_max(1, _args->validationTimeout);
     ctx->clientsMax = _args->maxClients > 0 ? _args->maxClients : 1;
     ctx->onConnection = _args->onConnection;
     ctx->onDisconnection = _args->onDisconnection;
@@ -76,6 +78,7 @@ cx_net_ctx_sv_t* cx_net_listen(cx_net_args_t* _args)
                                 ctx->c.epollEvents = CX_MEM_ARR_ALLOC(ctx->c.epollEvents, ctx->clientsMax);
                                 ctx->clients = CX_MEM_ARR_ALLOC(ctx->clients, ctx->clientsMax);
                                 ctx->clientsHalloc = cx_halloc_init(ctx->clientsMax);
+                                ctx->tmpHandles = CX_MEM_ARR_ALLOC(ctx->tmpHandles, ctx->clientsMax);
 
                                 // add an entry to the "interest list" of epoll containing our
                                 // listening socket file descriptor. the kernel will let us 
@@ -127,6 +130,7 @@ cx_net_ctx_cl_t* cx_net_connect(cx_net_args_t* _args)
     memcpy(ctx->c.msgHandlers, _args->msgHandlers, sizeof(_args->msgHandlers));
     ctx->c.port = _args->port;
     ctx->c.state = CX_NET_STATE_CLIENT | CX_NET_STATE_ERROR;
+    ctx->c.validationTimeout = cx_math_max(1, _args->validationTimeout);
     ctx->onConnected = _args->onConnected;
     ctx->onDisconnected = _args->onDisconnected;
 
@@ -212,30 +216,45 @@ void cx_net_close(void* _ctx)
     
     if (CX_NET_STATE_SERVER & ctx.c->state)
     {
-        cx_net_ctx_sv_t* svCtx = ctx.sv;
+        // close the listening socket
+        if (INVALID_DESCRIPTOR != ctx.c->sock)
+        {
+            close(ctx.c->sock);
+            epoll_ctl(ctx.c->epollDescriptor, EPOLL_CTL_DEL, ctx.c->sock, NULL);
+            ctx.c->sock = INVALID_DESCRIPTOR;
+        }
 
         //flush & disconnect all clients
-        uint16_t clientsCount = cx_handle_count(svCtx->clientsHalloc);
-        uint16_t handle;
+        uint16_t clientsCount = cx_handle_count(ctx.sv->clientsHalloc);
+        uint16_t handle = INVALID_HANDLE;
+        uint16_t j = 0;
         for (uint16_t i = 0; i < clientsCount; i++)
         {
-            handle = cx_handle_at(svCtx->clientsHalloc, i);
-            cx_net_flush(svCtx, handle);
-            close(svCtx->clients[handle].sock);
+            handle = cx_handle_at(ctx.sv->clientsHalloc, i);
+            ctx.sv->tmpHandles[j++] = handle;
+            cx_net_flush(ctx.sv, handle);
         }
         
-        free(svCtx->clients);
-        cx_halloc_destroy(svCtx->clientsHalloc);
+        _cx_net_poll_events_server(ctx.sv, 0);
+
+        for (uint16_t i = 0; i < j; i++)
+        {
+            cx_net_disconnect(ctx.sv, ctx.sv->tmpHandles[i], "context closed");
+        }
+
+        free(ctx.sv->clients);
+        cx_halloc_destroy(ctx.sv->clientsHalloc);
+        free(ctx.sv->tmpHandles);
         
         CX_INFO("[%s<--] finished serving on %s:%d", ctx.c->name, ctx.c->ip, ctx.c->port);
     }
     else if (CX_NET_STATE_CLIENT & ctx.c->state)
-    {
-        cx_net_ctx_cl_t* clCtx = ctx.cl;
-        
-        cx_net_flush(clCtx, INVALID_HANDLE);
+    {        
+        cx_net_flush(ctx.cl, INVALID_HANDLE);
 
-        CX_INFO("[-->%s] disconnected from server on %s:%d", ctx.c->name, ctx.c->ip, ctx.c->port);
+        _cx_net_poll_events_client(ctx.cl, 0);
+
+        cx_net_disconnect(ctx.cl, INVALID_HANDLE, "context closed");
     }
 
     // destroy epoll instance and free epoll events array
@@ -245,13 +264,6 @@ void cx_net_close(void* _ctx)
         ctx.c->epollDescriptor = INVALID_DESCRIPTOR;
     }
     free(ctx.c->epollEvents);
-
-    // close the common socket
-    if (INVALID_DESCRIPTOR != ctx.c->sock)
-    {
-        close(ctx.c->sock);
-        ctx.c->sock = INVALID_DESCRIPTOR;
-    }
 
     // destroy mutexes
     if (ctx.c->mtxInitialized)
@@ -365,6 +377,7 @@ void cx_net_validate(void* _ctx, uint16_t _clientHandle)
 
     if (CX_NET_STATE_SERVER & ctx.c->state)
     {
+        CX_CHECK(INVALID_HANDLE != _clientHandle, "_clientHandle is invalid!");
         cx_net_client_t* client = &ctx.sv->clients[_clientHandle];
         CX_CHECK(!client->validated, "client connection is already validated!");
         client->validated = true;
@@ -379,10 +392,8 @@ void cx_net_validate(void* _ctx, uint16_t _clientHandle)
 bool cx_net_flush(void* _ctx, uint16_t _clientHandle)
 {
     CX_CHECK_NOT_NULL(_ctx);
+    cx_net_ctx_t ctx = { _ctx };
 
-    cx_net_ctx_t ctx;
-    ctx.c = _ctx;
-    
     int32_t sock = 0;
     char* buffer = NULL;
     uint32_t* position = NULL;
@@ -458,6 +469,50 @@ bool cx_net_flush(void* _ctx, uint16_t _clientHandle)
     return (CX_NET_BUFLEN - (*position)) >= MAX_PACKET_LEN;
 }
 
+void cx_net_disconnect(void* _ctx, uint16_t _clientHandle, const char* _reason)
+{
+    CX_CHECK_NOT_NULL(_ctx);
+    cx_net_ctx_t ctx = { _ctx };
+
+    if (CX_NET_STATE_SERVER & ctx.c->state)
+    {
+        CX_CHECK(INVALID_HANDLE != _clientHandle, "_clientHandle is invalid!");
+        cx_net_client_t* client = &ctx.sv->clients[_clientHandle];
+
+        CX_INFO("[%s<--] [handle: %d] client disconnected (ip: %s, socket: %d, reason: %s)",
+            ctx.c->name, _clientHandle, client->ip, client->sock, _reason != NULL ? _reason : "unknown");
+
+        if (INVALID_DESCRIPTOR != client->sock)
+        {
+            epoll_ctl(ctx.c->epollDescriptor, EPOLL_CTL_DEL, client->sock, NULL);
+            close(client->sock);
+            client->sock = INVALID_DESCRIPTOR;
+        }
+
+        if (NULL != ctx.sv->onDisconnection) 
+            ctx.sv->onDisconnection(ctx.sv, &ctx.sv->clients[_clientHandle]);
+
+        cx_handle_free(ctx.sv->clientsHalloc, _clientHandle);
+    }
+    else if (CX_NET_STATE_CLIENT & ctx.c->state)
+    {
+        CX_INFO("[-->%s] server disconnected (ip: %s, socket: %d, reason: %s)", 
+            ctx.c->name, ctx.c->ip, ctx.c->sock, _reason);
+
+        ctx.c->state &= ~(CX_NET_STATE_CONNECTING | CX_NET_STATE_CONNECTED);
+
+        if (INVALID_DESCRIPTOR != ctx.c->sock)
+        {
+            epoll_ctl(ctx.c->epollDescriptor, EPOLL_CTL_DEL, ctx.c->sock, NULL);
+            close(ctx.c->sock);
+            ctx.c->sock = INVALID_DESCRIPTOR;
+        }
+
+        if (NULL != ctx.cl->onDisconnected) 
+            ctx.cl->onDisconnected(ctx.cl);
+    }
+}
+
 /****************************************************************************************
  ***  PRIVATE FUNCTIONS
  ***************************************************************************************/
@@ -479,6 +534,7 @@ static bool _cx_net_parse_address(const char* _ipAddress, uint16_t _port, sockad
 
 static void _cx_net_poll_events_client(cx_net_ctx_cl_t* _ctx, int32_t _timeout)
 {
+    double time = cx_time_counter();
     int32_t bytesRead = 0;
 
     int32_t eventsCount = epoll_wait(_ctx->c.epollDescriptor, _ctx->c.epollEvents, 1, _timeout);
@@ -494,21 +550,16 @@ static void _cx_net_poll_events_client(cx_net_ctx_cl_t* _ctx, int32_t _timeout)
             
             if (0 == bytesRead)
             {
-                CX_INFO("[-->%s] the server closed the connection", _ctx->c.name);
-                _ctx->c.state &= ~(CX_NET_STATE_CONNECTING | CX_NET_STATE_CONNECTED);
-                close(_ctx->c.sock);
-                if (NULL != _ctx->onDisconnected) _ctx->onDisconnected(_ctx);
+                cx_net_disconnect(_ctx, INVALID_HANDLE, "server closed the connection");
             }
             else if (bytesRead > 0)
             {
+                _ctx->lastPacketTime = time;
                 _cx_net_process_stream(&_ctx->c, NULL, _ctx->in, _ctx->inPos + bytesRead, &_ctx->inPos);
             }
             else if (-1 == bytesRead && errno == ECONNREFUSED)
             {
-                CX_INFO("[-->%s] the server refused the connection", _ctx->c.name);
-                _ctx->c.state &= ~(CX_NET_STATE_CONNECTING | CX_NET_STATE_CONNECTED);
-                close(_ctx->c.sock);
-                if (NULL != _ctx->onDisconnected) _ctx->onDisconnected(_ctx);
+                cx_net_disconnect(_ctx, INVALID_HANDLE, "server refused the connection");
             }
             else
             {
@@ -538,13 +589,18 @@ static void _cx_net_poll_events_client(cx_net_ctx_cl_t* _ctx, int32_t _timeout)
                 {
                     if (_ctx->c.errorNumber == 0)
                     {
+                        _ctx->validated = false;
+                        _ctx->connectedTime = time;
+                        _ctx->lastPacketTime = time;
+
                         _ctx->c.state |= CX_NET_STATE_CONNECTED;
                         _cx_net_epoll_mod(_ctx->c.epollDescriptor, _ctx->c.sock, true, false);
-
+                        
                         CX_INFO("[-->%s] connection established with server on %s:%d", 
                             _ctx->c.name, _ctx->c.ip, _ctx->c.port);
 
-                        if (NULL != _ctx->onConnected) _ctx->onConnected(_ctx);
+                        if (NULL != _ctx->onConnected)
+                            _ctx->onConnected(_ctx);
                     }
                 }
                 else
@@ -571,10 +627,11 @@ static void _cx_net_poll_events_client(cx_net_ctx_cl_t* _ctx, int32_t _timeout)
 
 static void _cx_net_poll_events_server(cx_net_ctx_sv_t* _ctx, int32_t _timeout)
 {
+    double time = cx_time_counter();
+
     epoll_event event;
     sockaddr_in address;
     ipv4_t ipv4;
-    double time = cx_time_counter();
 
     int32_t bytesRead = 0;
     int32_t clientSock = 0;
@@ -611,7 +668,7 @@ static void _cx_net_poll_events_server(cx_net_ctx_sv_t* _ctx, int32_t _timeout)
 
                         _ctx->clients[clientHandle].handle = clientHandle;
                         _ctx->clients[clientHandle].validated = false;
-                        _ctx->clients[clientHandle].connStartedTime = time;
+                        _ctx->clients[clientHandle].connectedTime = time;
                         _ctx->clients[clientHandle].lastPacketTime = time;
                         _ctx->clients[clientHandle].sock = clientSock;
                         _ctx->clients[clientHandle].inPos = 0;
@@ -657,19 +714,15 @@ static void _cx_net_poll_events_server(cx_net_ctx_sv_t* _ctx, int32_t _timeout)
 
                     if (0 == bytesRead)
                     {
-                        CX_INFO("[%s<--] [handle: %d] client disconnected (ip: %s, socket: %d)",
-                            _ctx->c.name, clientHandle, _ctx->clients[clientHandle].ip, clientSock);
-
-                        if (NULL != _ctx->onDisconnection) _ctx->onDisconnection(_ctx, &_ctx->clients[clientHandle]);
-
-                        epoll_ctl(_ctx->c.epollDescriptor, EPOLL_CTL_DEL, client->sock, NULL);
-                        close(client->sock);
-                        cx_handle_free(_ctx->clientsHalloc, clientHandle);
+                        cx_net_disconnect(_ctx, clientHandle, "client closed the connection");
                     }
                     else if (bytesRead > 0)
                     {
-                        _cx_net_process_stream(&_ctx->c, client,
-                            client->in, client->inPos + bytesRead, &client->inPos);
+                        client->lastPacketTime = time;
+                        if (!_cx_net_process_stream(&_ctx->c, client, client->in, client->inPos + bytesRead, &client->inPos))
+                        {
+                            cx_net_disconnect(_ctx, clientHandle, "invalid packet");
+                        }
                     }
                     else
                     {
@@ -698,22 +751,40 @@ static void _cx_net_poll_events_server(cx_net_ctx_sv_t* _ctx, int32_t _timeout)
     }
 
     //TODO fixme, do this only every 16ms or so
-    //TODO ping-pong/keep alive/shut-down checks here
     uint16_t clientsCount = cx_handle_count(_ctx->clientsHalloc);
     uint16_t handle = INVALID_HANDLE;
+    uint16_t validationCount = 0;
+    uint16_t inactiveCount = 0;
     for (uint16_t i = 0; i < clientsCount; i++)
     {
         handle = cx_handle_at(_ctx->clientsHalloc, i);
-        if (_ctx->clients[handle].outPos > 0)
-        {
+        client = &_ctx->clients[handle];
+
+        if (client->outPos > 0)
             cx_net_flush(_ctx, handle);
-        }
+
+        if (time - client->connectedTime > _ctx->c.validationTimeout)
+            _ctx->tmpHandles[validationCount++] = handle;
+
+        if (time - client->lastPacketTime > CX_NET_INACTIVITY_TIMEOUT)
+            _ctx->tmpHandles[_ctx->clientsMax - 1 - (inactiveCount++)] = handle;
+    }
+
+    for (uint16_t i = 0; i < validationCount; i++)
+    {
+        cx_net_disconnect(_ctx, _ctx->tmpHandles[i], "validation handshake timed-out");
+    }
+
+    for (uint16_t i = 0; i < inactiveCount; i++)
+    {
+        cx_net_disconnect(_ctx, _ctx->tmpHandles[_ctx->clientsMax - 1 - i], "inactive");
     }
 }
-static bool _cx_net_process_stream(const cx_net_common_t* _common, void* _userData,
+
+static bool _cx_net_process_stream(cx_net_common_t* _common, void* _userData,
     char* _buffer, uint32_t _bufferSize, uint32_t* _outPos)
 {   
-    cx_net_ctx_t ctx = { _common };
+    const cx_net_ctx_t ctx = { _common };
     bool     success = true;
     uint32_t bytesParsed = 0;       // current amount of bytes parsed from the given buffer
     uint32_t bytesRemaining = 0;    // remaining bytes that can't be parsed at this time (incomplete buffer)
