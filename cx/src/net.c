@@ -274,7 +274,7 @@ void cx_net_close(void* _ctx)
     free(_ctx);
 }
 
-void cx_net_poll_events(void* _ctx)
+void cx_net_poll_events(void* _ctx, int32_t _timeout)
 {
     CX_CHECK_NOT_NULL(_ctx);
 
@@ -285,14 +285,14 @@ void cx_net_poll_events(void* _ctx)
     {
         if (CX_NET_STATE_LISTENING & ctx.c->state)
         {
-            _cx_net_poll_events_server(ctx.sv, 0);
+            _cx_net_poll_events_server(ctx.sv, _timeout);
         }
     }
     else if (CX_NET_STATE_CLIENT & ctx.c->state)
     {
         if ((CX_NET_STATE_CONNECTING | CX_NET_STATE_CONNECTED) & ctx.c->state)
         {
-            _cx_net_poll_events_client(ctx.cl, 0);
+            _cx_net_poll_events_client(ctx.cl, _timeout);
         }
     }
 }
@@ -622,6 +622,7 @@ static void _cx_net_poll_events_client(cx_net_ctx_cl_t* _ctx, int32_t _timeout)
     {
         if (time - _ctx->lastPacketTime > (CX_NET_INACTIVITY_TIMEOUT * 0.5))
         {
+            _ctx->lastPacketTime = time;
             cx_net_send(_ctx, CX_NETP_PING, NULL, 0, INVALID_HANDLE);
         }
 
@@ -771,7 +772,7 @@ static void _cx_net_poll_events_server(cx_net_ctx_sv_t* _ctx, int32_t _timeout)
         if (client->outPos > 0)
             cx_net_flush(_ctx, handle);
 
-        if (time - client->connectedTime > _ctx->c.validationTimeout)
+        if (!client->validated && time - client->connectedTime > _ctx->c.validationTimeout)
             _ctx->tmpHandles[validationCount++] = handle;
 
         if (time - client->lastPacketTime > CX_NET_INACTIVITY_TIMEOUT)

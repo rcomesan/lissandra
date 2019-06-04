@@ -24,11 +24,11 @@ typedef char ipv4_t[16];
 
 typedef void(*cx_net_handler_cb)(const cx_net_common_t* _common, void* _userData, const char* _data, uint16_t _size);
 
-typedef bool(*cx_net_on_connection_cb)(const cx_net_ctx_sv_t* _ctx, const ipv4_t _ipv4);
-typedef void(*cx_net_on_disconnection_cb)(const cx_net_ctx_sv_t* _ctx, cx_net_client_t* _client);
+typedef bool(*cx_net_on_connection_cb)(cx_net_ctx_sv_t* _ctx, const ipv4_t _ipv4);
+typedef void(*cx_net_on_disconnection_cb)(cx_net_ctx_sv_t* _ctx, cx_net_client_t* _client);
 
-typedef void(*cx_net_on_connected_cb)(const cx_net_ctx_cl_t* _ctx);
-typedef void(*cx_net_on_disconnected_cb)(const cx_net_ctx_cl_t* _ctx);
+typedef void(*cx_net_on_connected_cb)(cx_net_ctx_cl_t* _ctx);
+typedef void(*cx_net_on_disconnected_cb)(cx_net_ctx_cl_t* _ctx);
 
 typedef enum CX_NET_PACKET
 {
@@ -143,7 +143,7 @@ cx_net_ctx_cl_t*        cx_net_connect(cx_net_args_t* _args);
 
 void                    cx_net_close(void* _ctx);
 
-void                    cx_net_poll_events(void* _ctx);
+void                    cx_net_poll_events(void* _ctx, int32_t _timeout);
 
 void                    cx_net_send(void* _ctx, uint8_t _header, const char* _payload, uint32_t _payloadSize, uint16_t _clientHandle);
 
