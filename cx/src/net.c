@@ -213,7 +213,8 @@ void cx_net_close(void* _ctx)
     if (NULL == _ctx) return;
 
     cx_net_ctx_t ctx = { _ctx };
-    
+    ctx.c->state |= CX_NET_STATE_CLOSING;
+
     if (CX_NET_STATE_SERVER & ctx.c->state)
     {
         // close the listening socket
@@ -297,64 +298,74 @@ void cx_net_poll_events(void* _ctx, int32_t _timeout)
     }
 }
 
-void cx_net_send(void* _ctx, uint8_t _header, const char* _payload, uint32_t _payloadSize, uint16_t _clientHandle)
+bool cx_net_send(void* _ctx, uint8_t _header, const char* _payload, uint32_t _payloadSize, uint16_t _clientHandle)
 {
+    bool success = true;
+
     CX_CHECK_NOT_NULL(_ctx);
+    cx_net_ctx_t ctx = { _ctx };
+
     CX_CHECK(_payloadSize <= MAX_PACKET_LEN - MIN_PACKET_LEN, "_payloadSize can't be greater than %d bytes", MAX_PACKET_LEN - MIN_PACKET_LEN);
+    if (_payloadSize > MAX_PACKET_LEN - MIN_PACKET_LEN) return false;
 
-    if (_payloadSize <= MAX_PACKET_LEN - MIN_PACKET_LEN)
+    if (ctx.c->mtxInitialized) pthread_mutex_lock(&ctx.c->mtx);
+
+    uint32_t bytesRequired = MIN_PACKET_LEN + _payloadSize;
+    char* buffer = NULL;
+    uint16_t bufferSize = 0;
+    uint32_t* position = NULL;
+
+    if (CX_NET_STATE_SERVER & ctx.c->state)
     {
-        cx_net_ctx_t ctx = { _ctx };
+        //TODO check the client is still valid (versioning?) and also connceted to us
+        CX_CHECK(cx_handle_is_valid(ctx.sv->clientsHalloc, _clientHandle),
+            "[%s<--] sending a packet to an invalid client! (handle: %d)", ctx.c->name, _clientHandle);
 
-        if (ctx.c->mtxInitialized) pthread_mutex_lock(&ctx.c->mtx);
-
-        uint32_t bytesRequired = MIN_PACKET_LEN + _payloadSize;
-        char* buffer = NULL;
-        uint16_t bufferSize = 0;
-        uint32_t* position = NULL;
-
-        if (CX_NET_STATE_SERVER & ctx.c->state)
+        buffer = ctx.sv->clients[_clientHandle].out;
+        bufferSize = sizeof(ctx.sv->clients[_clientHandle].out);
+        position = &(ctx.sv->clients[_clientHandle].outPos);
+    }
+    else if (CX_NET_STATE_CLIENT & ctx.c->state)
+    {
+        if (CX_NET_STATE_CONNECTED & ctx.c->state)
         {
-            CX_CHECK(cx_handle_is_valid(ctx.sv->clientsHalloc, _clientHandle),
-                "[%s<--] sending a packet to an invalid client! (handle: %d)", ctx.c->name, _clientHandle);
-
-            buffer = ctx.sv->clients[_clientHandle].out;
-            bufferSize = sizeof(ctx.sv->clients[_clientHandle].out);
-            position = &(ctx.sv->clients[_clientHandle].outPos);
-        }
-        else if (CX_NET_STATE_CLIENT & ctx.c->state)
-        {
-            CX_CHECK(CX_NET_STATE_CONNECTED & ctx.c->state, "[-->%s] this ctx is not connected! you must check CX_NET_STATE_CONNECTED flag before calling send!", ctx.c->name);
-
             buffer = ctx.cl->out;
             bufferSize = sizeof(ctx.cl->out);
             position = &(ctx.cl->outPos);
         }
-
-        if ((*position) + bytesRequired > CX_NET_BUFLEN)
+        else
         {
-            // not enough space to add this packet to the outbound buffer
-            // try to write it out to the socket and start from byte 0
-            if (!cx_net_flush(_ctx, _clientHandle))
-            {
-                // we do have a serious problem at this point since our outbound
-                // buffer can't be written to the socket (due to probably blocking i/o)
-                // there isn't much we can do other than using a bigger buffer 
-                // we'll ignore this packet for now :(
-                if (CX_NET_STATE_SERVER & ctx.c->state)
-                {
-                    CX_WARN(CX_ALW, "[%s<--] [handle: %d] we ran out of outbound buffer space to write packet #%d of length %d bytes",
-                        ctx.c->name, _clientHandle, _header, _payloadSize);
-                }
-                else if (CX_NET_STATE_CLIENT & ctx.c->state)
-                {
-                    CX_WARN(CX_ALW, "[-->%s] we ran out of outbound buffer space to write packet #%d of length %d bytes", 
-                        ctx.c->name, _header, _payloadSize);
-                }
-                return;
-            }
+            success = false;
         }
+    }
 
+    if (success && (*position) + bytesRequired > CX_NET_BUFLEN)
+    {
+        // not enough space to add this packet to the outbound buffer
+        // try to write it out to the socket and start from byte 0
+        if (!cx_net_flush(_ctx, _clientHandle))
+        {
+            // we do have a serious problem at this point since our outbound
+            // buffer can't be written to the socket (due to probably blocking i/o)
+            // there isn't much we can do other than using a bigger buffer 
+            // we'll ignore this packet for now :(
+            if (CX_NET_STATE_SERVER & ctx.c->state)
+            {
+                CX_WARN(CX_ALW, "[%s<--] [handle: %d] we ran out of outbound buffer space to write packet #%d of length %d bytes",
+                    ctx.c->name, _clientHandle, _header, bytesRequired);
+            }
+            else if (CX_NET_STATE_CLIENT & ctx.c->state)
+            {
+                CX_WARN(CX_ALW, "[-->%s] we ran out of outbound buffer space to write packet #%d of length %d bytes",
+                    ctx.c->name, _header, bytesRequired);
+            }
+
+            success = false;
+        }
+    }
+
+    if (success)
+    {
         // write the packet to our buffer
         cx_binw_uint8(buffer, bufferSize - (*position), position, _header);
         cx_binw_uint16(buffer, bufferSize - (*position), position, _payloadSize);
@@ -365,9 +376,11 @@ void cx_net_send(void* _ctx, uint8_t _header, const char* _payload, uint32_t _pa
             memcpy(&(buffer[*position]), _payload, _payloadSize);
             (*position) += _payloadSize;
         }
-
-        if (ctx.c->mtxInitialized) pthread_mutex_unlock(&ctx.c->mtx);
     }
+
+    if (ctx.c->mtxInitialized) pthread_mutex_unlock(&ctx.c->mtx);
+
+    return success;
 }
 
 void cx_net_validate(void* _ctx, uint16_t _clientHandle)
@@ -666,7 +679,8 @@ static void _cx_net_poll_events_server(cx_net_ctx_sv_t* _ctx, int32_t _timeout)
             {
                 inet_ntop(AF_INET, &(address.sin_addr), ipv4, INET_ADDRSTRLEN);
 
-                if (NULL == _ctx->onConnection || _ctx->onConnection(_ctx, ipv4))
+                if (!(CX_NET_STATE_CLOSING & _ctx->c.state) &&
+                    (NULL == _ctx->onConnection || _ctx->onConnection(_ctx, ipv4)))
                 {
                     clientHandle = cx_handle_alloc_key(_ctx->clientsHalloc, clientSock);
                     if (INVALID_HANDLE != clientHandle)
@@ -694,7 +708,7 @@ static void _cx_net_poll_events_server(cx_net_ctx_sv_t* _ctx, int32_t _timeout)
                 }
                 else
                 {
-                    // connection rejected by user (onConnection callback returned false).
+                    // connection rejected.
                     close(clientSock);
                 }
             }

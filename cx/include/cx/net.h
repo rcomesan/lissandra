@@ -48,6 +48,7 @@ typedef enum
     CX_NET_STATE_LISTENING      = 0x8,              // the server is listening.
     CX_NET_STATE_CONNECTING     = 0x10,             // the client is attempting to connect to the given server.
     CX_NET_STATE_CONNECTED      = 0x20,             // the client is connected to the server.
+    CX_NET_STATE_CLOSING        = 0x40,             // the context is being closed (running cx_net_close method).
 } CX_NET_STATE;
 
 struct cx_net_client_t
@@ -118,7 +119,7 @@ struct cx_net_args_t
     ipv4_t                      ip;                 // ip address to either listen or connect to.
     uint16_t                    port;               // port to either listen or connect to.
     bool                        multiThreadedSend;  // true if this context must support multi-threaded send.
-    cx_net_handler_cb*          msgHandlers[256];   // callback containing a message handler for each message header supported.
+    cx_net_handler_cb           msgHandlers[256];   // callback containing a message handler for each message header supported.
     double                      validationTimeout;  // maximum amount of time in seconds to wait before validation process times-out.
 
                                                     // cx_net_ctx_cl_t arguments.
@@ -145,7 +146,7 @@ void                    cx_net_close(void* _ctx);
 
 void                    cx_net_poll_events(void* _ctx, int32_t _timeout);
 
-void                    cx_net_send(void* _ctx, uint8_t _header, const char* _payload, uint32_t _payloadSize, uint16_t _clientHandle);
+bool                    cx_net_send(void* _ctx, uint8_t _header, const char* _payload, uint32_t _payloadSize, uint16_t _clientHandle);
 
 void                    cx_net_validate(void* _ctx, uint16_t _clientHandle);
 
