@@ -80,6 +80,7 @@ bool taskman_init(uint16_t _numWorkers, taskman_cb _runMt, taskman_cb _runWk, ta
         return false;
     }
 
+    m_taskmanCtx.isRunning = true;
     return true;
 }
 
@@ -88,6 +89,22 @@ void taskman_destroy()
     uint16_t max;
     uint16_t handle = INVALID_HANDLE;
     task_t* task = NULL;
+    
+    m_taskmanCtx.isRunning = false;
+
+    if (NULL != m_taskmanCtx.pool)
+    {
+        cx_pool_destroy(m_taskmanCtx.pool);
+        m_taskmanCtx.pool = NULL;
+        // process the few latest completed tasks (if any)
+        taskman_update();
+    }
+
+    if (NULL != m_taskmanCtx.mtQueue)
+    {
+        queue_destroy(m_taskmanCtx.mtQueue);
+        m_taskmanCtx.mtQueue = NULL;
+    }  
 
     if (m_taskmanCtx.mtxInitialized)
     {
@@ -117,18 +134,6 @@ void taskman_destroy()
     {
         pthread_mutex_destroy(&m_taskmanCtx.completionKeyMtx);
         m_taskmanCtx.completionKeyMtxInitialized = false;
-    }
-
-    if (NULL != m_taskmanCtx.pool)
-    {
-        cx_pool_destroy(m_taskmanCtx.pool);
-        m_taskmanCtx.pool = NULL;
-    }
-
-    if (NULL != m_taskmanCtx.mtQueue)
-    {
-        queue_destroy(m_taskmanCtx.mtQueue);
-        m_taskmanCtx.mtQueue = NULL;
     }
 }
 
@@ -174,27 +179,31 @@ void taskman_update()
         handle = cx_handle_at(m_taskmanCtx.halloc, i);
         task = &(m_taskmanCtx.tasks[handle]);
 
-        if (TASK_STATE_NEW == task->state)
+        if (m_taskmanCtx.isRunning)
         {
-            task->state = TASK_STATE_READY;
-            task->startTime = cx_time_counter();
+            if (TASK_STATE_NEW == task->state)
+            {
+                task->state = TASK_STATE_READY;
+                task->startTime = cx_time_counter();
 
-            if (TASK_WT & task->type)
-            {
-                cx_pool_submit(m_taskmanCtx.pool, task);
+                if (TASK_WT & task->type)
+                {
+                    cx_pool_submit(m_taskmanCtx.pool, task);
+                }
+                else
+                {
+                    queue_push(m_taskmanCtx.mtQueue, task);
+                }
             }
-            else
+            else if (TASK_STATE_BLOCKED_RESCHEDULE == task->state)
             {
-                queue_push(m_taskmanCtx.mtQueue, task);
+                m_taskmanCtx.taskReschedule(task);
             }
         }
-        else if (TASK_STATE_COMPLETED == task->state)
+
+        if (TASK_STATE_COMPLETED == task->state)
         {
             m_taskmanCtx.auxHandles[completedCount++] = handle;
-        }
-        else if (TASK_STATE_BLOCKED_RESCHEDULE == task->state)
-        {
-            m_taskmanCtx.taskReschedule(task);
         }
     }
 
@@ -218,7 +227,8 @@ void taskman_update()
         pthread_mutex_unlock(&m_taskmanCtx.mtx);
     }
 
-    _taskman_mtqueue_process();
+    if (m_taskmanCtx.isRunning)
+        _taskman_mtqueue_process();
 }
 
 void taskman_completion(task_t* _task)

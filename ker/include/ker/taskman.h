@@ -72,6 +72,7 @@ typedef bool(*taskman_cb)(task_t* _task);
 
 typedef struct taskman_ctx_t
 {
+    bool                isRunning;                                  // true if the taskman is alive and running.
     taskman_cb          taskRunMt;                                  // callback for executing main-thread tasks.
     taskman_cb          taskRunWk;                                  // callback for executing worker-thread tasks.
     taskman_cb          taskCompleted;                              // callback executed after task completion.
@@ -85,7 +86,7 @@ typedef struct taskman_ctx_t
     bool                mtxInitialized;                             // true if tasksMutex was successfully initialized.
     uint32_t            completionKeyLast;                          // auto-incremental number for sorting completed tasks.
     pthread_mutex_t     completionKeyMtx;                           // mutex for protecting tasksCompletionKeyLast.
-    bool                completionKeyMtxInitialized;                    // true if taskscompletionKeyMtx was successfully initialized.
+    bool                completionKeyMtxInitialized;                // true if taskscompletionKeyMtx was successfully initialized.
     uint16_t            auxHandles[MAX_TASKS];                      // statically allocated aux buffer for storing handles
 } taskman_ctx_t;
 
