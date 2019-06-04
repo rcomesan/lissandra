@@ -43,11 +43,14 @@ void worker_handle_drop(task_t* _req)
 {
     data_drop_t* data = _req->data;
 
-    payload_t payload;
-    uint32_t payloadSize = lfs_pack_req_drop(payload, sizeof(payload),
-        _req->handle, data->tableName);
+    if (mm_avail_guard_begin(&_req->err))
+    {
+        payload_t payload;
+        uint32_t payloadSize = lfs_pack_req_drop(payload, sizeof(payload),
+            _req->handle, data->tableName);
 
-    _worker_request_lfs(LFSP_REQ_DROP, payload, payloadSize, _req);
+        _worker_request_lfs(LFSP_REQ_DROP, payload, payloadSize, _req);
+    }
 
     _worker_parse_result(_req);
 }

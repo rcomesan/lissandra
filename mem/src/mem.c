@@ -44,7 +44,7 @@ static bool         task_run_wk(task_t* _task);
 static bool         task_completed(task_t* _task);
 static bool         task_free(task_t* _task);
 static bool         task_reschedule(task_t* _task);
-static bool         task_abort_req(task_t* _task, void* _userData);
+static bool         task_req_abort(task_t* _task, void* _userData);
 
 static void         on_connected_lfs(cx_net_ctx_cl_t* _ctx);
 static void         on_disconnected_lfs(cx_net_ctx_cl_t* _ctx);
@@ -397,12 +397,12 @@ static bool net_init(cx_err_t* _err)
     lfsCtxArgs.onDisconnected = (cx_net_on_connected_cb)on_disconnected_lfs;
 
     // message headers to handlers mappings
-    lfsCtxArgs.msgHandlers[MEMP_ACK] = (cx_net_handler_cb*)mem_handle_ack;
-    lfsCtxArgs.msgHandlers[MEMP_RES_CREATE] = (cx_net_handler_cb*)mem_handle_res_create;
-    lfsCtxArgs.msgHandlers[MEMP_RES_DROP] = (cx_net_handler_cb*)mem_handle_res_drop;
-    lfsCtxArgs.msgHandlers[MEMP_RES_DESCRIBE] = (cx_net_handler_cb*)mem_handle_res_describe;
-    lfsCtxArgs.msgHandlers[MEMP_RES_SELECT] = (cx_net_handler_cb*)mem_handle_res_select;
-    lfsCtxArgs.msgHandlers[MEMP_RES_INSERT] = (cx_net_handler_cb*)mem_handle_res_insert;
+    lfsCtxArgs.msgHandlers[MEMP_ACK] = (cx_net_handler_cb)mem_handle_ack;
+    lfsCtxArgs.msgHandlers[MEMP_RES_CREATE] = (cx_net_handler_cb)mem_handle_res_create;
+    lfsCtxArgs.msgHandlers[MEMP_RES_DROP] = (cx_net_handler_cb)mem_handle_res_drop;
+    lfsCtxArgs.msgHandlers[MEMP_RES_DESCRIBE] = (cx_net_handler_cb)mem_handle_res_describe;
+    lfsCtxArgs.msgHandlers[MEMP_RES_SELECT] = (cx_net_handler_cb)mem_handle_res_select;
+    lfsCtxArgs.msgHandlers[MEMP_RES_INSERT] = (cx_net_handler_cb)mem_handle_res_insert;
 
     // start client context
     g_ctx.lfsAvail = false;
@@ -483,6 +483,7 @@ static void handle_cli_command(const cx_cli_cmd_t* _cmd)
     if (strcmp("EXIT", _cmd->header) == 0)
     {
         g_ctx.isRunning = false;
+        g_ctx.shutdownReason = "cli-issued exit";
     }
     else if (strcmp("CREATE", _cmd->header) == 0)
     {
@@ -610,7 +611,7 @@ static bool task_reschedule(task_t* _task)
     return true;
 }
 
-static bool task_abort_req(task_t* _task, void* _userData)
+static bool task_req_abort(task_t* _task, void* _userData)
 {
     pthread_mutex_lock(&_task->responseMtx);
     if (TASK_STATE_RUNNING_AWAITING == _task->startTime)
@@ -753,13 +754,12 @@ static void on_disconnected_lfs(cx_net_ctx_cl_t* _ctx)
     }
     else if (g_ctx.lfsAvail)
     {
-        //TODO breakpoint y revisar que el contexto de cliente quede sin CONNECTED para que send devuelva false!
         g_ctx.lfsAvail = false;
         g_ctx.isRunning = false;
         g_ctx.shutdownReason = "lfs is unavailable";
 
         // the connection with the LFS node is gone. let's wake up all the tasks with pending requests on it.
-        taskman_foreach((taskman_func_cb)task_abort_req, NULL);
+        taskman_foreach((taskman_func_cb)task_req_abort, NULL);
     }
 }
 

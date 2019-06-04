@@ -79,7 +79,7 @@ void cx_pool_destroy(cx_pool_t* _pool)
     if (NULL == _pool) return;
 
     CX_CHECK(CX_POOL_STATE_RUNNING == _pool->state || CX_POOL_STATE_PAUSED == _pool->state,
-        "you cannot destroy pool '%s' in his current state (#%d)!", _pool->name, _pool->state);
+        "you cannot destroy pool '%s' in its current state (#%d)!", _pool->name, _pool->state);
 
     CX_INFO("[pool: %s] terminating thread pool...", _pool->name);
 

@@ -72,15 +72,18 @@ static void         table_create_task_dump(const char* _tableName, table_t* _tab
 
 int main(int _argc, char** _argv)
 {
+    cx_err_t err;
+
     cx_init(PROJECT_NAME);
+
     CX_MEM_ZERO(g_ctx);
+    CX_ERR_CLEAR(&err);
 
     double timeCounter = 0;
     double timeCounterPrev = 0;
     double timeDelta = 0;
 
-    cx_err_t err;
-
+    g_ctx.shutdownReason = "main thread finished";
     g_ctx.isRunning = true
         && cx_timer_init(MAX_TABLES + LFS_TIMER_COUNT, handle_timer_tick, &err)
         && logger_init(&g_ctx.log, &err)
@@ -121,14 +124,16 @@ int main(int _argc, char** _argv)
     }
     else if (NULL != g_ctx.log)
     {
+        g_ctx.shutdownReason = "initialization failed";
         log_error(g_ctx.log, "initialization failed (errcode %d). %s", err.code, err.desc);
     }
     else
     {
+        g_ctx.shutdownReason = "fatal error";
         printf("[FATAL] (errcode %d) %s", err.code, err.desc);
     }
 
-    CX_INFO("node is shutting down...", PROJECT_NAME);
+    CX_INFO("node is shutting down. reason: %s.", g_ctx.shutdownReason);
     cx_cli_destroy();
     taskman_destroy();
     net_destroy();
@@ -330,12 +335,12 @@ static bool net_init(cx_err_t* _err)
     svCtxArgs.onDisconnection = (cx_net_on_disconnection_cb)on_disconnection_mem;
 
     // message headers to handlers mappings
-    svCtxArgs.msgHandlers[LFSP_AUTH] = (cx_net_handler_cb*)lfs_handle_auth;
-    svCtxArgs.msgHandlers[LFSP_REQ_CREATE] = (cx_net_handler_cb*)lfs_handle_req_create;
-    svCtxArgs.msgHandlers[LFSP_REQ_DROP] = (cx_net_handler_cb*)lfs_handle_req_drop;
-    svCtxArgs.msgHandlers[LFSP_REQ_DESCRIBE] = (cx_net_handler_cb*)lfs_handle_req_describe;
-    svCtxArgs.msgHandlers[LFSP_REQ_SELECT] = (cx_net_handler_cb*)lfs_handle_req_select;
-    svCtxArgs.msgHandlers[LFSP_REQ_INSERT] = (cx_net_handler_cb*)lfs_handle_req_insert;
+    svCtxArgs.msgHandlers[LFSP_AUTH] = (cx_net_handler_cb)lfs_handle_auth;
+    svCtxArgs.msgHandlers[LFSP_REQ_CREATE] = (cx_net_handler_cb)lfs_handle_req_create;
+    svCtxArgs.msgHandlers[LFSP_REQ_DROP] = (cx_net_handler_cb)lfs_handle_req_drop;
+    svCtxArgs.msgHandlers[LFSP_REQ_DESCRIBE] = (cx_net_handler_cb)lfs_handle_req_describe;
+    svCtxArgs.msgHandlers[LFSP_REQ_SELECT] = (cx_net_handler_cb)lfs_handle_req_select;
+    svCtxArgs.msgHandlers[LFSP_REQ_INSERT] = (cx_net_handler_cb)lfs_handle_req_insert;
 
     // start server context and start listening for requests
     g_ctx.sv = cx_net_listen(&svCtxArgs);
@@ -346,7 +351,7 @@ static bool net_init(cx_err_t* _err)
     }
     else
     {
-        CX_ERR_SET(_err, ERR_NET_FAILED, "could not start a listening server context on %s:%d.",
+        CX_ERR_SET(_err, ERR_INIT_NET, "could not start a listening server context on %s:%d.",
             svCtxArgs.ip, svCtxArgs.port);
         return false;
     }
@@ -375,6 +380,7 @@ static void handle_cli_command(const cx_cli_cmd_t* _cmd)
     if (strcmp("EXIT", _cmd->header) == 0)
     {
         g_ctx.isRunning = false;
+        g_ctx.shutdownReason = "cli-issued exit";
     }
     else if (strcmp("CREATE", _cmd->header) == 0)
     {

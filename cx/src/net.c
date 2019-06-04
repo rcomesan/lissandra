@@ -250,12 +250,15 @@ void cx_net_close(void* _ctx)
         CX_INFO("[%s<--] finished serving on %s:%d", ctx.c->name, ctx.c->ip, ctx.c->port);
     }
     else if (CX_NET_STATE_CLIENT & ctx.c->state)
-    {        
-        cx_net_flush(ctx.cl, INVALID_HANDLE);
+    {
+        if (CX_NET_STATE_CONNECTED & ctx.c->state)
+        {
+            cx_net_flush(ctx.cl, INVALID_HANDLE);
 
-        _cx_net_poll_events_client(ctx.cl, 0);
+            _cx_net_poll_events_client(ctx.cl, 0);
 
-        cx_net_disconnect(ctx.cl, INVALID_HANDLE, "context closed");
+            cx_net_disconnect(ctx.cl, INVALID_HANDLE, "context closed");
+        }
     }
 
     // destroy epoll instance and free epoll events array
@@ -512,7 +515,9 @@ void cx_net_disconnect(void* _ctx, uint16_t _clientHandle, const char* _reason)
         CX_INFO("[-->%s] server disconnected (ip: %s, socket: %d, reason: %s)", 
             ctx.c->name, ctx.c->ip, ctx.c->sock, _reason);
 
+        if (ctx.c->mtxInitialized) pthread_mutex_lock(&ctx.c->mtx);
         ctx.c->state &= ~(CX_NET_STATE_CONNECTING | CX_NET_STATE_CONNECTED);
+        if (ctx.c->mtxInitialized) pthread_mutex_unlock(&ctx.c->mtx);
 
         if (INVALID_DESCRIPTOR != ctx.c->sock)
         {

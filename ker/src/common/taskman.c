@@ -235,6 +235,8 @@ void taskman_update()
 
 void taskman_foreach(taskman_func_cb _func, void* _userData)
 {
+    if (!m_taskmanCtx.isRunning) return;
+
     uint16_t max = cx_handle_count(m_taskmanCtx.halloc);
     uint16_t handle = INVALID_HANDLE;
     task_t*  task = NULL;
@@ -251,7 +253,7 @@ void taskman_foreach(taskman_func_cb _func, void* _userData)
 
 void taskman_completion(task_t* _task)
 {
-    if (!m_taskmanCtx.isRunning) return NULL;
+    if (!m_taskmanCtx.isRunning) return;
 
     pthread_mutex_lock(&m_taskmanCtx.completionKeyMtx);
     _task->completionKey = m_taskmanCtx.completionKeyLast++;
