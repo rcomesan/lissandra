@@ -4,7 +4,7 @@
 #include <cx/sort.h>
 #include <cx/timer.h>
 
-static taskman_ctx_t       m_taskmanCtx;        // private task manager context
+static taskman_ctx_t       m_taskmanCtx;
 
 /****************************************************************************************
  ***  PRIVATE DECLARATIONS
@@ -139,6 +139,8 @@ void taskman_destroy()
 
 task_t* taskman_create(TASK_ORIGIN _origin, TASK_TYPE _type, void* _data, cx_net_client_t* _client)
 {
+    if (!m_taskmanCtx.isRunning) return NULL;
+
     pthread_mutex_lock(&m_taskmanCtx.mtx);
     uint16_t handle = cx_handle_alloc(m_taskmanCtx.halloc);
     pthread_mutex_unlock(&m_taskmanCtx.mtx);
@@ -231,8 +233,26 @@ void taskman_update()
         _taskman_mtqueue_process();
 }
 
+void taskman_foreach(taskman_func_cb _func, void* _userData)
+{
+    uint16_t max = cx_handle_count(m_taskmanCtx.halloc);
+    uint16_t handle = INVALID_HANDLE;
+    task_t*  task = NULL;
+
+    for (uint16_t i = 0; i < max; i++)
+    {
+        handle = cx_handle_at(m_taskmanCtx.halloc, i);
+        task = &(m_taskmanCtx.tasks[handle]);
+
+        if (!_func(task, _userData))
+            return;
+    }
+}
+
 void taskman_completion(task_t* _task)
 {
+    if (!m_taskmanCtx.isRunning) return NULL;
+
     pthread_mutex_lock(&m_taskmanCtx.completionKeyMtx);
     _task->completionKey = m_taskmanCtx.completionKeyLast++;
     _task->state = TASK_STATE_COMPLETED;
@@ -241,6 +261,8 @@ void taskman_completion(task_t* _task)
 
 task_t* taskman_get(uint16_t _taskHandle)
 {
+    if (!m_taskmanCtx.isRunning) return NULL;
+
     if (cx_handle_is_valid(m_taskmanCtx.halloc, _taskHandle))
     {
         return &m_taskmanCtx.tasks[_taskHandle];

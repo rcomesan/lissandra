@@ -69,6 +69,7 @@ typedef struct task_t
 } task_t;
 
 typedef bool(*taskman_cb)(task_t* _task);
+typedef bool(*taskman_func_cb)(task_t* _task, void* _userData);
 
 typedef struct taskman_ctx_t
 {
@@ -101,6 +102,8 @@ void        taskman_destroy();
 task_t*     taskman_create(TASK_ORIGIN _origin, TASK_TYPE _type, void* _data, cx_net_client_t* _client);
 
 void        taskman_update();
+
+void        taskman_foreach(taskman_func_cb _func, void* _userData);
 
 void        taskman_completion(task_t* _task);
 
