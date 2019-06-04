@@ -34,11 +34,8 @@ void worker_handle_create(task_t* _req)
         _req->handle, data->tableName, data->consistency,
         data->numPartitions, data->compactionInterval);
 
-    _req->state = TASK_STATE_RUNNING_AWAITING;
-    cx_net_send(g_ctx.lfs, LFSP_REQ_CREATE, payload, payloadSize, INVALID_HANDLE);
-
-    _worker_wait_response(_req);
-
+    _worker_request_lfs(LFSP_REQ_CREATE, payload, payloadSize, _req);
+    
     _worker_parse_result(_req);
 }
 

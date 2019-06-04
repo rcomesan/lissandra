@@ -15,6 +15,7 @@
 #include <cx/file.h>
 #include <cx/net.h>
 #include <cx/str.h>
+#include <cx/math.h>
 
 #include <stdio.h>
 #include <string.h>
@@ -44,6 +45,9 @@ static bool         task_completed(task_t* _task);
 static bool         task_free(task_t* _task);
 static bool         task_reschedule(task_t* _task);
 
+static void         on_connected_lfs(cx_net_ctx_cl_t* _ctx);
+static void         on_disconnected_lfs(cx_net_ctx_cl_t* _ctx);
+
 static void         api_response_create(const task_t* _task);
 static void         api_response_drop(const task_t* _task);
 static void         api_response_describe(const task_t* _task);
@@ -67,7 +71,7 @@ int main(int _argc, char** _argv)
     cx_err_t err;
 
     g_ctx.isRunning = true
-        && cx_timer_init(1, handle_timer_tick, &err)
+        && cx_timer_init(MEM_TIMER_COUNT, handle_timer_tick, &err)
         && logger_init(&g_ctx.log, &err)
         && cfg_init("res/mem.cfg", &err)
         && taskman_init(g_ctx.cfg.workers, task_run_mt, task_run_wk, task_completed, task_free, task_reschedule, &err)
@@ -92,15 +96,8 @@ int main(int _argc, char** _argv)
                 handle_cli_command(cmd);
 
             // poll socket events
-            cx_net_poll_events(g_ctx.sv);
-            cx_net_poll_events(g_ctx.lfs);
-
-            if (!(CX_NET_STATE_CONNECTING & g_ctx.lfs->c.state) 
-                && !(CX_NET_STATE_CONNECTED & g_ctx.lfs->c.state))
-            {
-                shutdownReason = "lfs is unavailable";
-                g_ctx.isRunning = false;
-            }
+            cx_net_poll_events(g_ctx.sv, 0);
+            cx_net_poll_events(g_ctx.lfs, 0);
 
             // poll timer events
             cx_timer_poll_events();
@@ -159,6 +156,23 @@ static bool cfg_init(const char* _cfgFilePath, cx_err_t* _err)
     {
         CX_INFO("config file: %s", cfgPath);
 
+        key = "password";
+        if (config_has_property(g_ctx.cfg.handle, key))
+        {
+            temp = config_get_string_value(g_ctx.cfg.handle, key);
+
+            uint32_t len = strlen(temp);
+            CX_WARN(len >= MIN_PASSWD_LEN, "'%s' must have a minimum length of %d characters!", key, MIN_PASSWD_LEN);
+            CX_WARN(len <= MAX_PASSWD_LEN, "'%s' must have a maximum length of %s characters!", key, MAX_PASSWD_LEN)
+                if (!cx_math_in_range(len, MIN_PASSWD_LEN, MAX_PASSWD_LEN)) goto key_missing;
+
+            cx_str_copy(g_ctx.cfg.password, sizeof(g_ctx.cfg.password), temp);
+        }
+        else
+        {
+            goto key_missing;
+        }
+
         key = "memNumber";
         if (config_has_property(g_ctx.cfg.handle, key))
         {
@@ -215,6 +229,23 @@ static bool cfg_init(const char* _cfgFilePath, cx_err_t* _err)
         if (config_has_property(g_ctx.cfg.handle, key))
         {
             g_ctx.cfg.lfsPort = (uint16_t)config_get_int_value(g_ctx.cfg.handle, key);
+        }
+        else
+        {
+            goto key_missing;
+        }
+
+        key = "lfsPassword";
+        if (config_has_property(g_ctx.cfg.handle, key))
+        {
+            temp = config_get_string_value(g_ctx.cfg.handle, key);
+
+            uint32_t len = strlen(temp);
+            CX_WARN(len >= MIN_PASSWD_LEN, "'%s' must have a minimum length of %d characters!", key, MIN_PASSWD_LEN);
+            CX_WARN(len <= MAX_PASSWD_LEN, "'%s' must have a maximum length of %s characters!", key, MAX_PASSWD_LEN)
+                if (!cx_math_in_range(len, MIN_PASSWD_LEN, MAX_PASSWD_LEN)) goto key_missing;
+
+            cx_str_copy(g_ctx.cfg.lfsPassword, sizeof(g_ctx.cfg.lfsPassword), temp);
         }
         else
         {
@@ -318,7 +349,7 @@ static bool cfg_init(const char* _cfgFilePath, cx_err_t* _err)
         return true;
 
     key_missing:
-        CX_ERR_SET(_err, ERR_CFG_MISSINGKEY, "key '%s' is missing in the configuration file.", key);
+        CX_ERR_SET(_err, ERR_CFG_MISSINGKEY, "key '%s' is either missing or invalid in the configuration file.", key);
     }
     else
     {
@@ -357,8 +388,11 @@ static bool net_init(cx_err_t* _err)
     lfsCtxArgs.multiThreadedSend = true;
     lfsCtxArgs.connectBlocking = true;
     lfsCtxArgs.connectTimeout = 15000;
+    lfsCtxArgs.onConnected = (cx_net_on_connected_cb)on_connected_lfs;
+    lfsCtxArgs.onDisconnected = (cx_net_on_connected_cb)on_disconnected_lfs;
 
     // message headers to handlers mappings
+    lfsCtxArgs.msgHandlers[MEMP_ACK] = (cx_net_handler_cb*)mem_handle_ack;
     lfsCtxArgs.msgHandlers[MEMP_RES_CREATE] = (cx_net_handler_cb*)mem_handle_res_create;
     lfsCtxArgs.msgHandlers[MEMP_RES_DROP] = (cx_net_handler_cb*)mem_handle_res_drop;
     lfsCtxArgs.msgHandlers[MEMP_RES_DESCRIBE] = (cx_net_handler_cb*)mem_handle_res_describe;
@@ -366,23 +400,38 @@ static bool net_init(cx_err_t* _err)
     lfsCtxArgs.msgHandlers[MEMP_RES_INSERT] = (cx_net_handler_cb*)mem_handle_res_insert;
 
     // start client context
+    g_ctx.lfsAvail = false;
+    g_ctx.lfsHandshaking = true;
     g_ctx.lfs = cx_net_connect(&lfsCtxArgs);
-    if (NULL == g_ctx.lfs || !(CX_NET_STATE_CONNECTED & g_ctx.lfs->c.state))
+    if (NULL != g_ctx.lfs && (CX_NET_STATE_CONNECTED & g_ctx.lfs->c.state))
+    {
+        // wait until we either get acknowledged or disconnected
+        while (g_ctx.lfsHandshaking)
+        {
+            cx_net_poll_events(g_ctx.lfs, -1);
+        }
+    }
+
+    if (!g_ctx.lfsAvail)
     {
         CX_ERR_SET(_err, ERR_NET_FAILED, "could not connect to lfs server on %s:%d.",
             lfsCtxArgs.ip, lfsCtxArgs.port);
         return false;
     }
-
-    g_ctx.cfg.valueSize = 100;
+    else
+    {
+        CX_INFO("connection successfully established with LFS.");
+    }
 
     cx_net_args_t svCtxArgs;
     CX_MEM_ZERO(svCtxArgs);
     cx_str_copy(svCtxArgs.name, sizeof(svCtxArgs.name), "api");
     cx_str_copy(svCtxArgs.ip, sizeof(svCtxArgs.ip), g_ctx.cfg.listeningIp);
     svCtxArgs.port = g_ctx.cfg.listeningPort;
+    svCtxArgs.maxClients = 10;
 
     // message headers to handlers mappings
+    svCtxArgs.msgHandlers[MEMP_AUTH] = (cx_net_handler_cb*)mem_handle_auth;
     svCtxArgs.msgHandlers[MEMP_REQ_CREATE] = (cx_net_handler_cb*)mem_handle_req_create;
     svCtxArgs.msgHandlers[MEMP_REQ_DROP] = (cx_net_handler_cb*)mem_handle_req_drop;
     svCtxArgs.msgHandlers[MEMP_REQ_DESCRIBE] = (cx_net_handler_cb*)mem_handle_req_describe;
@@ -668,6 +717,23 @@ static bool task_free(task_t* _task)
     }
 
     return true;
+}
+
+static void on_connected_lfs(cx_net_ctx_cl_t* _ctx)
+{
+    payload_t payload;
+    uint32_t payloadSize = lfs_pack_auth(payload, sizeof(payload), g_ctx.cfg.lfsPassword);
+    
+    cx_net_send(_ctx, LFSP_AUTH, payload, payloadSize, INVALID_HANDLE);
+}
+
+static void on_disconnected_lfs(cx_net_ctx_cl_t* _ctx)
+{
+    if (g_ctx.lfsHandshaking)
+    {
+        g_ctx.lfsAvail = false;
+        g_ctx.lfsHandshaking = false;
+    }
 }
 
 static void api_response_create(const task_t* _task)

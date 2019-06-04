@@ -17,24 +17,28 @@
 typedef enum MEM_TIMER
 {
     MEM_TIMER_JOURNAL = 0,
+    MEM_TIMER_GOSSIPING = 1,
+    MEM_TIMER_COUNT
 } MEM_TIMER;
 
 typedef struct cfg_t
 {
     t_config*           handle;                     // pointer to so-commons-lib config adt.
+    password_t          password;                   // password for authenticating KER nodes.
     uint16_t            memNumber;                  // memory node identifier.
     uint16_t            workers;                    // number of worker threads to spawn to process requests.
     ipv4_t              listeningIp;                // ip address on which this MEM server will listen on.
     uint16_t            listeningPort;              // tcp port on which this MEM server will listen on.
     ipv4_t              lfsIp;                      // ip address on which the LFS server will listen on.
     uint16_t            lfsPort;                    // tcp port on which the LFS server will listen on.
+    password_t          lfsPassword;                // password to authenticate with the LFS server.
     uint8_t             seedsCount;                 // number memory nodes already known.
     ipv4_t              seedsIps[MAX_MEM_SEEDS];    // ip addresses of memory nodes already known.
     uint16_t            seedsPorts[MAX_MEM_SEEDS];  // ports of memory nodes already known.
     uint32_t            delayMem;                   // memory access delay in milliseconds.
     uint32_t            delayLfs;                   // filesystem access delay in milliseconds.
     uint32_t            memSize;                    // size in bytes of the main memory.
-    uint32_t            valueSize;                  // size in bytes of each record's value field.
+    uint16_t            valueSize;                  // size in bytes of each record's value field.
     uint32_t            intervalJournaling;         // interval in milliseconds to perform the journaling process.
     uint32_t            intervalGossiping;          // interval in milliseconds to perform the gossiping process.
 } cfg_t;
@@ -57,7 +61,7 @@ typedef struct page_t
 typedef struct mm_ctx_t
 {
     char*               mainMem;                    // pre-allocated main memory buffer.
-    uint32_t            valueSize;                  // size in bytes of each record's value field.
+    uint16_t            valueSize;                  // size in bytes of each record's value field.
     uint32_t            pageSize;                   // size in bytes of each page contained in our main memory.
     uint32_t            pageMax;                    // maximum amount of pages that fit in our main memory.
     cx_cdict_t*         tablesMap;                  // table of segments implemented as a dictionary for faster lookups.
@@ -76,6 +80,8 @@ typedef struct mem_ctx_t
     bool                isRunning;                  // true if the server is running. false if it's shutting down.
     cx_net_ctx_sv_t*    sv;                         // server context for serving API requests coming from KER nodes.
     cx_net_ctx_cl_t*    lfs;                        // client context for connecting to the LFS node.
+    bool                lfsHandshaking;             // true if we're in authenticating with the LFS node.
+    bool                lfsAvail;                   // true if the LFS node is available to process our requests.
     payload_t           buff1;                      // temporary pre-allocated buffer for building packets.
     payload_t           buff2;                      // temporary pre-allocated buffer for building packets.
 } mem_ctx_t;

@@ -22,7 +22,7 @@ static void             _mm_page_destroy(page_t* _page);
  ***  PUBLIC FUNCTIONS
  ***************************************************************************************/
 
-bool mm_init(uint32_t _memSz, uint32_t _valueSz, cx_err_t* _err)
+bool mm_init(uint32_t _memSz, uint16_t _valueSz, cx_err_t* _err)
 {
     CX_CHECK(NULL == m_mmCtx, "mm is already initialized!");
 
@@ -94,6 +94,8 @@ bool mm_init(uint32_t _memSz, uint32_t _valueSz, cx_err_t* _err)
 
 void mm_destroy()
 {
+    if (NULL == m_mmCtx) return;
+
     if (NULL != m_mmCtx->mainMem)
     {
         free(m_mmCtx->mainMem);

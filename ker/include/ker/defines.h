@@ -15,10 +15,12 @@
 #define MAX_TABLES 4096
 #define MAX_FILE_FRAG 1024
 #define MAX_MEM_SEEDS 16
+#define MIN_PASSWD_LEN 12
+#define MAX_PASSWD_LEN 32
 
 typedef char payload_t[MAX_PACKET_LEN - MIN_PACKET_LEN];
 typedef char table_name_t[TABLE_NAME_LEN_MAX + 1];
-typedef char ipv4_t[16];
+typedef char password_t[MAX_PASSWD_LEN + 1];
 
 typedef enum ERR_CODE
 {

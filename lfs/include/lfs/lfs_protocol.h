@@ -9,7 +9,9 @@
 
 typedef enum
 {
-    LFSP_NONE = 0,
+    LFSP_NONE = _CX_NETP_BEGIN_,
+    LFSP_AUTH,
+    LFSP_ACK,
     LFSP_REQ_CREATE,
     LFSP_REQ_DROP,
     LFSP_REQ_DESCRIBE,
@@ -25,21 +27,25 @@ typedef enum
 
 #include "../../src/lfs.h"
 
-void lfs_handle_req_create(const cx_net_common_t* _common, void* _userData, const char* _buffer, uint16_t _bufferSize);
+void lfs_handle_auth(cx_net_common_t* _common, void* _userData, const char* _buffer, uint16_t _bufferSize);
 
-void lfs_handle_req_drop(const cx_net_common_t* _common, void* _userData, const char* _buffer, uint16_t _bufferSize);
+void lfs_handle_req_create(cx_net_common_t* _common, void* _userData, const char* _buffer, uint16_t _bufferSize);
 
-void lfs_handle_req_describe(const cx_net_common_t* _common, void* _userData, const char* _buffer, uint16_t _bufferSize);
+void lfs_handle_req_drop(cx_net_common_t* _common, void* _userData, const char* _buffer, uint16_t _bufferSize);
 
-void lfs_handle_req_select(const cx_net_common_t* _common, void* _userData, const char* _buffer, uint16_t _bufferSize);
+void lfs_handle_req_describe(cx_net_common_t* _common, void* _userData, const char* _buffer, uint16_t _bufferSize);
 
-void lfs_handle_req_insert(const cx_net_common_t* _common, void* _userData, const char* _buffer, uint16_t _bufferSize);
+void lfs_handle_req_select(cx_net_common_t* _common, void* _userData, const char* _buffer, uint16_t _bufferSize);
+
+void lfs_handle_req_insert(cx_net_common_t* _common, void* _userData, const char* _buffer, uint16_t _bufferSize);
 
 #endif // LFS
 
 /****************************************************************************************
  ***  MESSAGE PACKERS
  ***************************************************************************************/
+
+uint32_t lfs_pack_auth(char* _buffer, uint16_t _size, password_t _passwd);
 
 uint32_t lfs_pack_req_create(char* _buffer, uint16_t _size, uint16_t _remoteId, const char* _tableName, uint8_t _consistency, uint16_t _numPartitions, uint32_t _compactionInterval);
 

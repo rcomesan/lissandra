@@ -18,6 +18,7 @@
 #include <cx/cdict.h>
 #include <cx/sort.h>
 #include <cx/binw.h> //TODO sacar esto una vez que mueva api_response_describe a common
+#include <cx/math.h>
 
 #include <ker/common_protocol.h>
 #include <lfs/lfs_protocol.h>
@@ -58,6 +59,9 @@ static void         api_response_describe(const task_t* _task);
 static void         api_response_select(const task_t* _task);
 static void         api_response_insert(const task_t* _task);
 
+static bool         on_connection_mem(cx_net_ctx_sv_t* _ctx, const ipv4_t _ipv4);
+static void         on_disconnection_mem(cx_net_ctx_sv_t* _ctx, cx_net_client_t* _client);
+
 static void         table_unblock(table_t* _table);
 static void         table_free(table_t* _table);
 static void         table_create_task_dump(const char* _tableName, table_t* _table, void* _userData);
@@ -78,7 +82,7 @@ int main(int _argc, char** _argv)
     cx_err_t err;
 
     g_ctx.isRunning = true
-        && cx_timer_init(MAX_TABLES + 1, handle_timer_tick, &err)
+        && cx_timer_init(MAX_TABLES + LFS_TIMER_COUNT, handle_timer_tick, &err)
         && logger_init(&g_ctx.log, &err)
         && cfg_init("res/lfs.cfg", &err)
         && taskman_init(g_ctx.cfg.workers, task_run_mt, task_run_wk, task_completed, task_free, task_reschedule, &err)
@@ -103,7 +107,7 @@ int main(int _argc, char** _argv)
                 handle_cli_command(cmd);
 
             // poll socket events
-            cx_net_poll_events(g_ctx.sv);
+            cx_net_poll_events(g_ctx.sv, 0);
             
             // poll timer events
             cx_timer_poll_events();
@@ -126,9 +130,9 @@ int main(int _argc, char** _argv)
 
     CX_INFO("node is shutting down...", PROJECT_NAME);
     cx_cli_destroy();
+    taskman_destroy();
     net_destroy();
     lfs_destroy();
-    taskman_destroy();
     cfg_destroy();
     cx_timer_destroy();
 
@@ -159,6 +163,23 @@ static bool cfg_init(const char* _cfgFilePath, cx_err_t* _err)
     if (NULL != g_ctx.cfg.handle)
     {
         CX_INFO("config file: %s", cfgPath);
+
+        key = "password";
+        if (config_has_property(g_ctx.cfg.handle, key))
+        {
+            temp = config_get_string_value(g_ctx.cfg.handle, key);
+
+            uint32_t len = strlen(temp);
+            CX_WARN(len >= MIN_PASSWD_LEN, "'%s' must have a minimum length of %d characters!", key, MIN_PASSWD_LEN);
+            CX_WARN(len <= MAX_PASSWD_LEN, "'%s' must have a maximum length of %s characters!", key, MAX_PASSWD_LEN)
+            if (!cx_math_in_range(len, MIN_PASSWD_LEN, MAX_PASSWD_LEN)) goto key_missing;
+
+            cx_str_copy(g_ctx.cfg.password, sizeof(g_ctx.cfg.password), temp);
+        }
+        else
+        {
+            goto key_missing;
+        }
 
         key = "listeningIp";
         if (config_has_property(g_ctx.cfg.handle, key))
@@ -304,8 +325,12 @@ static bool net_init(cx_err_t* _err)
     cx_str_copy(svCtxArgs.name, sizeof(svCtxArgs.name), "api");
     cx_str_copy(svCtxArgs.ip, sizeof(svCtxArgs.ip), g_ctx.cfg.listeningIp);
     svCtxArgs.port = g_ctx.cfg.listeningPort;
+    svCtxArgs.maxClients = 100;
+    svCtxArgs.onConnection = (cx_net_on_connection_cb)on_connection_mem;
+    svCtxArgs.onDisconnection = (cx_net_on_disconnection_cb)on_disconnection_mem;
 
     // message headers to handlers mappings
+    svCtxArgs.msgHandlers[LFSP_AUTH] = (cx_net_handler_cb*)lfs_handle_auth;
     svCtxArgs.msgHandlers[LFSP_REQ_CREATE] = (cx_net_handler_cb*)lfs_handle_req_create;
     svCtxArgs.msgHandlers[LFSP_REQ_DROP] = (cx_net_handler_cb*)lfs_handle_req_drop;
     svCtxArgs.msgHandlers[LFSP_REQ_DESCRIBE] = (cx_net_handler_cb*)lfs_handle_req_describe;
@@ -457,6 +482,16 @@ static bool handle_timer_tick(uint64_t _expirations, uint32_t _type, void* _user
     }
 
     return !stopTimer;
+}
+
+static bool on_connection_mem(cx_net_ctx_sv_t* _ctx, const ipv4_t _ipv4)
+{
+    return g_ctx.isRunning;
+}
+
+static void on_disconnection_mem(cx_net_ctx_sv_t* _ctx, cx_net_client_t* _client)
+{
+    // MEM node just disconnected.
 }
 
 static void table_unblock(table_t* _table)
@@ -738,7 +773,7 @@ static bool task_completed(task_t* _task)
     {
         if (NULL != table)
         {
-            cli_report_dumped(_task, table->meta.name, "asd.tmp"); //TODO add resulting dump file name
+            cli_report_dumped(_task, table->meta.name, NULL);
         }
         break;
     }

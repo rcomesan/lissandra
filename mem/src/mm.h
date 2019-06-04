@@ -15,7 +15,7 @@
  ***  PUBLIC FUNCTIONS
  ***************************************************************************************/
 
-bool                mm_init(uint32_t _memSz, uint32_t _valueSz, cx_err_t* _err);
+bool                mm_init(uint32_t _memSz, uint16_t _valueSz, cx_err_t* _err);
 
 void                mm_destroy();
 

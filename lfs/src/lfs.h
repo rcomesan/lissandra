@@ -16,12 +16,14 @@
 typedef enum LFS_TIMER
 {
     LFS_TIMER_DUMP = 0,
-    LFS_TIMER_COMPACT
+    LFS_TIMER_COMPACT,
+    LFS_TIMER_COUNT
 } LFS_TIMER;
 
 typedef struct cfg_t
 {
     t_config*           handle;                 // pointer to so-commons-lib config adt.
+    password_t          password;               // password for authenticating MEM nodes.
     ipv4_t              listeningIp;            // ip address on which this LFS server will listen on.
     uint16_t            listeningPort;          // tcp port on which this LFS server will listen on.
     uint16_t            workers;                // number of worker threads to spawn to process requests.
