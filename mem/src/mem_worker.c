@@ -140,18 +140,27 @@ static bool _worker_request_lfs(uint8_t _header, const char* _payload, uint32_t 
 {
     CX_ERR_CLEAR(&_task->err);
 
-    _task->state = TASK_STATE_RUNNING_AWAITING;
-    cx_net_send(g_ctx.lfs, _header, _payload, _payloadSize, INVALID_HANDLE);
-
-    // wait for the response
     pthread_mutex_lock(&_task->responseMtx);
-    {
-        while (TASK_STATE_RUNNING_AWAITING == _task->state)
-        {
-            pthread_cond_wait(&_task->responseCond, &_task->responseMtx);
-        }
-    }
+    _task->state = TASK_STATE_RUNNING_AWAITING;
     pthread_mutex_unlock(&_task->responseMtx);
+
+    if (cx_net_send(g_ctx.lfs, _header, _payload, _payloadSize, INVALID_HANDLE))
+    {
+        // wait for the response
+        pthread_mutex_lock(&_task->responseMtx);
+        {
+            while (TASK_STATE_RUNNING_AWAITING == _task->state)
+            {
+                pthread_cond_wait(&_task->responseCond, &_task->responseMtx);
+            }
+        }
+        pthread_mutex_unlock(&_task->responseMtx);
+    }
+    else
+    {
+        _task->state = TASK_STATE_RUNNING;
+        CX_ERR_SET(&_task->err, ERR_NET_LFS_UNAVAILABLE, "LFS node is unavailable.");
+    }
 
     return (ERR_NONE == _task->err.code);
 

@@ -44,9 +44,12 @@ static bool         task_run_wk(task_t* _task);
 static bool         task_completed(task_t* _task);
 static bool         task_free(task_t* _task);
 static bool         task_reschedule(task_t* _task);
+static bool         task_abort_req(task_t* _task, void* _userData);
 
 static void         on_connected_lfs(cx_net_ctx_cl_t* _ctx);
 static void         on_disconnected_lfs(cx_net_ctx_cl_t* _ctx);
+static bool         on_connection(cx_net_ctx_sv_t* _ctx, const ipv4_t _ipv4);
+static void         on_disconnection(cx_net_ctx_sv_t* _ctx, cx_net_client_t* _client);
 
 static void         api_response_create(const task_t* _task);
 static void         api_response_drop(const task_t* _task);
@@ -60,16 +63,18 @@ static void         api_response_insert(const task_t* _task);
 
 int main(int _argc, char** _argv)
 {
+    cx_err_t err;
+
     cx_init(PROJECT_NAME);
+    
     CX_MEM_ZERO(g_ctx);
+    CX_ERR_CLEAR(&err);
 
     double timeCounter = 0;
     double timeCounterPrev = 0;
     double timeDelta = 0;
-    char* shutdownReason = "main thread finished";
 
-    cx_err_t err;
-
+    g_ctx.shutdownReason = "main thread finished";
     g_ctx.isRunning = true
         && cx_timer_init(MEM_TIMER_COUNT, handle_timer_tick, &err)
         && logger_init(&g_ctx.log, &err)
@@ -79,7 +84,7 @@ int main(int _argc, char** _argv)
         && mem_init(&err)
         && cx_cli_init(&err);
 
-    if (0 == err.code)
+    if (ERR_NONE == err.code)
     {
         cx_cli_cmd_t* cmd = NULL;
         timeCounterPrev = cx_time_counter();
@@ -111,20 +116,20 @@ int main(int _argc, char** _argv)
     }
     else if (NULL != g_ctx.log)
     {
-        shutdownReason = "initialization failed";
+        g_ctx.shutdownReason = "initialization failed";
         log_error(g_ctx.log, "initialization failed (errcode %d). %s", err.code, err.desc);
     }
     else
     {
-        shutdownReason = "fatal error";
+        g_ctx.shutdownReason = "fatal error";
         printf("[FATAL] (errcode %d) %s", err.code, err.desc);
     }
 
-    CX_INFO("node is shutting down. reason: %s.", shutdownReason);
+    CX_INFO("node is shutting down. reason: %s.", g_ctx.shutdownReason);
     cx_cli_destroy();
+    taskman_destroy();
     net_destroy();
     mem_destroy();
-    taskman_destroy();
     cfg_destroy();
     cx_timer_destroy();
 
@@ -414,7 +419,7 @@ static bool net_init(cx_err_t* _err)
 
     if (!g_ctx.lfsAvail)
     {
-        CX_ERR_SET(_err, ERR_NET_FAILED, "could not connect to lfs server on %s:%d.",
+        CX_ERR_SET(_err, ERR_INIT_NET, "could not connect to lfs server on %s:%d.",
             lfsCtxArgs.ip, lfsCtxArgs.port);
         return false;
     }
@@ -429,20 +434,22 @@ static bool net_init(cx_err_t* _err)
     cx_str_copy(svCtxArgs.ip, sizeof(svCtxArgs.ip), g_ctx.cfg.listeningIp);
     svCtxArgs.port = g_ctx.cfg.listeningPort;
     svCtxArgs.maxClients = 10;
+    svCtxArgs.onConnection = (cx_net_on_connection_cb)on_connection;
+    svCtxArgs.onDisconnection = (cx_net_on_disconnection_cb)on_disconnection;
 
     // message headers to handlers mappings
-    svCtxArgs.msgHandlers[MEMP_AUTH] = (cx_net_handler_cb*)mem_handle_auth;
-    svCtxArgs.msgHandlers[MEMP_REQ_CREATE] = (cx_net_handler_cb*)mem_handle_req_create;
-    svCtxArgs.msgHandlers[MEMP_REQ_DROP] = (cx_net_handler_cb*)mem_handle_req_drop;
-    svCtxArgs.msgHandlers[MEMP_REQ_DESCRIBE] = (cx_net_handler_cb*)mem_handle_req_describe;
-    svCtxArgs.msgHandlers[MEMP_REQ_SELECT] = (cx_net_handler_cb*)mem_handle_req_select;
-    svCtxArgs.msgHandlers[MEMP_REQ_INSERT] = (cx_net_handler_cb*)mem_handle_req_insert;
+    svCtxArgs.msgHandlers[MEMP_AUTH] = (cx_net_handler_cb)mem_handle_auth;
+    svCtxArgs.msgHandlers[MEMP_REQ_CREATE] = (cx_net_handler_cb)mem_handle_req_create;
+    svCtxArgs.msgHandlers[MEMP_REQ_DROP] = (cx_net_handler_cb)mem_handle_req_drop;
+    svCtxArgs.msgHandlers[MEMP_REQ_DESCRIBE] = (cx_net_handler_cb)mem_handle_req_describe;
+    svCtxArgs.msgHandlers[MEMP_REQ_SELECT] = (cx_net_handler_cb)mem_handle_req_select;
+    svCtxArgs.msgHandlers[MEMP_REQ_INSERT] = (cx_net_handler_cb)mem_handle_req_insert;
 
     // start server context
     g_ctx.sv = cx_net_listen(&svCtxArgs);
     if (NULL == g_ctx.sv)
     {
-        CX_ERR_SET(_err, ERR_NET_FAILED, "could not start a listening server context on %s:%d.",
+        CX_ERR_SET(_err, ERR_INIT_NET, "could not start a listening server context on %s:%d.",
             svCtxArgs.ip, svCtxArgs.port);
         return false;
     }
@@ -452,14 +459,10 @@ static bool net_init(cx_err_t* _err)
 
 static void net_destroy()
 {
-    //TODO make sure there're no pending requests from KER node.
-    // we need to notify them in some way that we're shutting down!
-    
-    //TODO make sure to wake up all the threads waiting for LFS
-
     cx_net_close(g_ctx.sv);
-    cx_net_close(g_ctx.lfs);
     g_ctx.sv = NULL;
+
+    cx_net_close(g_ctx.lfs);
     g_ctx.lfs = NULL;
 }
 
@@ -607,6 +610,20 @@ static bool task_reschedule(task_t* _task)
     return true;
 }
 
+static bool task_abort_req(task_t* _task, void* _userData)
+{
+    pthread_mutex_lock(&_task->responseMtx);
+    if (TASK_STATE_RUNNING_AWAITING == _task->startTime)
+    {
+        _task->state = TASK_STATE_RUNNING;
+        CX_ERR_SET(&_task->err, ERR_NET_LFS_UNAVAILABLE, "LFS node is unavailable.");
+        pthread_cond_signal(&_task->responseCond);
+    }
+    pthread_mutex_unlock(&_task->responseMtx);
+    
+    return true;
+}
+
 static bool task_completed(task_t* _task)
 {
     switch (_task->type)
@@ -734,6 +751,26 @@ static void on_disconnected_lfs(cx_net_ctx_cl_t* _ctx)
         g_ctx.lfsAvail = false;
         g_ctx.lfsHandshaking = false;
     }
+    else if (g_ctx.lfsAvail)
+    {
+        //TODO breakpoint y revisar que el contexto de cliente quede sin CONNECTED para que send devuelva false!
+        g_ctx.lfsAvail = false;
+        g_ctx.isRunning = false;
+        g_ctx.shutdownReason = "lfs is unavailable";
+
+        // the connection with the LFS node is gone. let's wake up all the tasks with pending requests on it.
+        taskman_foreach((taskman_func_cb)task_abort_req, NULL);
+    }
+}
+
+static bool on_connection(cx_net_ctx_sv_t* _ctx, const ipv4_t _ipv4)
+{
+    return g_ctx.isRunning;
+}
+
+static void on_disconnection(cx_net_ctx_sv_t* _ctx, cx_net_client_t* _client)
+{
+    // KER or MEM node just disconnected.
 }
 
 static void api_response_create(const task_t* _task)

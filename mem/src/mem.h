@@ -80,10 +80,11 @@ typedef struct mem_ctx_t
     bool                isRunning;                  // true if the server is running. false if it's shutting down.
     cx_net_ctx_sv_t*    sv;                         // server context for serving API requests coming from KER nodes.
     cx_net_ctx_cl_t*    lfs;                        // client context for connecting to the LFS node.
-    bool                lfsHandshaking;             // true if we're in authenticating with the LFS node.
+    bool                lfsHandshaking;             // true if we're authenticating with the LFS node.
     bool                lfsAvail;                   // true if the LFS node is available to process our requests.
     payload_t           buff1;                      // temporary pre-allocated buffer for building packets.
     payload_t           buff2;                      // temporary pre-allocated buffer for building packets.
+    char*               shutdownReason;             // reason that caused this MEM node to exit.
 } mem_ctx_t;
 
 extern mem_ctx_t        g_ctx;
