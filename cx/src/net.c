@@ -301,9 +301,9 @@ void cx_net_poll_events(void* _ctx, int32_t _timeout)
     }
 }
 
-bool cx_net_send(void* _ctx, uint8_t _header, const char* _payload, uint32_t _payloadSize, uint16_t _clientHandle)
+int32_t cx_net_send(void* _ctx, uint8_t _header, const char* _payload, uint32_t _payloadSize, uint16_t _clientHandle)
 {
-    bool success = true;
+    int32_t result = CX_NET_SEND_OK;
 
     CX_CHECK_NOT_NULL(_ctx);
     cx_net_ctx_t ctx = { _ctx };
@@ -338,11 +338,12 @@ bool cx_net_send(void* _ctx, uint8_t _header, const char* _payload, uint32_t _pa
         }
         else
         {
-            success = false;
+            result = CX_NET_SEND_DISCONNECTED;
+            goto send_finished;
         }
     }
 
-    if (success && (*position) + bytesRequired > CX_NET_BUFLEN)
+    if ((*position) + bytesRequired > CX_NET_BUFLEN)
     {
         // not enough space to add this packet to the outbound buffer
         // try to write it out to the socket and start from byte 0
@@ -363,27 +364,27 @@ bool cx_net_send(void* _ctx, uint8_t _header, const char* _payload, uint32_t _pa
                     ctx.c->name, _header, bytesRequired);
             }
 
-            success = false;
+            result = CX_NET_SEND_BUFFER_FULL;
+            goto send_finished;
         }
     }
 
-    if (success)
+    // write the packet to our buffer
+    cx_binw_uint8(buffer, bufferSize - (*position), position, _header);
+    cx_binw_uint16(buffer, bufferSize - (*position), position, _payloadSize);
+
+    if (_payloadSize > 0)
     {
-        // write the packet to our buffer
-        cx_binw_uint8(buffer, bufferSize - (*position), position, _header);
-        cx_binw_uint16(buffer, bufferSize - (*position), position, _payloadSize);
-
-        if (_payloadSize > 0)
-        {
-            CX_CHECK_NOT_NULL(_payload);
-            memcpy(&(buffer[*position]), _payload, _payloadSize);
-            (*position) += _payloadSize;
-        }
+        CX_CHECK_NOT_NULL(_payload);
+        memcpy(&(buffer[*position]), _payload, _payloadSize);
+        (*position) += _payloadSize;
     }
+
+send_finished:
 
     if (ctx.c->mtxInitialized) pthread_mutex_unlock(&ctx.c->mtx);
 
-    return success;
+    return result;
 }
 
 void cx_net_validate(void* _ctx, uint16_t _clientHandle)
@@ -529,6 +530,11 @@ void cx_net_disconnect(void* _ctx, uint16_t _clientHandle, const char* _reason)
         if (NULL != ctx.cl->onDisconnected) 
             ctx.cl->onDisconnected(ctx.cl);
     }
+}
+
+void cx_net_wait_outboundbuff(void* _ctx, uint16_t _clientHandle, int32_t _timeout)
+{
+    //TODO
 }
 
 /****************************************************************************************

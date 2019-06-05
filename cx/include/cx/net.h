@@ -30,7 +30,7 @@ typedef void(*cx_net_on_disconnection_cb)(cx_net_ctx_sv_t* _ctx, cx_net_client_t
 typedef void(*cx_net_on_connected_cb)(cx_net_ctx_cl_t* _ctx);
 typedef void(*cx_net_on_disconnected_cb)(cx_net_ctx_cl_t* _ctx);
 
-typedef enum CX_NET_PACKET
+typedef enum
 {
     CX_NETP_PING = 0,                               // sends a ping to keep the connection alive.
     CX_NETP_PONG,                                   // sends a pong (ping-reply) to keep the connection alive.
@@ -38,6 +38,13 @@ typedef enum CX_NET_PACKET
     CX_NETP_AUTH,                                   // sends an authentication request.
     CX_NETP_ACK                                     // acknowledges an authentication.
 } CX_NET_PACKET;
+
+typedef enum
+{
+    CX_NET_SEND_DISCONNECTED = 0,                   // the send request could not be performed since the destination is disconnected.
+    CX_NET_SEND_OK,                                 // the send request was completed successfully.
+    CX_NET_SEND_BUFFER_FULL                         // the send request could not be performed since the outbound buffer is full.
+} CX_NET_SEND_RESULT;
 
 typedef enum
 {
@@ -146,13 +153,15 @@ void                    cx_net_close(void* _ctx);
 
 void                    cx_net_poll_events(void* _ctx, int32_t _timeout);
 
-bool                    cx_net_send(void* _ctx, uint8_t _header, const char* _payload, uint32_t _payloadSize, uint16_t _clientHandle);
+int32_t                 cx_net_send(void* _ctx, uint8_t _header, const char* _payload, uint32_t _payloadSize, uint16_t _clientHandle);
 
 void                    cx_net_validate(void* _ctx, uint16_t _clientHandle);
 
 bool                    cx_net_flush(void* _ctx, uint16_t _clientHandle);
 
 void                    cx_net_disconnect(void* _ctx, uint16_t _clientHandle, const char* _reason);
+
+void                    cx_net_wait_outboundbuff(void* _ctx, uint16_t _clientHandle, int32_t _timeout);
 
 #endif // CX_NET_H_
 
