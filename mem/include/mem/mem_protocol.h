@@ -77,12 +77,12 @@ uint32_t mem_pack_req_select(char* _buffer, uint16_t _size, uint16_t _remoteId, 
 
 uint32_t mem_pack_req_insert(char* _buffer, uint16_t _size, uint16_t _remoteId, const char* _tableName, uint16_t _key, const char* _value, uint32_t _timestamp);
 
-uint32_t mem_pack_res_create(char* _buffer, uint16_t _size, uint16_t _remoteId, uint32_t _errCode, const char* _errDesc);
+uint32_t mem_pack_res_create(char* _buffer, uint16_t _size, uint16_t _remoteId, const cx_err_t* _err);
 
-uint32_t mem_pack_res_drop(char* _buffer, uint16_t _size, uint16_t _remoteId, uint32_t _errCode, const char* _errDesc);
+uint32_t mem_pack_res_drop(char* _buffer, uint16_t _size, uint16_t _remoteId, const cx_err_t* _err);
 
-uint32_t mem_pack_res_select(char* _buffer, uint16_t _size, uint16_t _remoteId, uint32_t _errCode, const char* _errDesc, table_record_t* _record);
+uint32_t mem_pack_res_select(char* _buffer, uint16_t _size, uint16_t _remoteId, const cx_err_t* _err, const table_record_t* _record);
 
-uint32_t mem_pack_res_insert(char* _buffer, uint16_t _size, uint16_t _remoteId, uint32_t _errCode, const char* _errDesc);
+uint32_t mem_pack_res_insert(char* _buffer, uint16_t _size, uint16_t _remoteId, const cx_err_t* _err);
 
 #endif // MEM_PROTOCOL_H_

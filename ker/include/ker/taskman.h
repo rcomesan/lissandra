@@ -25,27 +25,29 @@ typedef enum TASK_STATE
     TASK_STATE_RUNNING,             // the task is being processed by a worker thread.
     TASK_STATE_RUNNING_AWAITING,    // the task is being processed by a worker thread, but it's awaiting for some other node's reply.
     TASK_STATE_COMPLETED,           // the task is completed. check c->err to handle errors (if any).
-    TASK_STATE_BLOCKED_RESCHEDULE,  // the task cannot be performed at this time since the table is blocked and it must be re-rescheduled.
-    TASK_STATE_BLOCKED_AWAITING,    // the task is awaiting in a table's blocked queue. as soon as the table is unblocked it will be moved to the main queue.
+    TASK_STATE_BLOCKED_RESCHEDULE,  // the task cannot be performed at this time since the resource is blocked and it must be re-rescheduled.
+    TASK_STATE_BLOCKED_AWAITING,    // the task is awaiting in a resource's blocked queue. as soon as the resource is unblocked it will be moved to the main queue.
 } TASK_STATE;
 
 typedef enum TASK_TYPE
 {
-    TASK_TYPE_NONE = 0,             // default, unasigned state.
-    TASK_MT = UINT8_C(0x0),         // main thread task bitflag.
-    TASK_WT = UINT8_C(0x80),        // worker thread task bitflag.
+    TASK_TYPE_NONE = 0,         // default, unasigned state.
+    TASK_MT = UINT8_C(0x0),     // main thread task bitflag.
+    TASK_WT = UINT8_C(0x80),    // worker thread task bitflag.
     // Main-thread tasks ----------------------------------------------------------------
-    TASK_MT_COMPACT =   TASK_MT | UINT8_C(01), // main thread task to compact a table when it's no longer in use.
-    TASK_MT_DUMP =      TASK_MT | UINT8_C(02), // main thread task to dump all the existing tables.
-    TASK_MT_FREE =      TASK_MT | UINT8_C(03), // main thread task to free a resource when it's no longer in use.
+    TASK_MT_COMPACT =   TASK_MT | UINT8_C(1),   // main thread task to compact a table when it's no longer in use.
+    TASK_MT_DUMP =      TASK_MT | UINT8_C(2),   // main thread task to dump all the existing tables.
+    TASK_MT_JOURNAL =   TASK_MT | UINT8_C(3),   // main thread task to enqueue a memory journal.
+    TASK_MT_FREE =      TASK_MT | UINT8_C(4),   // main thread task to free a resource when it's no longer in use.
     // Worker-thread tasks --------------------------------------------------------------
-    TASK_WT_CREATE =    TASK_WT | UINT8_C(01), // worker thread task to create a table.
-    TASK_WT_DROP =      TASK_WT | UINT8_C(02), // worker thread task to drop a table.
-    TASK_WT_DESCRIBE =  TASK_WT | UINT8_C(03), // worker thread task to describe single/multiple table/s.
-    TASK_WT_SELECT =    TASK_WT | UINT8_C(04), // worker thread task to do a select query on a table.
-    TASK_WT_INSERT =    TASK_WT | UINT8_C(05), // worker thread task to do a single/bulk insert query in a table.
-    TASK_WT_DUMP =      TASK_WT | UINT8_C(06), // worker thread task to dump a table.
-    TASK_WT_COMPACT =   TASK_WT | UINT8_C(07), // worker thread task to compact a table.
+    TASK_WT_CREATE =    TASK_WT | UINT8_C(1),   // worker thread task to create a table.
+    TASK_WT_DROP =      TASK_WT | UINT8_C(2),   // worker thread task to drop a table.
+    TASK_WT_DESCRIBE =  TASK_WT | UINT8_C(3),   // worker thread task to describe single/multiple table/s.
+    TASK_WT_SELECT =    TASK_WT | UINT8_C(4),   // worker thread task to do a select query on a table.
+    TASK_WT_INSERT =    TASK_WT | UINT8_C(5),   // worker thread task to do a single/bulk insert query in a table.
+    TASK_WT_DUMP =      TASK_WT | UINT8_C(6),   // worker thread task to dump a table.
+    TASK_WT_COMPACT =   TASK_WT | UINT8_C(7),   // worker thread task to compact a table.
+    TASK_WT_JOURNAL =   TASK_WT | UINT8_C(8),   // worker thread task to run a memory journal.
 } TASK_TYPE;
 
 typedef struct task_t

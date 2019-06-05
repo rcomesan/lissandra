@@ -1,5 +1,7 @@
 #include "mm.h"
 
+#include <lfs/lfs_protocol.h>
+
 #include <cx/mem.h>
 #include <cx/str.h>
 
@@ -249,16 +251,23 @@ bool mm_page_alloc(segment_t* _parent, bool _isModification, page_t** _outPage, 
         // get the LRU page and re-use it
         (*_outPage) = (page_t*)list_remove(m_mmCtx->pagesLru, list_size(m_mmCtx->pagesLru) - 1);
         
-        pthread_rwlock_wrlock(&(*_outPage)->rwlock);
-        (*_outPage)->modified = _isModification;
-        (*_outPage)->parent = _parent;
-        pthread_rwlock_unlock(&(*_outPage)->rwlock);
-        
-        //TODO should we notify here the parent that we stole his page??
-        // this gets a little bit tricky since it could lead us to a deadlock
-        // we should ask main thread to do this for us in some (synchronized) way
+        if (NULL != (*_outPage))
+        {
+            pthread_rwlock_wrlock(&(*_outPage)->rwlock);
+            (*_outPage)->modified = _isModification;
+            (*_outPage)->parent = _parent;
+            pthread_rwlock_unlock(&(*_outPage)->rwlock);
 
-        success = true;
+            //TODO should we notify here the parent that we stole his page??
+            // this gets a little bit tricky since it could lead us to a deadlock
+            // we should ask main thread to do this for us in some (synchronized) way
+
+            success = true;
+        }
+        else
+        {
+            CX_ERR_SET(_err, ERR_MEMORY_FULL, "the memory is full.");
+        }
     }
     else
     {
@@ -381,6 +390,148 @@ bool mm_page_write(segment_t* _table, table_record_t* _record, bool _isModificat
     pthread_mutex_unlock(&_table->pages->mtx);
 
     return success;
+}
+
+void mm_reschedule_task(task_t* _task)
+{
+    if (ERR_MEMORY_FULL == _task->err.code)
+    {
+        if (!cx_reslock_is_blocked(&m_mmCtx->reslock))
+        {
+            cx_reslock_block(&m_mmCtx->reslock);
+
+            // enqueue a journal request. 
+            task_t* task = taskman_create(TASK_ORIGIN_INTERNAL, TASK_MT_JOURNAL, NULL, NULL);
+            if (NULL != task) task->state = TASK_STATE_NEW;
+        }
+    }
+
+    if (ERR_MEMORY_FULL == _task->err.code
+        || ERR_MEMORY_BLOCKED == _task->err.code)
+    {
+        queue_push(m_mmCtx->blockedQueue, _task);
+        _task->state = TASK_STATE_BLOCKED_AWAITING;
+    }
+    else if (ERR_TABLE_BLOCKED == _task->err.code)
+    {
+        //TODO. figure out in which cases a task has to be rescheduled
+        // due to a table being in blocked state.
+        // I believe this only happens when we're about to drop it..
+        // but in that case we shouldn't be really interested in rescheduling it.
+    }
+}
+
+bool mm_journal_tryenqueue()
+{
+    if (m_mmCtx->journaling)
+    {
+        // we can safely ignore this one
+        // we don't really want multiple journals to be performed at the same time
+        CX_INFO("Ignoring journal request (we're already performing journal in another thread).");
+        return true;
+    }
+
+    if (!cx_reslock_is_blocked(&m_mmCtx->reslock))
+    {
+        // if the memory is not blocked, block it now to start denying tasks
+        cx_reslock_block(&m_mmCtx->reslock);
+    }
+
+    if (0 == cx_reslock_counter(&m_mmCtx->reslock))
+    {
+        // at this point, our memory is blocked (so new operations on it are being blocked and delayed)
+        // and also there're zero pending operations on it, so we can safely start journaling it now.
+        m_mmCtx->journaling = true;
+
+        task_t* task = taskman_create(TASK_ORIGIN_INTERNAL, TASK_WT_JOURNAL, NULL, NULL);
+        if (NULL != task)
+        {
+            task->state = TASK_STATE_NEW;
+            return true;
+        }
+        else
+        {
+            // task creation failed. unblock this table and skip this task.
+            mm_unblock(NULL);
+        }
+    }
+
+    return false;
+}
+
+void mm_journal_run(task_t* _task)
+{
+    CX_CHECK(m_mmCtx->journaling, "this method should only be called when performing a memory journal!");
+    CX_CHECK(TASK_WT_JOURNAL == _task->type, "this method should only be called when processing a TASK_WT_JOURNAL task!");
+
+    bool        success = true;
+    payload_t   payload;
+    uint32_t    payloadSize = 0;
+    segment_t*  table = NULL;
+    page_t*     page = NULL;
+    char*       tableName = NULL;
+    int32_t     result = 0;
+    table_record_t r;
+
+    cx_cdict_iter_begin(m_mmCtx->tablesMap);
+    while (ERR_NONE == _task->err.code && cx_cdict_iter_next(m_mmCtx->tablesMap, &tableName, (void**)&table))
+    {
+        cx_cdict_iter_begin(table->pages);
+        while (ERR_NONE == _task->err.code && cx_cdict_iter_next(table->pages, NULL, (void**)&page))
+        {
+            if (page->parent == table && page->modified)
+            {
+                // not the most performant code but anyway...
+                _mm_page_to_record(page->handle, &r);
+
+                payloadSize = lfs_pack_req_insert(payload, sizeof(payload),
+                    _task->handle, tableName, r.key, r.value, r.timestamp);
+
+                do
+                {
+                    result = cx_net_send(g_ctx.lfs, LFSP_REQ_INSERT, payload, payloadSize, INVALID_HANDLE);
+
+                    if (CX_NET_SEND_DISCONNECTED == result)
+                    {
+                        CX_ERR_SET(&_task->err, ERR_NET_LFS_UNAVAILABLE, "LFS node is unavailable.");
+                    }
+                    else if (CX_NET_SEND_BUFFER_FULL == result)
+                    {
+                        cx_net_wait_outboundbuff(g_ctx.lfs, INVALID_HANDLE, -1);
+                    }
+                } while (ERR_NONE == _task->err.code && result != CX_NET_SEND_OK);
+
+                free(r.value);
+            }
+        }
+        cx_cdict_iter_end(table->pages);
+    }
+    cx_cdict_iter_end(m_mmCtx->tablesMap);
+
+    // destroy segments & pages
+    cx_cdict_clear(m_mmCtx->tablesMap, (cx_destroyer_cb)mm_segment_destroy);
+    CX_CHECK(cx_handle_count(m_mmCtx->pagesHalloc) == 0, "we're leaking page handles!");
+
+    // clear lru
+    list_clean(m_mmCtx->pagesLru);
+}
+
+void mm_unblock(double* _blockedTime)
+{
+    m_mmCtx->journaling = false;
+
+    // make the resource (our memory) available again
+    cx_reslock_unblock(&m_mmCtx->reslock);
+
+    task_t* task = NULL;
+    while (!queue_is_empty(m_mmCtx->blockedQueue))
+    {
+        task = queue_pop(m_mmCtx->blockedQueue);
+        task->state = TASK_STATE_NEW;
+    }
+
+    if (NULL != _blockedTime)
+        (*_blockedTime) = cx_reslock_blocked_time(&m_mmCtx->reslock);
 }
 
 /****************************************************************************************

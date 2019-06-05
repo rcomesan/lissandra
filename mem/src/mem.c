@@ -485,6 +485,16 @@ static void handle_cli_command(const cx_cli_cmd_t* _cmd)
         g_ctx.isRunning = false;
         g_ctx.shutdownReason = "cli-issued exit";
     }
+    else if (strcmp("JOURNAL", _cmd->header) == 0)
+    {
+        // enqueue a journal request. 
+        task_t* task = taskman_create(TASK_ORIGIN_CLI, TASK_MT_JOURNAL, NULL, NULL);
+        if (NULL != task)
+        {
+            task->state = TASK_STATE_NEW;
+            cli_report_info("Memory journal scheduled.");
+        }
+    }
     else if (strcmp("CREATE", _cmd->header) == 0)
     {
         if (cli_parse_create(_cmd, &err, &tableName, &consistency, &numPartitions, &compactionInterval))
@@ -530,7 +540,7 @@ static void handle_cli_command(const cx_cli_cmd_t* _cmd)
         CX_ERR_SET(&err, 1, "Unknown command '%s'.", _cmd->header);
     }
 
-    if (0 != err.code)
+    if (ERR_NONE != err.code)
     {
         cli_report_error(&err);
         cx_cli_command_end();
@@ -579,6 +589,12 @@ static bool task_run_wk(task_t* _task)
         worker_handle_insert(_task);
         break;
 
+    case TASK_WT_JOURNAL:
+    {
+        worker_handle_journal(_task);
+        break;
+    }
+
     default:
         CX_WARN(CX_ALW, "undefined <worker-thread> behaviour for task type #%d.", _task->type);
         break;
@@ -598,6 +614,20 @@ static bool task_run_mt(task_t* _task)
     switch (_task->type)
     {
 
+    case TASK_MT_JOURNAL:
+    {
+        success = mm_journal_tryenqueue();
+        break;
+    }
+
+    case TASK_MT_FREE:
+    {
+        data_free_t* data = _task->data;
+        //TODO
+        success = true;
+        break;
+    }
+
     default:
         CX_WARN(CX_ALW, "undefined <main-thread> behaviour for task type #%d.", _task->type);
         break;
@@ -608,6 +638,18 @@ static bool task_run_mt(task_t* _task)
 
 static bool task_reschedule(task_t* _task)
 {
+    if (ERR_MEMORY_FULL == _task->err.code 
+        || ERR_MEMORY_BLOCKED == _task->err.code
+        || ERR_TABLE_BLOCKED == _task->err.code)
+    {
+        mm_reschedule_task(_task);
+
+    }
+    else
+    {
+        CX_WARN(CX_ALW, "undefined <reschedule> behaviour for task type #%d error %d.", _task->type, _task->err.code);
+    }
+
     return true;
 }
 
@@ -674,6 +716,34 @@ static bool task_completed(task_t* _task)
         break;
     }
 
+    case TASK_WT_JOURNAL:
+    {
+        double blockedTime = 0;
+        mm_unblock(&blockedTime);
+
+        if (ERR_NONE == _task->err.code)
+        {
+            CX_INFO("memory journal completed successfully. (%.3f sec blocked)\n", blockedTime);
+        }
+        else
+        {
+            CX_INFO("memory journal failed. %s\n", _task->err.desc);
+        }
+        break;
+    }
+
+    case TASK_MT_JOURNAL:
+    {
+        //noop
+        break;
+    }
+
+    case TASK_MT_FREE:
+    {
+        //noop
+        break;
+    }
+
     default:
         CX_WARN(CX_ALW, "undefined <completed> behaviour for request type #%d.", _task->type);
         break;
@@ -726,6 +796,24 @@ static bool task_free(task_t* _task)
         data_insert_t* data = (data_insert_t*)_task->data;
         free(data->record.value);
         data->record.value = NULL;
+        break;
+    }
+
+    case TASK_WT_JOURNAL:
+    {
+        //noop
+        break;
+    }
+
+    case TASK_MT_JOURNAL:
+    {
+        //noop
+        break;
+    }
+
+    case TASK_MT_FREE:
+    {
+        //noop
         break;
     }
 

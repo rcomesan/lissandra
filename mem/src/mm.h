@@ -3,12 +3,13 @@
 
 #include "mem.h"
 
-#include <stdint.h>
-#include <stdbool.h>
+#include <ker/taskman.h>
 
 #include <cx/cx.h>
 #include <cx/file.h>
 
+#include <stdint.h>
+#include <stdbool.h>
 #include <pthread.h>
 
 /****************************************************************************************
@@ -39,5 +40,12 @@ bool                mm_page_read(segment_t* _table, uint16_t _key, table_record_
 
 bool                mm_page_write(segment_t* _table, table_record_t* _record, bool _isModification, cx_err_t* _err);
 
+void                mm_reschedule_task(task_t* _task);
+
+bool                mm_journal_tryenqueue();
+
+void                mm_journal_run(task_t* _task);
+
+void                mm_unblock(double* _blockedTime);
 
 #endif // MEM_MM_H_

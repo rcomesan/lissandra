@@ -6,6 +6,14 @@
 #include <cx/str.h>
 
 /****************************************************************************************
+ ***  PRIVATE DECLARATIONS
+ ***************************************************************************************/
+
+static void         _common_pack_res_generic(char* _buffer, uint16_t _bufferSize, uint32_t* _bufferPos, uint16_t _remoteId, const cx_err_t* _err);
+
+static void         _common_unpack_res_generic(const char* _buffer, uint16_t _bufferSize, uint32_t* _bufferPos, uint16_t* _outRemoteId, cx_err_t* _err);
+
+/****************************************************************************************
  ***  COMMON MESSAGE PACKERS
  ***************************************************************************************/
 
@@ -56,67 +64,39 @@ uint32_t common_pack_req_insert(char* _buffer, uint16_t _size, uint16_t _remoteI
     return pos;
 }
 
-uint32_t common_pack_res_create(char* _buffer, uint16_t _size, uint16_t _remoteId, uint32_t _errCode, const char* _errDesc)
+uint32_t common_pack_res_create(char* _buffer, uint16_t _size, uint16_t _remoteId, const cx_err_t* _err)
 {
     uint32_t pos = 0;
-    cx_binw_uint16(_buffer, _size, &pos, _remoteId);
-    cx_binw_uint32(_buffer, _size, &pos, _errCode);
-
-    if (ERR_NONE != _errCode)
-    {
-        cx_binw_str(_buffer, _size, &pos, _errDesc);
-    }
-
+    _common_pack_res_generic(_buffer, _size, &pos, _remoteId, _err);
     return pos;
 }
 
-uint32_t common_pack_res_drop(char* _buffer, uint16_t _size, uint16_t _remoteId, uint32_t _errCode, const char* _errDesc)
+uint32_t common_pack_res_drop(char* _buffer, uint16_t _size, uint16_t _remoteId, const cx_err_t* _err)
 {
     uint32_t pos = 0;
-    cx_binw_uint16(_buffer, _size, &pos, _remoteId);
-    cx_binw_uint32(_buffer, _size, &pos, _errCode);
-
-    if (ERR_NONE != _errCode)
-    {
-        cx_binw_str(_buffer, _size, &pos, _errDesc);
-    }
-
+    _common_pack_res_generic(_buffer, _size, &pos, _remoteId, _err);
     return pos;
 }
 
-uint32_t common_pack_res_select(char* _buffer, uint16_t _size, uint16_t _remoteId, uint32_t _errCode, const char* _errDesc, table_record_t* _record)
+uint32_t common_pack_res_select(char* _buffer, uint16_t _size, uint16_t _remoteId, const cx_err_t* _err, const table_record_t* _record)
 {
     uint32_t pos = 0;
-    cx_binw_uint16(_buffer, _size, &pos, _remoteId);
-    cx_binw_uint32(_buffer, _size, &pos, _errCode);
-
-    if (ERR_NONE == _errCode)
+    _common_pack_res_generic(_buffer, _size, &pos, _remoteId, _err);
+    if (ERR_NONE == _err->code)
     {
         pos += common_pack_table_record(&_buffer[pos], _size - pos, _record);
     }
-    else
-    {
-        cx_binw_str(_buffer, _size, &pos, _errDesc);
-    }
-
     return pos;
 }
 
-uint32_t common_pack_res_insert(char* _buffer, uint16_t _size, uint16_t _remoteId, uint32_t _errCode, const char* _errDesc)
+uint32_t common_pack_res_insert(char* _buffer, uint16_t _size, uint16_t _remoteId, const cx_err_t* _err)
 {
     uint32_t pos = 0;
-    cx_binw_uint16(_buffer, _size, &pos, _remoteId);
-    cx_binw_uint32(_buffer, _size, &pos, _errCode);
-
-    if (ERR_NONE != _errCode)
-    {
-        cx_binw_str(_buffer, _size, &pos, _errDesc);
-    }
-
+    _common_pack_res_generic(_buffer, _size, &pos, _remoteId, _err);
     return pos;
 }
 
-uint32_t common_pack_table_meta(char* _buffer, uint16_t _size, table_meta_t* _table)
+uint32_t common_pack_table_meta(char* _buffer, uint16_t _size, const table_meta_t* _table)
 {
     uint32_t pos = 0;
     cx_binw_str(_buffer, _size, &pos, _table->name);
@@ -126,7 +106,7 @@ uint32_t common_pack_table_meta(char* _buffer, uint16_t _size, table_meta_t* _ta
     return pos;
 }
 
-uint32_t common_pack_table_record(char* _buffer, uint16_t _size, table_record_t* _record)
+uint32_t common_pack_table_record(char* _buffer, uint16_t _size, const table_record_t* _record)
 {
     uint32_t pos = 0;
     cx_binw_uint16(_buffer, _size, &pos, _record->key);
@@ -200,6 +180,21 @@ data_insert_t* common_unpack_req_insert(const char* _buffer, uint16_t _bufferSiz
     return data;
 }
 
+void common_unpack_res_create(const char* _buffer, uint16_t _bufferSize, uint32_t* _bufferPos, uint16_t* _outRemoteId, cx_err_t* _err)
+{
+    _common_unpack_res_generic(_buffer, _bufferSize, _bufferPos, _outRemoteId, _err);
+}
+
+void common_unpack_res_drop(const char* _buffer, uint16_t _bufferSize, uint32_t* _bufferPos, uint16_t* _outRemoteId, cx_err_t* _err)
+{
+    _common_unpack_res_generic(_buffer, _bufferSize, _bufferPos, _outRemoteId, _err);
+}
+
+void common_unpack_res_insert(const char* _buffer, uint16_t _bufferSize, uint32_t* _bufferPos, uint16_t* _outRemoteId, cx_err_t* _err)
+{
+    _common_unpack_res_generic(_buffer, _bufferSize, _bufferPos, _outRemoteId, _err);
+}
+
 void common_unpack_table_meta(const char* _buffer, uint16_t _bufferSize, uint32_t* _bufferPos, table_meta_t* _outTable)
 {
     cx_binr_str(_buffer, _bufferSize, _bufferPos, _outTable->name, sizeof(_outTable->name));
@@ -219,3 +214,28 @@ void common_unpack_table_record(const char* _buffer, uint16_t _bufferSize, uint3
     cx_binr_uint32(_buffer, _bufferSize, _bufferPos, &_outRecord->timestamp);
 }
 
+/****************************************************************************************
+ ***  PRIVATE DECLARATIONS
+ ***************************************************************************************/
+
+static void _common_pack_res_generic(char* _buffer, uint16_t _bufferSize, uint32_t* _bufferPos, uint16_t _remoteId, const cx_err_t* _err)
+{
+    cx_binw_uint16(_buffer, _bufferSize, _bufferPos, _remoteId);
+    cx_binw_uint32(_buffer, _bufferSize, _bufferPos, _err->code);
+
+    if (ERR_NONE != _err->code)
+    {
+        cx_binw_str(_buffer, _bufferSize, _bufferPos, _err->desc);
+    }
+}
+
+static void _common_unpack_res_generic(const char* _buffer, uint16_t _bufferSize, uint32_t* _bufferPos, uint16_t* _outRemoteId, cx_err_t* _err)
+{
+    cx_binr_uint16(_buffer, _bufferSize, _bufferPos, _outRemoteId);
+    cx_binr_uint32(_buffer, _bufferSize, _bufferPos, &_err->code);
+
+    if (ERR_NONE != _err->code)
+    {
+        cx_binr_str(_buffer, _bufferSize, _bufferPos, _err->desc, sizeof(_err->desc));
+    }
+}

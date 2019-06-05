@@ -119,17 +119,22 @@ void worker_handle_insert(task_t* _req)
     _worker_parse_result(_req);
 }
 
+void worker_handle_journal(task_t* _req)
+{
+    mm_journal_run(_req);
+
+    _worker_parse_result(_req);
+}
+
 /****************************************************************************************
 ***  PRIVATE FUNCTIONS
 ***************************************************************************************/
 
 static void _worker_parse_result(task_t* _req)
 {
-    if (ERR_MEMORY_BLOCKED == _req->err.code)
-    {
-        _req->state = TASK_STATE_BLOCKED_RESCHEDULE;
-    }
-    else if (ERR_TABLE_BLOCKED == _req->err.code)
+    if (ERR_MEMORY_FULL == _req->err.code
+        || ERR_MEMORY_BLOCKED == _req->err.code
+        || ERR_TABLE_BLOCKED == _req->err.code)
     {
         _req->state = TASK_STATE_BLOCKED_RESCHEDULE;
     }
@@ -141,13 +146,29 @@ static void _worker_parse_result(task_t* _req)
 
 static bool _worker_request_lfs(uint8_t _header, const char* _payload, uint32_t _payloadSize, task_t* _task)
 {
+    int32_t result = 0;
     CX_ERR_CLEAR(&_task->err);
-
+    
     pthread_mutex_lock(&_task->responseMtx);
     _task->state = TASK_STATE_RUNNING_AWAITING;
     pthread_mutex_unlock(&_task->responseMtx);
 
-    if (cx_net_send(g_ctx.lfs, _header, _payload, _payloadSize, INVALID_HANDLE))
+    do
+    {
+        result = cx_net_send(g_ctx.lfs, _header, _payload, _payloadSize, INVALID_HANDLE);
+
+        if (CX_NET_SEND_DISCONNECTED == result)
+        {
+            break;
+        }
+        else if (CX_NET_SEND_BUFFER_FULL == result)
+        {
+            cx_net_wait_outboundbuff(g_ctx.lfs, INVALID_HANDLE, -1);
+        }
+
+    } while (result != CX_NET_SEND_OK);
+
+    if (CX_NET_SEND_OK == result)
     {
         // wait for the response
         pthread_mutex_lock(&_task->responseMtx);

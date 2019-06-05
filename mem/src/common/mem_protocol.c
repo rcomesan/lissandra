@@ -203,7 +203,20 @@ void mem_handle_res_select(const cx_net_common_t* _common, void* _userData, cons
 
 void mem_handle_res_insert(const cx_net_common_t* _common, void* _userData, const char* _buffer, uint16_t _bufferSize)
 {
-    //TODO. this is actually the response to a bulk insert performed during a memory journal.
+    // this is actually the handler for responses received to inserts 
+    // issued during the journaling process. we don't really have to 
+    // show an output or process the result for this.
+
+    uint32_t bufferPos = 0;
+    uint16_t remoteId = 0;
+    cx_err_t err;
+
+    common_unpack_res_insert(_buffer, _bufferSize, &bufferPos, &remoteId, &err);
+
+    if (ERR_NONE != err.code)
+    {
+        CX_INFO("memory journal: %s", err.desc);
+    }
 }
 
 #endif // MEM
@@ -261,22 +274,22 @@ uint32_t mem_pack_req_insert(char* _buffer, uint16_t _size, uint16_t _remoteId, 
     return common_pack_req_insert(_buffer, _size, _remoteId, _tableName, _key, _value, _timestamp);
 }
 
-uint32_t mem_pack_res_create(char* _buffer, uint16_t _size, uint16_t _remoteId, uint32_t _errCode, const char* _errDesc)
+uint32_t mem_pack_res_create(char* _buffer, uint16_t _size, uint16_t _remoteId, const cx_err_t* _err)
 {
-    return common_pack_res_create(_buffer, _size, _remoteId, _errCode, _errDesc);
+    return common_pack_res_create(_buffer, _size, _remoteId, _err);
 }
 
-uint32_t mem_pack_res_drop(char* _buffer, uint16_t _size, uint16_t _remoteId, uint32_t _errCode, const char* _errDesc)
+uint32_t mem_pack_res_drop(char* _buffer, uint16_t _size, uint16_t _remoteId, const cx_err_t* _err)
 {
-    return common_pack_res_drop(_buffer, _size, _remoteId, _errCode, _errDesc);
+    return common_pack_res_drop(_buffer, _size, _remoteId, _err);
 }
 
-uint32_t mem_pack_res_select(char* _buffer, uint16_t _size, uint16_t _remoteId, uint32_t _errCode, const char* _errDesc, table_record_t* _record)
+uint32_t mem_pack_res_select(char* _buffer, uint16_t _size, uint16_t _remoteId, const cx_err_t* _err, const table_record_t* _record)
 {
-    return common_pack_res_select(_buffer, _size, _remoteId, _errCode, _errDesc, _record);
+    return common_pack_res_select(_buffer, _size, _remoteId, _err, _record);
 }
 
-uint32_t mem_pack_res_insert(char* _buffer, uint16_t _size, uint16_t _remoteId, uint32_t _errCode, const char* _errDesc)
+uint32_t mem_pack_res_insert(char* _buffer, uint16_t _size, uint16_t _remoteId, const cx_err_t* _err)
 {
-    return common_pack_res_insert(_buffer, _size, _remoteId, _errCode, _errDesc);
+    return common_pack_res_insert(_buffer, _size, _remoteId, _err);
 }

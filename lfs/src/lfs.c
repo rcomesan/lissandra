@@ -626,6 +626,7 @@ static bool task_run_mt(task_t* _task)
                     else
                     {
                         // task creation failed. unblock this table and skip this task.
+                        table->compacting = false;
                         table_unblock(table);
                     }
                 }
@@ -917,7 +918,7 @@ static bool task_free(task_t* _task)
 static void api_response_create(const task_t* _task)
 {
     uint32_t payloadSize = mem_pack_res_create(g_ctx.buff1, sizeof(g_ctx.buff1), 
-        _task->remoteId, _task->err.code, _task->err.desc);    
+        _task->remoteId, &_task->err);    
 
     cx_net_send(g_ctx.sv, MEMP_RES_CREATE, g_ctx.buff1, payloadSize, _task->clientHandle);
 }
@@ -925,7 +926,7 @@ static void api_response_create(const task_t* _task)
 static void api_response_drop(const task_t* _task)
 {
     uint32_t payloadSize = mem_pack_res_drop(g_ctx.buff1, sizeof(g_ctx.buff1),
-        _task->remoteId, _task->err.code, _task->err.desc);
+        _task->remoteId, &_task->err);
 
     cx_net_send(g_ctx.sv, MEMP_RES_DROP, g_ctx.buff1, payloadSize, _task->clientHandle);
 }
@@ -981,7 +982,7 @@ static void api_response_select(const task_t* _task)
 {
     data_select_t* data = _task->data;
     uint32_t payloadSize = mem_pack_res_select(g_ctx.buff1, sizeof(g_ctx.buff1),
-        _task->remoteId, _task->err.code, _task->err.desc, &data->record);
+        _task->remoteId, &_task->err, &data->record);
 
     cx_net_send(g_ctx.sv, MEMP_RES_SELECT, g_ctx.buff1, payloadSize, _task->clientHandle);
 }
@@ -989,7 +990,7 @@ static void api_response_select(const task_t* _task)
 static void api_response_insert(const task_t* _task)
 {
     uint32_t payloadSize = mem_pack_res_insert(g_ctx.buff1, sizeof(g_ctx.buff1),
-        _task->remoteId, _task->err.code, _task->err.desc);
+        _task->remoteId, &_task->err);
     
     cx_net_send(g_ctx.sv, MEMP_RES_INSERT, g_ctx.buff1, payloadSize, _task->clientHandle);
 }

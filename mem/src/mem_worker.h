@@ -17,4 +17,6 @@ void        worker_handle_select(task_t* _req);
 
 void        worker_handle_insert(task_t* _req);
 
+void        worker_handle_journal(task_t* _req);
+
 #endif // MEM_WORKER_H_

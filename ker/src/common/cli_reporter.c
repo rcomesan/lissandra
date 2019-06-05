@@ -20,6 +20,10 @@ void cli_report_error(cx_err_t* err)
     printf("%s\n\n", err->desc);
 }
 
+void cli_report_info(const char* _info)
+{
+    printf("%s\n\n", _info);
+}
 
 void cli_report_compact(const task_t* _task, double _blockedTime)
 {

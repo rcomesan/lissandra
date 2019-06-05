@@ -47,10 +47,6 @@
     CX_CHECK(NULL != task, "invalid response for task handle %d!", taskHandle);
 
 /****************************************************************************************
- ***  COMMON MESSAGES SENDERS
- ***************************************************************************************/
-
-/****************************************************************************************
  ***  COMMON MESSAGE PACKERS
  ***************************************************************************************/
 
@@ -64,17 +60,17 @@ uint32_t            common_pack_req_select(char* _buffer, uint16_t _size, uint16
 
 uint32_t            common_pack_req_insert(char* _buffer, uint16_t _size, uint16_t _remoteId, const char* _tableName, uint16_t _key, const char* _value, uint32_t _timestamp);
 
-uint32_t            common_pack_res_create(char* _buffer, uint16_t _size, uint16_t _remoteId, uint32_t _errCode, const char* _errDesc);
+uint32_t            common_pack_res_create(char* _buffer, uint16_t _size, uint16_t _remoteId, const cx_err_t* _err);
 
-uint32_t            common_pack_res_drop(char* _buffer, uint16_t _size, uint16_t _remoteId, uint32_t _errCode, const char* _errDesc);
+uint32_t            common_pack_res_drop(char* _buffer, uint16_t _size, uint16_t _remoteId, const cx_err_t* _err);
 
-uint32_t            common_pack_res_select(char* _buffer, uint16_t _size, uint16_t _remoteId, uint32_t _errCode, const char* _errDesc, table_record_t* _record);
+uint32_t            common_pack_res_select(char* _buffer, uint16_t _size, uint16_t _remoteId, const cx_err_t* _err, const table_record_t* _record);
 
-uint32_t            common_pack_res_insert(char* _buffer, uint16_t _size, uint16_t _remoteId, uint32_t _errCode, const char* _errDesc);
+uint32_t            common_pack_res_insert(char* _buffer, uint16_t _size, uint16_t _remoteId, const cx_err_t* _err);
 
-uint32_t            common_pack_table_meta(char* _buffer, uint16_t _size, table_meta_t* _table);
+uint32_t            common_pack_table_meta(char* _buffer, uint16_t _size, const table_meta_t* _table);
 
-uint32_t            common_pack_table_record(char* _buffer, uint16_t _size, table_record_t* _record);
+uint32_t            common_pack_table_record(char* _buffer, uint16_t _size, const table_record_t* _record);
 
 /****************************************************************************************
  ***  COMMON MESSAGE UNPACKERS
@@ -89,6 +85,12 @@ data_describe_t*    common_unpack_req_describe(const char* _buffer, uint16_t _bu
 data_select_t*      common_unpack_req_select(const char* _buffer, uint16_t _bufferSize, uint32_t* _bufferPos, uint16_t* _outRemoteId);
 
 data_insert_t*      common_unpack_req_insert(const char* _buffer, uint16_t _bufferSize, uint32_t* _bufferPos, uint16_t* _outRemoteId);
+
+void                common_unpack_res_create(const char* _buffer, uint16_t _bufferSize, uint32_t* _bufferPos, uint16_t* _outRemoteId, cx_err_t* _err);
+
+void                common_unpack_res_drop(const char* _buffer, uint16_t _bufferSize, uint32_t* _bufferPos, uint16_t* _outRemoteId, cx_err_t* _err);
+
+void                common_unpack_res_insert(const char* _buffer, uint16_t _bufferSize, uint32_t* _bufferPos, uint16_t* _outRemoteId, cx_err_t* _err);
 
 void                common_unpack_table_meta(const char* _buffer, uint16_t _bufferSize, uint32_t* _bufferPos, table_meta_t* _outTable);
 
