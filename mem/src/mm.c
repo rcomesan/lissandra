@@ -360,6 +360,17 @@ bool mm_page_write(segment_t* _table, table_record_t* _record, bool _isModificat
                 // update the page with the given (most recent) value
                 _mm_record_to_page(_record, page->handle);
                 free(curRecord.value);
+
+                if (!page->modified && _isModification)
+                {
+                    //TODO remove it from LRU
+                }
+                else if (page->modified && !_isModification)
+                {
+                    //TODO add it to LRU
+                }
+
+                page->modified = _isModification;
             }
             else
             {

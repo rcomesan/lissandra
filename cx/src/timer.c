@@ -203,6 +203,7 @@ void cx_timer_modify(uint16_t _timerHandle, uint32_t _newInterval)
     ts.it_interval.tv_nsec = (_newInterval % 1000) * 1000000;
 
     bool success = (0 == timerfd_settime(timer->fd, 0, &ts, NULL));
+    CX_UNUSED(success);
     CX_CHECK(success, "timer handle %d modification failed!", _timerHandle);
 }
 

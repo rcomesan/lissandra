@@ -94,7 +94,6 @@ typedef struct table_t
 typedef struct lfs_ctx_t
 {
     cfg_t               cfg;                                        // lfs node configuration data.
-    t_log*              log;                                        // pointer to so-commons-lib log adt.
     bool                isRunning;                                  // true if the server is running. false if it's shutting down.
     cx_net_ctx_sv_t*    sv;                                         // server context for serving API requests coming from MEM nodes.
     payload_t           buff1;                                      // temporary pre-allocated buffer for building packets.

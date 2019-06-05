@@ -54,6 +54,7 @@ _build: directory $(PATH_BUILD)$(BIN_OUTPUT)
 .PHONY: release
 release: export PATH_BUILD := $(PATH_BUILD)release/
 release: export BIN_OUTPUT := $(BIN_OUTPUT_RELEASE)
+release: export CFLAGS := $(CFLAGS) -DCX_RELEASE_VERBOSE -ggdb3
 release:
 	@echo ""
 	@echo ${COLOR_WHITE}"** [$(BIN_OUTPUT)] Building RELEASE..."${COLOR_NONE}

@@ -76,7 +76,6 @@ typedef struct mm_ctx_t
 typedef struct mem_ctx_t
 {
     cfg_t               cfg;                        // mem node configuration data.
-    t_log*              log;                        // pointer to so-commons-lib log adt.
     bool                isRunning;                  // true if the server is running. false if it's shutting down.
     cx_net_ctx_sv_t*    sv;                         // server context for serving API requests coming from KER nodes.
     cx_net_ctx_cl_t*    lfs;                        // client context for connecting to the LFS node.

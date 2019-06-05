@@ -5,7 +5,6 @@
 #include <ker/cli_parser.h>
 #include <ker/cli_reporter.h>
 #include <ker/taskman.h>
-#include <ker/logger.h>
 
 #include <mem/mem_protocol.h>
 #include <lfs/lfs_protocol.h>
@@ -16,10 +15,17 @@
 #include <cx/net.h>
 #include <cx/str.h>
 #include <cx/math.h>
+#include <cx/timer.h>
 
 #include <stdio.h>
 #include <string.h>
 #include <unistd.h>
+
+#ifdef DEBUG
+#define OUTPUT_LOG_ENABLED false
+#else
+#define OUTPUT_LOG_ENABLED true
+#endif 
 
 mem_ctx_t           g_ctx;
 
@@ -65,8 +71,6 @@ int main(int _argc, char** _argv)
 {
     cx_err_t err;
 
-    cx_init(PROJECT_NAME);
-    
     CX_MEM_ZERO(g_ctx);
     CX_ERR_CLEAR(&err);
 
@@ -76,8 +80,8 @@ int main(int _argc, char** _argv)
 
     g_ctx.shutdownReason = "main thread finished";
     g_ctx.isRunning = true
+        && cx_init(PROJECT_NAME, OUTPUT_LOG_ENABLED, NULL, &err)
         && cx_timer_init(MEM_TIMER_COUNT, handle_timer_tick, &err)
-        && logger_init(&g_ctx.log, &err)
         && cfg_init("res/mem.cfg", &err)
         && taskman_init(g_ctx.cfg.workers, task_run_mt, task_run_wk, task_completed, task_free, task_reschedule, &err)
         && net_init(&err)
@@ -114,15 +118,10 @@ int main(int _argc, char** _argv)
             sleep(0);
         }
     }
-    else if (NULL != g_ctx.log)
-    {
-        g_ctx.shutdownReason = "initialization failed";
-        log_error(g_ctx.log, "initialization failed (errcode %d). %s", err.code, err.desc);
-    }
     else
     {
-        g_ctx.shutdownReason = "fatal error";
-        printf("[FATAL] (errcode %d) %s", err.code, err.desc);
+        g_ctx.shutdownReason = "initialization failed";
+        CX_WARN(CX_ALW, "initialization failed (errcode %d). %s", err.code, err.desc);
     }
 
     CX_INFO("node is shutting down. reason: %s.", g_ctx.shutdownReason);
@@ -134,11 +133,15 @@ int main(int _argc, char** _argv)
     cx_timer_destroy();
 
     if (0 == err.code)
+    {
         CX_INFO("node terminated gracefully.");
+    }
     else
+    {
         CX_INFO("node terminated with error %d.", err.code);
+    }
 
-    logger_destroy(g_ctx.log);
+    cx_destroy();
     return err.code;
 }
 
@@ -484,6 +487,18 @@ static void handle_cli_command(const cx_cli_cmd_t* _cmd)
     {
         g_ctx.isRunning = false;
         g_ctx.shutdownReason = "cli-issued exit";
+    }
+    else if (strcmp("LOGFILE", _cmd->header) == 0)
+    {
+        if (NULL != cx_logfile())
+        {
+            cli_report_info(cx_logfile());
+        }
+        else
+        {
+            cli_report_info("There is no log file available.");
+        }
+        cx_cli_command_end();
     }
     else if (strcmp("JOURNAL", _cmd->header) == 0)
     {

@@ -66,6 +66,7 @@ _build: directory resource dependency $(PATH_BUILD)$(BIN_OUTPUT)
 release: export TARGET := release
 release: export PATH_BUILD := $(PATH_BUILD)$(TARGET)/
 release: export LIB_CX := $(LIB_CX_RELEASE)
+release: export CFLAGS := $(CFLAGS) -DCX_RELEASE_VERBOSE
 release:
 	@echo ""
 	@echo ${COLOR_WHITE}"** [$(BIN_OUTPUT)] Building RELEASE..."${COLOR_NONE}

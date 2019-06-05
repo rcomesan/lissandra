@@ -149,7 +149,7 @@ static void* cx_cli_main_loop(void* _arg)
     uint32_t    cmdLen = 0;
     char        temp[4096];
 
-    CX_INFO("command line interface loop started");
+    CX_INFO("command line interface loop started.");
 
     pthread_mutex_lock(&m_cliCtx->mtx);
     while (CX_CLI_STATE_SHUTDOWN != m_cliCtx->state)
@@ -161,7 +161,7 @@ static void* cx_cli_main_loop(void* _arg)
         if (CX_CLI_STATE_READING == m_cliCtx->state)
         {
             pthread_mutex_unlock(&m_cliCtx->mtx);
-            cmd = readline("> ");
+            cmd = readline(">>> ");
             pthread_mutex_lock(&m_cliCtx->mtx);
 
             cmdLen = strlen(cmd);
