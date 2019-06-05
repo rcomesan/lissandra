@@ -64,6 +64,7 @@
     <ProjectPublicIncludePath>$(RemoteRootDir)/$(ProjectName)/include</ProjectPublicIncludePath>
   </PropertyGroup>
   <ItemGroup>
+    <ClCompile Include="src\list.c" />
     <ClCompile Include="src\reslock.c" />
     <ClCompile Include="src\binr.c" />
     <ClCompile Include="src\binw.c" />
@@ -85,6 +86,7 @@
     <None Include="src\cdict.c" />
   </ItemGroup>
   <ItemGroup>
+    <ClInclude Include="include\cx\list.h" />
     <ClInclude Include="include\cx\reslock.h" />
     <ClInclude Include="include\cx\binr.h" />
     <ClInclude Include="include\cx\binw.h" />
