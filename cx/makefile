@@ -9,28 +9,38 @@ COLOR_GREEN='\033[0;32m'
 COLOR_WHITE='\033[1;37m'
 endif
 
-# Dependencies
-LIB_COMMONS := libcommons.so
-
 # Gcc
 CC := gcc
 CFLAGS ?=                                 \
 	-I/usr/include                        \
 	-L/usr/lib                            \
 	-Iinclude/cx/                         \
-	-g3 -fPIC -Wall -Wextra               \
-	-Wno-type-limits
+	-g3 -Wall -Wextra                     \
+	-Wno-type-limits                      \
+	-Wno-unused-parameter                 \
+	-Wno-discarded-qualifiers
+
+# Dependencies
+LIBS ?= -l:libcommons.so -l:libreadline.so -l:libpthread.so -l:libm.so
+
+# Build
+SHARED_LIB ?= -shared -fPIC
 
 # Paths
 PATH_SRC   ?= src/
+PATH_TESTS ?= tests/
 PATH_BUILD ?= build/
 
 # Files
-FILES_C := $(shell find $(PATH_SRC) -name *.c)
-FILES_H := $(shell find $(PATH_SRC) -name *.h)
-FILES_O := $(FILES_C:$(PATH_SRC)%.c=$(PATH_BUILD).obj/%.o)
+FILES_C ?= $(shell find $(PATH_SRC) -name *.c)
+FILES_O ?= $(FILES_C:$(PATH_SRC)%.c=$(PATH_BUILD).obj/%.o)
+
+FILES_C_TESTS ?= $(shell find $(PATH_TESTS) -name *.c)
+FILES_O_TESTS ?= $(FILES_C_TESTS:$(PATH_TESTS)%.c=$(PATH_BUILD).obj/tests/%.o)
+
 BIN_OUTPUT_RELEASE := lib$(PROJECT_NAME).so
 BIN_OUTPUT_DEBUG := lib$(PROJECT_NAME)d.so
+BIN_OUTPUT_TESTS := $(PROJECT_NAME)-tests.out
 
 .PHONY: default
 default: release
@@ -66,6 +76,32 @@ debug:
 	@echo ${COLOR_GREEN}"** [$(BIN_OUTPUT)] Debug build completed successfully."${COLOR_NONE}
 	@echo ""
 
+.PHONY: tests
+tests: export PATH_BUILD := $(PATH_BUILD)tests/
+tests: export BIN_OUTPUT := $(BIN_OUTPUT_TESTS)
+tests: export LIBS := $(LIBS) -lcunit
+tests: export SHARED_LIB := 
+tests: export TESTS := $(PATH_TESTS)test.o
+tests:
+	@echo ""
+	@echo ${COLOR_WHITE}"** [$(BIN_OUTPUT)] Building TESTS..."${COLOR_NONE}
+	@echo ""
+	@$(MAKE) _build --no-print-directory
+	@echo ""
+	@echo ${COLOR_GREEN}"** [$(BIN_OUTPUT)] Tests build completed successfully."${COLOR_NONE}
+	@echo ""
+
+.PHONY: runtests
+runtests: export PATH_BUILD := $(PATH_BUILD)tests/
+runtests: export BIN_OUTPUT := $(BIN_OUTPUT_TESTS)
+runtests: release
+	@echo ${COLOR_WHITE}"** [$(BIN_OUTPUT)] Running tests..."${COLOR_WHITE}
+	@echo ""
+	@./$(PATH_BUILD)$(BIN_OUTPUT)
+	@echo ""
+	@echo ${COLOR_GREEN}"** [$(BIN_OUTPUT)] Tests OK!"${COLOR_NONE}
+	@echo ""
+
 .PHONY: clean
 clean:
 	@rm -rf $(PATH_BUILD)
@@ -74,9 +110,13 @@ clean:
 directory:
 	@mkdir -p $(PATH_BUILD)
 	@mkdir -p $(PATH_BUILD).obj/
+	@mkdir -p $(PATH_BUILD).obj/tests/
+
+$(PATH_BUILD).obj/tests/test.o: $(FILES_C_TESTS)
+	$(CC) $(CFLAGS) -c $< -o $@
 
 $(PATH_BUILD).obj/%.o: $(PATH_SRC)%.c
 	$(CC) $(CFLAGS) -c $< -o $@
 
-$(PATH_BUILD)$(BIN_OUTPUT): $(FILES_O)
-	$(CC) -shared $(CFLAGS) $(FILES_O) -o $(PATH_BUILD)$(BIN_OUTPUT) -l:$(LIB_COMMONS) -l:libreadline.so -l:libpthread.so
+$(PATH_BUILD)$(BIN_OUTPUT): $(FILES_O) $(TESTS)
+	$(CC) $(CFLAGS) $(SHARED_LIB) -o $(PATH_BUILD)$(BIN_OUTPUT) $(FILES_O) $(TESTS) $(LIBS)

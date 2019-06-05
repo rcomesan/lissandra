@@ -11,6 +11,8 @@ Project("{8BC9CEB8-8B4A-11D0-8D11-00A0C91BC942}") = "mem", "mem\mem.vcxproj", "{
 EndProject
 Project("{8BC9CEB8-8B4A-11D0-8D11-00A0C91BC942}") = "lfs", "lfs\lfs.vcxproj", "{A3A59FCB-E3FF-41EA-A651-F0EBCD453BD6}"
 EndProject
+Project("{8BC9CEB8-8B4A-11D0-8D11-00A0C91BC942}") = "cx-tests", "cx\cx-tests.vcxproj", "{EE90DABB-C7D2-4D53-B47F-D3ABBD0FE9BE}"
+EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution
 		Debug|x86 = Debug|x86
@@ -33,6 +35,10 @@ Global
 		{A3A59FCB-E3FF-41EA-A651-F0EBCD453BD6}.Debug|x86.Build.0 = Debug|x86
 		{A3A59FCB-E3FF-41EA-A651-F0EBCD453BD6}.Release|x86.ActiveCfg = Release|x86
 		{A3A59FCB-E3FF-41EA-A651-F0EBCD453BD6}.Release|x86.Build.0 = Release|x86
+		{EE90DABB-C7D2-4D53-B47F-D3ABBD0FE9BE}.Debug|x86.ActiveCfg = Tests|x86
+		{EE90DABB-C7D2-4D53-B47F-D3ABBD0FE9BE}.Debug|x86.Build.0 = Tests|x86
+		{EE90DABB-C7D2-4D53-B47F-D3ABBD0FE9BE}.Release|x86.ActiveCfg = Tests|x86
+		{EE90DABB-C7D2-4D53-B47F-D3ABBD0FE9BE}.Release|x86.Build.0 = Tests|x86
 	EndGlobalSection
 	GlobalSection(SolutionProperties) = preSolution
 		HideSolutionNode = FALSE

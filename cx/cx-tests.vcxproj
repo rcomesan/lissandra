@@ -1,0 +1,95 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<Project DefaultTargets="Build" ToolsVersion="15.0" xmlns="http://schemas.microsoft.com/developer/msbuild/2003">
+  <ItemGroup Label="ProjectConfigurations">
+    <ProjectConfiguration Include="Tests|x86">
+      <Configuration>Tests</Configuration>
+      <Platform>x86</Platform>
+    </ProjectConfiguration>
+  </ItemGroup>
+  <PropertyGroup Label="Globals">
+    <ProjectGuid>{EE90DABB-C7D2-4D53-B47F-D3ABBD0FE9BE}</ProjectGuid>
+    <Keyword>Linux</Keyword>
+    <RootNamespace>cx-tests</RootNamespace>
+    <MinimumVisualStudioVersion>15.0</MinimumVisualStudioVersion>
+    <ApplicationType>Linux</ApplicationType>
+    <ApplicationTypeRevision>1.0</ApplicationTypeRevision>
+    <TargetLinuxPlatform>Generic</TargetLinuxPlatform>
+    <LinuxProjectType>{FC1A4D80-50E9-41DA-9192-61C0DBAA00D2}</LinuxProjectType>
+  </PropertyGroup>
+  <Import Project="$(VCTargetsPath)\Microsoft.Cpp.Default.props" />
+  <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Tests|x86'" Label="Configuration">
+    <UseDebugLibraries>false</UseDebugLibraries>
+    <ConfigurationType>Makefile</ConfigurationType>
+    <RemoteRootDir>/home/utnso/$(SolutionName)</RemoteRootDir>
+  </PropertyGroup>
+  <Import Project="$(VCTargetsPath)\Microsoft.Cpp.props" />
+  <ImportGroup Label="ExtensionSettings" />
+  <ImportGroup Label="Shared" />
+  <ImportGroup Label="PropertySheets" />
+  <PropertyGroup Label="UserMacros" />
+  <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Tests|x86'">
+    <RemoteBuildCommandLine>make $(Configuration.toLower()) NO_COLOR=1</RemoteBuildCommandLine>
+    <RemoteCleanCommandLine>make clean</RemoteCleanCommandLine>
+    <AdditionalOptions>
+    </AdditionalOptions>
+    <NMakeIncludeSearchPath>$(ProjectDir)include\cx\;$(NMakeIncludeSearchPath)</NMakeIncludeSearchPath>
+    <AdditionalSourcesToCopyMapping>
+    </AdditionalSourcesToCopyMapping>
+    <RemoteProjectDir>$(RemoteRootDir)/cx</RemoteProjectDir>
+    <LocalRemoteCopySources>true</LocalRemoteCopySources>
+    <RemoteBuildOutputs>$(RemoteRootDir)/cx/build/$(Configuration.toLower())/$(ProjectName).out</RemoteBuildOutputs>
+    <ProjectPublicIncludePath>$(RemoteRootDir)/cx/include</ProjectPublicIncludePath>
+  </PropertyGroup>
+  <ItemGroup>
+    <ClCompile Include="src\list.c" />
+    <ClCompile Include="src\reslock.c" />
+    <ClCompile Include="src\binr.c" />
+    <ClCompile Include="src\binw.c" />
+    <ClCompile Include="src\cli.c" />
+    <ClCompile Include="src\cx.c" />
+    <ClCompile Include="src\linesf.c" />
+    <ClCompile Include="src\file.c" />
+    <ClCompile Include="src\halloc.c" />
+    <ClCompile Include="src\mcq.c" />
+    <ClCompile Include="src\mem.c" />
+    <ClCompile Include="src\net.c" />
+    <ClCompile Include="src\pool.c" />
+    <ClCompile Include="src\sort.c" />
+    <ClCompile Include="src\str.c" />
+    <ClCompile Include="src\timer.c" />
+    <ClCompile Include="src\cdict.c" />
+    <ClCompile Include="tests\list_test.c" />
+    <ClCompile Include="tests\test.c" />
+  </ItemGroup>
+  <ItemGroup>
+    <None Include="makefile" />
+  </ItemGroup>
+  <ItemGroup>
+    <ClInclude Include="include\cx\list.h" />
+    <ClInclude Include="include\cx\reslock.h" />
+    <ClInclude Include="include\cx\binr.h" />
+    <ClInclude Include="include\cx\binw.h" />
+    <ClInclude Include="include\cx\cdict.h" />
+    <ClInclude Include="include\cx\cli.h" />
+    <ClInclude Include="include\cx\cx.h" />
+    <ClInclude Include="include\cx\linesf.h" />
+    <ClInclude Include="include\cx\file.h" />
+    <ClInclude Include="include\cx\halloc.h" />
+    <ClInclude Include="include\cx\math.h" />
+    <ClInclude Include="include\cx\mcq.h" />
+    <ClInclude Include="include\cx\mem.h" />
+    <ClInclude Include="include\cx\net.h" />
+    <ClInclude Include="include\cx\pool.h" />
+    <ClInclude Include="include\cx\sort.h" />
+    <ClInclude Include="include\cx\str.h" />
+    <ClInclude Include="include\cx\timer.h" />
+    <ClInclude Include="tests\test.h" />
+  </ItemGroup>
+  <ItemDefinitionGroup Condition="'$(Configuration)|$(Platform)'=='Tests|x86'">
+    <PreBuildEvent>
+      <Command>$(SolutionDir)\scripts\rsync.bat $(SolutionFileName) $(ProjectFileName)</Command>
+    </PreBuildEvent>
+  </ItemDefinitionGroup>
+  <Import Project="$(VCTargetsPath)\Microsoft.Cpp.targets" />
+  <ImportGroup Label="ExtensionTargets" />
+</Project>
