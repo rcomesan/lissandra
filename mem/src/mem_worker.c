@@ -50,15 +50,26 @@ void worker_handle_drop(task_t* _req)
 
     _worker_request_lfs(LFSP_REQ_DROP, payload, payloadSize, _req);
 
-    if (mm_segment_delete(data->tableName, &table, &_req->err))
+    if (mm_segment_delete(data->tableName, &table, NULL))
     {
         // block the resource. it shouldn't be accessible at this point since
         // the segment is already removed from the table... but anyway
         cx_reslock_block(&table->reslock);
 
-        // set error to zero, so that the task_completed event can detect it
-        // as a successfull drop and schedules a segment_t resource deallocation.
-        CX_ERR_CLEAR(&_req->err);
+        // insert a MT_TASK to free this table in a thread-safe way.
+        data_free_t* data = CX_MEM_STRUCT_ALLOC(data);
+        data->resourceType = RESOURCE_TYPE_TABLE;
+        data->resourcePtr = table;
+
+        task_t* task = taskman_create(TASK_ORIGIN_INTERNAL, TASK_MT_FREE, data, NULL);
+        if (NULL != task)
+        {
+            task->state = TASK_STATE_NEW;
+        }
+        else
+        {
+            CX_ERR_SET(&_req->err, ERR_GENERIC, "We ran out of task handles. Try again later.");
+        }
     }
 
     _worker_parse_result(_req, table);

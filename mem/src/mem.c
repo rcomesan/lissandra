@@ -715,14 +715,6 @@ static bool task_completed(task_t* _task)
 
     case TASK_WT_DROP:
     {
-        // free this table in a thread-safe way.
-        data_free_t* data = CX_MEM_STRUCT_ALLOC(data);
-        data->resourceType = RESOURCE_TYPE_TABLE;
-        data->resourcePtr = _task->table;
-
-        task_t* task = taskman_create(TASK_ORIGIN_INTERNAL, TASK_MT_FREE, data, NULL);
-        if (NULL != task) task->state = TASK_STATE_NEW;
-
         if (TASK_ORIGIN_API == _task->origin)
             api_response_drop(_task);
         else
