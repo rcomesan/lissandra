@@ -31,9 +31,9 @@ typedef void(*cx_list_func_cb)(cx_list_t* _list, cx_list_node_t* _node, uint32_t
 
 cx_list_t*              cx_list_init();
 
-void                    cx_list_destroy(cx_list_t* _list, cx_destroyer_cb _cb);
+void                    cx_list_destroy(cx_list_t* _list, cx_destroyer_cb _nodeDestroyer);
 
-void                    cx_list_clear(cx_list_t* _list, cx_destroyer_cb _cb);
+void                    cx_list_clear(cx_list_t* _list, cx_destroyer_cb _nodeDestroyer);
 
 uint32_t                cx_list_size(cx_list_t* _list);
 

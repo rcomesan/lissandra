@@ -2,6 +2,7 @@
 #include "mem_worker.h"
 #include "mm.h"
 
+#include <ker/defines.h>
 #include <lfs/lfs_protocol.h>
 
 #include <cx/cx.h>
@@ -10,7 +11,6 @@
 #include <cx/file.h>
 #include <cx/timer.h>
 
-#include <ker/defines.h>
 #include <unistd.h>
 
 /****************************************************************************************

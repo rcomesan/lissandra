@@ -21,10 +21,10 @@ cx_list_t* cx_list_init()
     return list;
 }
 
-void cx_list_destroy(cx_list_t* _list, cx_destroyer_cb _cb)
+void cx_list_destroy(cx_list_t* _list, cx_destroyer_cb _nodeDestroyer)
 {
     if (NULL == _list) return;
-    cx_list_clear(_list, _cb);
+    cx_list_clear(_list, _nodeDestroyer);
     free(_list);
 }
 
@@ -144,10 +144,10 @@ void cx_list_foreach(cx_list_t* _list, cx_list_func_cb _func, void* _userData)
 ***  PRIVATE FUNCTIONS
 ***************************************************************************************/
 
-static void _list_node_destroyer(cx_list_t* _list, cx_list_node_t* _node, uint32_t _index, void* _dataDestroyer)
+static void _list_node_destroyer(cx_list_t* _list, cx_list_node_t* _node, uint32_t _index, void* _nodeDestroyer)
 {
-    cx_destroyer_cb dataDestroyer = (cx_destroyer_cb)_dataDestroyer;
-    dataDestroyer(_node);
+    cx_destroyer_cb nodeDestroyer = (cx_destroyer_cb)_nodeDestroyer;
+    nodeDestroyer(_node);
 }
 
 static cx_list_node_t* _list_node_new(cx_list_node_t* _prev, cx_list_node_t* _next, void* _data)

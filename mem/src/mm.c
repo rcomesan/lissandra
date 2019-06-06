@@ -36,8 +36,6 @@ bool mm_init(uint32_t _memSz, uint16_t _valueSz, cx_err_t* _err)
 {
     CX_CHECK(NULL == m_mmCtx, "mm is already initialized!");
 
-    bool success = false;
-
     m_mmCtx = CX_MEM_STRUCT_ALLOC(m_mmCtx);
     CX_ERR_CLEAR(_err);
 

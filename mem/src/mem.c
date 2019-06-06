@@ -52,8 +52,8 @@ static bool         task_free(task_t* _task);
 static bool         task_reschedule(task_t* _task);
 static bool         task_req_abort(task_t* _task, void* _userData);
 
-static void         on_connected_lfs(cx_net_ctx_cl_t* _ctx);
-static void         on_disconnected_lfs(cx_net_ctx_cl_t* _ctx);
+static void         on_connected_to_lfs(cx_net_ctx_cl_t* _ctx);
+static void         on_disconnected_from_lfs(cx_net_ctx_cl_t* _ctx);
 static bool         on_connection(cx_net_ctx_sv_t* _ctx, const ipv4_t _ipv4);
 static void         on_disconnection(cx_net_ctx_sv_t* _ctx, cx_net_client_t* _client);
 
@@ -396,8 +396,8 @@ static bool net_init(cx_err_t* _err)
     lfsCtxArgs.multiThreadedSend = true;
     lfsCtxArgs.connectBlocking = true;
     lfsCtxArgs.connectTimeout = 15000;
-    lfsCtxArgs.onConnected = (cx_net_on_connected_cb)on_connected_lfs;
-    lfsCtxArgs.onDisconnected = (cx_net_on_connected_cb)on_disconnected_lfs;
+    lfsCtxArgs.onConnected = (cx_net_on_connected_cb)on_connected_to_lfs;
+    lfsCtxArgs.onDisconnected = (cx_net_on_connected_cb)on_disconnected_from_lfs;
 
     // message headers to handlers mappings
     lfsCtxArgs.msgHandlers[MEMP_ACK] = (cx_net_handler_cb)mem_handle_ack;
@@ -858,7 +858,7 @@ static bool task_free(task_t* _task)
     return true;
 }
 
-static void on_connected_lfs(cx_net_ctx_cl_t* _ctx)
+static void on_connected_to_lfs(cx_net_ctx_cl_t* _ctx)
 {
     payload_t payload;
     uint32_t payloadSize = lfs_pack_auth(payload, sizeof(payload), g_ctx.cfg.lfsPassword);
@@ -866,7 +866,7 @@ static void on_connected_lfs(cx_net_ctx_cl_t* _ctx)
     cx_net_send(_ctx, LFSP_AUTH, payload, payloadSize, INVALID_HANDLE);
 }
 
-static void on_disconnected_lfs(cx_net_ctx_cl_t* _ctx)
+static void on_disconnected_from_lfs(cx_net_ctx_cl_t* _ctx)
 {
     if (g_ctx.lfsHandshaking)
     {

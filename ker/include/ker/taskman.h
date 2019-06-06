@@ -19,7 +19,7 @@ typedef enum TASK_ORIGIN
 
 typedef enum TASK_STATE
 {
-    TASK_STATE_NONE = 0,            // default, unasigned state.
+    TASK_STATE_NONE = 0,            // default, unassigned state.
     TASK_STATE_NEW,                 // the task was just created, but it's not yet assigned to the primary queue.
     TASK_STATE_READY,               // the task is ready to be executed and waiting in the queue.
     TASK_STATE_RUNNING,             // the task is being processed by a worker thread.
