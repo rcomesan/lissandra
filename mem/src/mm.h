@@ -26,6 +26,8 @@ void                mm_avail_guard_end();
 
 bool                mm_segment_init(segment_t** _outSegment, const char* _tableName, cx_err_t* _err);
 
+bool                mm_segment_delete(const char* _tableName, segment_t** _outTable, cx_err_t* _err);
+
 void                mm_segment_destroy(segment_t* _table);
 
 bool                mm_segment_exists(const char* _tableName, segment_t** _outTable);

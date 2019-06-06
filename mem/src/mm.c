@@ -164,8 +164,6 @@ void mm_avail_guard_end()
 
 bool mm_segment_init(segment_t** _outSegment, const char* _tableName, cx_err_t* _err)
 {
-    CX_CHECK(strlen(_tableName) > 0, "Invalid table name!");
-
     bool success = false;
     segment_t* table = CX_MEM_STRUCT_ALLOC(table);
 
@@ -182,6 +180,19 @@ bool mm_segment_init(segment_t** _outSegment, const char* _tableName, cx_err_t* 
         CX_ERR_SET(_err, ERR_GENERIC, "Table initialization failed.")
 
     (*_outSegment) = success ? table : NULL;
+    return success;
+}
+
+bool mm_segment_delete(const char* _tableName, segment_t** _outTable, cx_err_t* _err)
+{
+    segment_t* table = NULL;
+    
+    bool success = cx_cdict_tryremove(m_mmCtx->tablesMap, _tableName, (void**)_outTable);
+    if (!success)
+    {
+        CX_ERR_SET(_err, 1, "Table '%s' does not exist.", _tableName);
+    }
+
     return success;
 }
 
@@ -472,6 +483,7 @@ void mm_reschedule_task(task_t* _task)
         // due to a table being in blocked state.
         // I believe this only happens when we're about to drop it..
         // but in that case we shouldn't be really interested in rescheduling it.
+        CX_WARN(CX_ALW, "we shouldn't be getting rescheduling requests on blocked tables!");
     }
 }
 

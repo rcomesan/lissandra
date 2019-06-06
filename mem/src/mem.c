@@ -623,8 +623,9 @@ static bool task_run_mt(task_t* _task)
     CX_CHECK_NOT_NULL(_task);
     _task->state = TASK_STATE_RUNNING;
 
-    bool     success = false;
-    task_t*  task = NULL;
+    bool        success = false;
+    segment_t*  table = NULL;
+    task_t*     task = NULL;
 
     switch (_task->type)
     {
@@ -638,13 +639,30 @@ static bool task_run_mt(task_t* _task)
     case TASK_MT_FREE:
     {
         data_free_t* data = _task->data;
-        //TODO
-        success = true;
+        
+        if (RESOURCE_TYPE_TABLE == data->resourceType)
+        {
+            table = (segment_t*)data->resourcePtr;
+
+            if (0 == cx_reslock_counter(&table->reslock))
+            {
+                // at this point the table no longer exist (it's not part of the tablesMap dictionary)
+                // and nobody else is using it... we can destroy & deallocate this segment now.
+                mm_segment_destroy(table);
+                success = true;
+            }
+        }
+        else
+        {
+            CX_WARN(CX_ALW, "undefined TASK_MT_FREE for resource type #%d!", data->resourceType);
+            success = true;
+        }
         break;
     }
 
     default:
         CX_WARN(CX_ALW, "undefined <main-thread> behaviour for task type #%d.", _task->type);
+        success = true;
         break;
     }
 
@@ -697,6 +715,14 @@ static bool task_completed(task_t* _task)
 
     case TASK_WT_DROP:
     {
+        // free this table in a thread-safe way.
+        data_free_t* data = CX_MEM_STRUCT_ALLOC(data);
+        data->resourceType = RESOURCE_TYPE_TABLE;
+        data->resourcePtr = _task->table;
+
+        task_t* task = taskman_create(TASK_ORIGIN_INTERNAL, TASK_MT_FREE, data, NULL);
+        if (NULL != task) task->state = TASK_STATE_NEW;
+
         if (TASK_ORIGIN_API == _task->origin)
             api_response_drop(_task);
         else

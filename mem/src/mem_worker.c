@@ -17,7 +17,7 @@
 ***  PRIVATE DECLARATIONS
 ***************************************************************************************/
 
-static void         _worker_parse_result(task_t* _req);
+static void         _worker_parse_result(task_t* _req, segment_t* _affectedTable);
 
 static bool         _worker_request_lfs(uint8_t _header, const char* _payload, uint32_t _payloadSize, task_t* _task);
 
@@ -36,23 +36,32 @@ void worker_handle_create(task_t* _req)
 
     _worker_request_lfs(LFSP_REQ_CREATE, payload, payloadSize, _req);
     
-    _worker_parse_result(_req);
+    _worker_parse_result(_req, NULL);
 }
 
 void worker_handle_drop(task_t* _req)
 {
     data_drop_t* data = _req->data;
+    segment_t* table = NULL;
 
-    if (mm_avail_guard_begin(&_req->err))
+    payload_t payload;
+    uint32_t payloadSize = lfs_pack_req_drop(payload, sizeof(payload),
+        _req->handle, data->tableName);
+
+    _worker_request_lfs(LFSP_REQ_DROP, payload, payloadSize, _req);
+
+    if (mm_segment_delete(data->tableName, &table, &_req->err))
     {
-        payload_t payload;
-        uint32_t payloadSize = lfs_pack_req_drop(payload, sizeof(payload),
-            _req->handle, data->tableName);
+        // block the resource. it shouldn't be accessible at this point since
+        // the segment is already removed from the table... but anyway
+        cx_reslock_block(&table->reslock);
 
-        _worker_request_lfs(LFSP_REQ_DROP, payload, payloadSize, _req);
+        // set error to zero, so that the task_completed event can detect it
+        // as a successfull drop and schedules a segment_t resource deallocation.
+        CX_ERR_CLEAR(&_req->err);
     }
 
-    _worker_parse_result(_req);
+    _worker_parse_result(_req, table);
 }
 
 void worker_handle_describe(task_t* _req)
@@ -67,7 +76,7 @@ void worker_handle_describe(task_t* _req)
 
     _worker_request_lfs(LFSP_REQ_DESCRIBE, payload, payloadSize, _req);
     
-    _worker_parse_result(_req);
+    _worker_parse_result(_req, NULL);
 }
 
 void worker_handle_select(task_t* _req)
@@ -98,7 +107,7 @@ void worker_handle_select(task_t* _req)
         mm_avail_guard_end();
     }
 
-    _worker_parse_result(_req);
+    _worker_parse_result(_req, table);
 }
 
 void worker_handle_insert(task_t* _req)
@@ -116,22 +125,24 @@ void worker_handle_insert(task_t* _req)
         mm_avail_guard_end();
     }
 
-    _worker_parse_result(_req);
+    _worker_parse_result(_req, table);
 }
 
 void worker_handle_journal(task_t* _req)
 {
     mm_journal_run(_req);
 
-    _worker_parse_result(_req);
+    _worker_parse_result(_req, NULL);
 }
 
 /****************************************************************************************
 ***  PRIVATE FUNCTIONS
 ***************************************************************************************/
 
-static void _worker_parse_result(task_t* _req)
+static void _worker_parse_result(task_t* _req, segment_t* _affectedTable)
 {
+    _req->table = _affectedTable;
+
     if (ERR_MEMORY_FULL == _req->err.code
         || ERR_MEMORY_BLOCKED == _req->err.code
         || ERR_TABLE_BLOCKED == _req->err.code)
