@@ -112,7 +112,7 @@ void fs_destroy()
     m_fsCtx->blocksMap = NULL;
     
     // destroy tablesMap
-    cx_cdict_destroy(m_fsCtx->tablesMap, NULL);
+    cx_cdict_destroy(m_fsCtx->tablesMap, (cx_destroyer_cb)fs_table_destroy);
 
     // mutexes
     if (m_fsCtx->mtxBlocksInit)
@@ -959,9 +959,16 @@ bool fs_table_init(table_t** _outTable, const char* _tableName, cx_err_t* _err)
         && cx_reslock_init(&table->reslock, true);
 
     if (!success)
+    {
+        (*_outTable) = NULL;
+        fs_table_destroy(table);
         CX_ERR_SET(_err, ERR_GENERIC, "Table initialization failed.")
+    }
+    else
+    {
+        (*_outTable) = table;
+    }
 
-    (*_outTable) = success ? table : NULL;
     return success;
 }
 
