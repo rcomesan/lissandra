@@ -231,7 +231,7 @@ bool fs_table_create(table_t** _outTable, const char* _tableName, uint8_t _consi
 
     if (fs_table_init(_outTable, _tableName, _err))
     {
-        if (cx_cdict_tryadd(m_fsCtx->tablesMap, _tableName, (*_outTable)))
+        if (cx_cdict_tryadd(m_fsCtx->tablesMap, _tableName, (*_outTable), NULL))
         {
             cx_file_path(&path, "%s/%s/%s", m_fsCtx->rootDir, LFS_DIR_TABLES, _tableName);
             if (cx_file_mkdir(&path, _err))

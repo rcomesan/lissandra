@@ -28,9 +28,7 @@ bool                    cx_cdict_get(cx_cdict_t* _cdict, const char* _key, void*
 
 void                    cx_cdict_set(cx_cdict_t* _cdict, const char* _key, void* _data);
 
-void                    cx_cdict_getoradd(cx_cdict_t* _cdict, const char* _key, void* _data, void** _outData);
-
-bool                    cx_cdict_tryadd(cx_cdict_t* _cdict, const char* _key, void* _data);
+bool                    cx_cdict_tryadd(cx_cdict_t* _cdict, const char* _key, void* _data, void** _outData);
 
 bool                    cx_cdict_tryremove(cx_cdict_t* _cdict, const char* _key, void** _outData);
 

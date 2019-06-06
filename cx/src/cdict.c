@@ -70,37 +70,26 @@ void cx_cdict_set(cx_cdict_t* _cdict, const char* _key, void* _data)
     pthread_mutex_unlock(&_cdict->mtx);
 }
 
-void cx_cdict_getoradd(cx_cdict_t* _cdict, const char* _key, void* _data, void** _outData)
-{
-    CX_CHECK_NOT_NULL(_cdict);
-    CX_CHECK_NOT_NULL(_outData);
-
-    pthread_mutex_lock(&_cdict->mtx);
-    (*_outData) = dictionary_get(_cdict->handle, _key);
-
-    if (NULL == (*_outData))
-    {
-        dictionary_put(_cdict->handle, _key, _data);
-        (*_outData) = dictionary_get(_cdict->handle, _key);
-    }
-    pthread_mutex_unlock(&_cdict->mtx);
-}
-
-bool cx_cdict_tryadd(cx_cdict_t* _cdict, const char* _key, void* _data)
+bool cx_cdict_tryadd(cx_cdict_t* _cdict, const char* _key, void* _data, void** _outData)
 {
     CX_CHECK_NOT_NULL(_cdict);
 
-    bool result = false;
+    bool  added = false;
+    void* curData = NULL;
 
     pthread_mutex_lock(&_cdict->mtx);
-    if (!dictionary_has_key(_cdict->handle, _key))
+    curData = dictionary_get(_cdict->handle, _key);
+
+    if (NULL == curData)
     {
+        curData = _data;
         dictionary_put(_cdict->handle, _key, _data);
-        result = true;
+        added = true;
     }
     pthread_mutex_unlock(&_cdict->mtx);
 
-    return result;
+    if (NULL != _outData) (*_outData) = curData;
+    return added;
 }
 
 bool cx_cdict_tryremove(cx_cdict_t* _cdict, const char* _key, void** _outData)
