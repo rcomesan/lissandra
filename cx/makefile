@@ -95,12 +95,21 @@ tests:
 .PHONY: runtests
 runtests: export PATH_BUILD := $(PATH_BUILD)tests/
 runtests: export BIN_OUTPUT := $(BIN_OUTPUT_TESTS)
-runtests: release
+runtests: tests
 	@echo ${COLOR_WHITE}"** [$(BIN_OUTPUT)] Running tests..."${COLOR_WHITE}
 	@echo ""
 	@./$(PATH_BUILD)$(BIN_OUTPUT)
 	@echo ""
 	@echo ${COLOR_GREEN}"** [$(BIN_OUTPUT)] Tests OK!"${COLOR_NONE}
+	@echo ""
+
+.PHONY: valgrind
+valgrind: export PATH_BUILD := $(PATH_BUILD)tests/
+valgrind: export BIN_OUTPUT := $(BIN_OUTPUT_TESTS)
+valgrind: runtests
+	@valgrind --leak-check=full --track-origins=yes --error-exitcode=1 -v $(PATH_BUILD)$(BIN_OUTPUT)
+	@echo ""
+	@echo ${COLOR_GREEN}"** [$(BIN_OUTPUT)] Valgrind checks passed successfully."${COLOR_NONE}
 	@echo ""
 
 .PHONY: clean
