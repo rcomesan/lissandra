@@ -696,11 +696,17 @@ static bool task_run_mt(task_t* _task)
                 success = true;
             }
         }
+        else
+        {
+            CX_WARN(CX_ALW, "undefined TASK_MT_FREE for resource type #%d!", data->resourceType);
+            success = true;
+        }
         break;
     }
 
     default:
         CX_WARN(CX_ALW, "undefined <main-thread> behaviour for task type #%d.", _task->type);
+        success = true;
         break;
     }
 

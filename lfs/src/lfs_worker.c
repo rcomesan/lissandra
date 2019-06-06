@@ -306,14 +306,7 @@ failed:
 
 static void _worker_parse_result(task_t* _req, table_t* _affectedTable)
 {
-    if (NULL != _affectedTable)
-    {
-        _req->table = _affectedTable;
-    }
-    else
-    {
-        _req->table = NULL;
-    }
+    _req->table = _affectedTable;
 
     if (ERR_TABLE_BLOCKED == _req->err.code)
     {
