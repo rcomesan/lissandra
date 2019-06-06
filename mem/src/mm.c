@@ -28,8 +28,6 @@ static void             _mm_page_to_record(uint16_t _pageHandle, table_record_t*
 
 static void             _mm_record_to_page(table_record_t* _record, uint16_t _pageHandle);
 
-static void             _mm_page_destroy(page_t* _page);
-
 /****************************************************************************************
  ***  PUBLIC FUNCTIONS
  ***************************************************************************************/
@@ -88,13 +86,18 @@ bool mm_init(uint32_t _memSz, uint16_t _valueSz, cx_err_t* _err)
         return false;
     }
 
-    if (0 != pthread_mutex_init(&m_mmCtx->pagesMtx, NULL))
+    pthread_mutexattr_t attr;
+    if (!(true
+        && (0 == pthread_mutexattr_init(&attr))
+        && (0 == pthread_mutexattr_settype(&attr, PTHREAD_MUTEX_RECURSIVE))
+        && (0 == pthread_mutex_init(&m_mmCtx->pagesMtx, &attr))
+        && (0 == pthread_mutexattr_destroy(&attr))))
     {
         CX_ERR_SET(_err, ERR_INIT_MTX, "pagesMtx initialization failed!");
         return false;
     }
 
-    m_mmCtx->pagesLru = list_create();
+    m_mmCtx->pagesLru = cx_list_init();
     if (NULL == m_mmCtx->pagesLru)
     {
         CX_ERR_SET(_err, ERR_INIT_LIST, "pagesLru list initialization failed!");
@@ -134,7 +137,7 @@ void mm_destroy()
     
     if (NULL != m_mmCtx->pagesLru)
     {
-        list_destroy(m_mmCtx->pagesLru);
+        cx_list_destroy(m_mmCtx->pagesLru, NULL);
         m_mmCtx->pagesLru = NULL;
     }
 
@@ -186,7 +189,7 @@ void mm_segment_destroy(segment_t* _table)
 {
     // this function is not thread-safe. it must only be called from the main thread!
     page_t* page = NULL;
-
+    
     if (NULL != _table)
     {
         cx_reslock_destroy(&_table->reslock);
@@ -194,10 +197,33 @@ void mm_segment_destroy(segment_t* _table)
         if (NULL != _table->pages)
         {
             pthread_mutex_lock(&m_mmCtx->pagesMtx);
-            cx_cdict_destroy(_table->pages, (cx_destroyer_cb)_mm_page_destroy);
-            pthread_mutex_unlock(&m_mmCtx->pagesMtx);
 
-            _table->pages = NULL;
+            cx_cdict_iter_begin(_table->pages);
+            while (cx_cdict_iter_next(_table->pages, NULL, (void**)&page))
+            {
+                pthread_rwlock_wrlock(&page->rwlock);
+                if (page->parent == _table)
+                {
+                    if (!page->modified)
+                    {
+                        // if the page doesn't contain modifications, it means 
+                        // it's replaceable: we need to remove it from the lru cache
+                        // since we're gonna free it now and nobody else should take it.
+                        _mm_lru_remove(page);
+                    }
+
+                    free(page->node);
+                }
+                pthread_rwlock_unlock(&page->rwlock);
+
+                cx_handle_free(m_mmCtx->pagesHalloc, page->handle);
+                pthread_rwlock_destroy(&page->rwlock);
+                free(page);
+            }
+            cx_cdict_iter_end(_table->pages);
+            cx_cdict_destroy(_table->pages, NULL);
+            
+            pthread_mutex_unlock(&m_mmCtx->pagesMtx);
         }
 
         free(_table);
@@ -334,7 +360,11 @@ bool mm_page_read(segment_t* _table, uint16_t _key, table_record_t* _outRecord, 
         // make sure the page is still assigned to this segment
         if (_table == page->parent) 
         {
-            _mm_lru_touch(page); // cache hit
+            if (!page->modified)
+            {
+                _mm_lru_touch(page); // cache hit
+            }
+
             _mm_page_to_record(page->handle, _outRecord);
             success = true;
         }
@@ -564,29 +594,39 @@ void mm_unblock(double* _blockedTime)
 
 static void _mm_lru_push_front(page_t* _page)
 {
+    pthread_mutex_lock(&m_mmCtx->pagesMtx);
     cx_list_push_front(m_mmCtx->pagesLru, _page->node);
+    pthread_mutex_unlock(&m_mmCtx->pagesMtx);
 }
 
 static page_t* _mm_lru_pop_back()
 {
-    cx_list_node_t* last = cx_list_pop_back(m_mmCtx->pagesLru);
-    return (page_t*)last->data;
+    pthread_mutex_lock(&m_mmCtx->pagesMtx);
+    page_t* lruPage = cx_list_pop_back(m_mmCtx->pagesLru)->data;
+    pthread_mutex_unlock(&m_mmCtx->pagesMtx);
+    return lruPage;
 }
 
 static void _mm_lru_touch(page_t* _page)
 {
+    pthread_mutex_lock(&m_mmCtx->pagesMtx);
     cx_list_remove(m_mmCtx->pagesLru, _page->node);
     cx_list_push_front(m_mmCtx->pagesLru, _page->node);
+    pthread_mutex_unlock(&m_mmCtx->pagesMtx);
 }
 
 static void _mm_lru_remove(page_t* _page)
 {
+    pthread_mutex_lock(&m_mmCtx->pagesMtx);
     cx_list_remove(m_mmCtx->pagesLru, _page->node);
+    pthread_mutex_unlock(&m_mmCtx->pagesMtx);
 }
 
 static void _mm_lru_reset()
 {
+    pthread_mutex_lock(&m_mmCtx->pagesMtx);
     cx_list_clear(m_mmCtx->pagesLru, NULL);
+    pthread_mutex_unlock(&m_mmCtx->pagesMtx);
 }
 
 static void _mm_page_to_record(uint16_t _pageHandle, table_record_t* _outRecord)
@@ -609,13 +649,4 @@ static void _mm_record_to_page(table_record_t* _record, uint16_t _pageHandle)
     memcpy(&m_mmCtx->mainMem[base + 0], &_record->timestamp, timestampSz);
     memcpy(&m_mmCtx->mainMem[base + timestampSz], &_record->key, keySz);
     cx_str_copy(&m_mmCtx->mainMem[base + timestampSz + keySz], m_mmCtx->valueSize, _record->value);
-}
-
-static void _mm_page_destroy(page_t* _page)
-{
-    cx_handle_free(m_mmCtx->pagesHalloc, _page->handle);
-
-    pthread_rwlock_destroy(&_page->rwlock);
-
-    free(_page);
 }
