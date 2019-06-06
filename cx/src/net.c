@@ -45,6 +45,7 @@ cx_net_ctx_sv_t* cx_net_listen(cx_net_args_t* _args)
     ctx->clientsMax = _args->maxClients > 0 ? _args->maxClients : 1;
     ctx->onConnection = _args->onConnection;
     ctx->onDisconnection = _args->onDisconnection;
+    ctx->userData = _args->userData;
 
     if (_args->multiThreadedSend)
     {
@@ -133,6 +134,7 @@ cx_net_ctx_cl_t* cx_net_connect(cx_net_args_t* _args)
     ctx->c.validationTimeout = cx_math_max(1, _args->validationTimeout);
     ctx->onConnected = _args->onConnected;
     ctx->onDisconnected = _args->onDisconnected;
+    ctx->userData = _args->userData;
 
     epoll_event event;
     CX_MEM_ZERO(event);

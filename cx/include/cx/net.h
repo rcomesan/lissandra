@@ -91,6 +91,7 @@ struct cx_net_common_t
 struct cx_net_ctx_sv_t
 {
     cx_net_common_t             c;                  // server context common data.
+    void*                       userData;           // user data copied from cx_net_args_t.
     cx_net_client_t*            clients;            // pre-allocated buffer for storing client's data.
     cx_handle_alloc_t*          clientsHalloc;      // handle allocator for clients array.
     uint16_t                    clientsMax;         // maximum amount of clients supported for this server context.
@@ -105,6 +106,7 @@ struct cx_net_ctx_cl_t
     bool                        validated;          // true if this client was validated. if a client is not validated before the timeout is exceeded the connection is terminated.
     double                      connectedTime;      // time counter value of when the connection was established.
     double                      lastPacketTime;     // time counter value of when the last packet arrived.
+    void*                       userData;           // user data copied from cx_net_args_t.
     char                        in[CX_NET_BUFLEN];  // pre-allocated buffer for inbound data.
     uint32_t                    inPos;              // current position in the inbound buffer.
     char                        out[CX_NET_BUFLEN]; // pre-allocated buffer for outbound data.
@@ -128,6 +130,7 @@ struct cx_net_args_t
     bool                        multiThreadedSend;  // true if this context must support multi-threaded send.
     cx_net_handler_cb           msgHandlers[256];   // callback containing a message handler for each message header supported.
     double                      validationTimeout;  // maximum amount of time in seconds to wait before validation process times-out.
+    void*                       userData;           // user data.
 
                                                     // cx_net_ctx_cl_t arguments.
     bool                        connectBlocking;    // [ctx_cl] true if the client connect must be done synchronously.
