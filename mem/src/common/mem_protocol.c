@@ -1,12 +1,9 @@
 #include <ker/common_protocol.h>
 #include <mem/mem_protocol.h>
-#include <lfs/lfs_protocol.h>
 #include <ker/defines.h>
-#include <ker/taskman.h>
 
 #include <cx/binr.h>
 #include <cx/binw.h>
-#include <cx/halloc.h>
 #include <cx/mem.h>
 #include <cx/str.h>
 
@@ -107,12 +104,7 @@ void mem_handle_res_create(const cx_net_common_t* _common, void* _userData, cons
 {
     RES_BEGIN;
     {
-        cx_binr_uint32(_buffer, _bufferSize, &bufferPos, &task->err.code);
-
-        if (ERR_NONE != task->err.code)
-        {
-            cx_binr_str(_buffer, _bufferSize, &bufferPos, task->err.desc, sizeof(task->err.desc));
-        }
+        common_unpack_res_create(_buffer, _bufferSize, &bufferPos, NULL, &task->err);
     }
     RES_END;
 }
@@ -121,12 +113,7 @@ void mem_handle_res_drop(const cx_net_common_t* _common, void* _userData, const 
 {
     RES_BEGIN;
     {
-        cx_binr_uint32(_buffer, _bufferSize, &bufferPos, &task->err.code);
-
-        if (ERR_NONE != task->err.code)
-        {
-            cx_binr_str(_buffer, _bufferSize, &bufferPos, task->err.desc, sizeof(task->err.desc));
-        }
+        common_unpack_res_drop(_buffer, _bufferSize, &bufferPos, NULL, &task->err);
     }
     RES_END;
 }
@@ -136,41 +123,7 @@ void mem_handle_res_describe(const cx_net_common_t* _common, void* _userData, co
     RES_BEGIN;
     {
         data_describe_t* data = task->data;
-        uint16_t tablesCount = 0;
-
-        // first packet (from the list of chunks)
-        if (data->tablesRemaining == 0)
-        {
-            // get the initial tables counter
-            cx_binr_uint16(_buffer, _bufferSize, &bufferPos, &tablesCount);
-            data->tablesRemaining = tablesCount;
-
-            // allocate more space if needed
-            if (data->tablesRemaining != data->tablesCount)
-            {
-                if (NULL != data->tables) free(data->tables);
-                data->tablesCount = tablesCount;
-                data->tables = CX_MEM_ARR_ALLOC(data->tables, tablesCount);
-            }
-            
-            // single table request
-            if (1 == tablesCount)
-            {
-                cx_binr_uint32(_buffer, _bufferSize, &bufferPos, &task->err.code);
-                if (ERR_NONE != task->err.code)
-                {
-                    cx_binr_str(_buffer, _bufferSize, &bufferPos, task->err.desc, sizeof(task->err.desc));
-                    data->tablesRemaining = 0;
-                }
-            }
-        }
-
-        while (data->tablesRemaining > 0 && bufferPos < _bufferSize)
-        {
-            common_unpack_table_meta(_buffer, _bufferSize, &bufferPos, &data->tables[data->tablesCount - data->tablesRemaining]);
-            data->tablesRemaining--;
-        }
-        
+        common_unpack_res_describe(_buffer, _bufferSize, &bufferPos, NULL, data, &task->err);
         complete = (0 == data->tablesRemaining);
     }
     RES_END;
@@ -180,32 +133,17 @@ void mem_handle_res_select(const cx_net_common_t* _common, void* _userData, cons
 {
     RES_BEGIN;
     {
-        cx_binr_uint32(_buffer, _bufferSize, &bufferPos, &task->err.code);
-
-        if (ERR_NONE == task->err.code)
-        {
-            data_select_t* data = task->data;
-            cx_binr_uint16(_buffer, _bufferSize, &bufferPos, &data->record.key);
-
-            uint16_t strLen = cx_binr_str(_buffer, _bufferSize, &bufferPos, NULL, 0);
-            data->record.value = malloc((strLen + 1) * sizeof(char));
-            cx_binr_str(_buffer, _bufferSize, &bufferPos, data->record.value, strLen + 1);
-
-            cx_binr_uint32(_buffer, _bufferSize, &bufferPos, &data->record.timestamp);
-        }
-        else
-        {
-            cx_binr_str(_buffer, _bufferSize, &bufferPos, task->err.desc, sizeof(task->err.desc));
-        }
+        common_unpack_res_select(_buffer, _bufferSize, &bufferPos, NULL, (data_select_t*)task->data, &task->err);
     }
     RES_END;
 }
 
 void mem_handle_res_insert(const cx_net_common_t* _common, void* _userData, const char* _buffer, uint16_t _bufferSize)
 {
-    // this is actually the handler for responses received to inserts 
+    // this is actually a handler for responses received to inserts 
     // issued during the journaling process. we don't really have to 
     // show an output or process the result for this.
+    // for now, we'll just log all those inserts that failed.
 
     uint32_t bufferPos = 0;
     uint16_t remoteId = 0;

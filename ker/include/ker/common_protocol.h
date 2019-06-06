@@ -29,9 +29,9 @@
     cx_net_ctx_cl_t* clCtx = (cx_net_ctx_cl_t*)_common;                                 \
     bool complete = true;                                                               \
     uint32_t bufferPos = 0;                                                             \
-    uint16_t taskHandle = INVALID_HANDLE;                                               \
-    cx_binr_uint16(_buffer, _bufferSize, &bufferPos, &taskHandle);                      \
-    task_t* task = taskman_get(taskHandle);                                             \
+    uint16_t remoteId = INVALID_HANDLE;                                                 \
+    cx_binr_uint16(_buffer, _bufferSize, &bufferPos, &remoteId);                        \
+    task_t* task = taskman_get(remoteId);                                               \
     if (NULL != task)                                                                   \
     {
 
@@ -44,7 +44,7 @@
             pthread_mutex_unlock(&task->responseMtx);                                   \
         }                                                                               \
     }                                                                                   \
-    CX_CHECK(NULL != task, "invalid response for task handle %d!", taskHandle);
+    CX_CHECK(NULL != task, "invalid response for task handle %d!", remoteId);
 
 /****************************************************************************************
  ***  COMMON MESSAGE PACKERS
@@ -89,6 +89,10 @@ data_insert_t*      common_unpack_req_insert(const char* _buffer, uint16_t _buff
 void                common_unpack_res_create(const char* _buffer, uint16_t _bufferSize, uint32_t* _bufferPos, uint16_t* _outRemoteId, cx_err_t* _err);
 
 void                common_unpack_res_drop(const char* _buffer, uint16_t _bufferSize, uint32_t* _bufferPos, uint16_t* _outRemoteId, cx_err_t* _err);
+
+void                common_unpack_res_describe(const char* _buffer, uint16_t _bufferSize, uint32_t* _bufferPos, uint16_t* _outRemoteId, data_describe_t* _outData, cx_err_t* _err);
+
+void                common_unpack_res_select(const char* _buffer, uint16_t _bufferSize, uint32_t* _bufferPos, uint16_t* _outRemoteId, data_select_t* _outData, cx_err_t* _err);
 
 void                common_unpack_res_insert(const char* _buffer, uint16_t _bufferSize, uint32_t* _bufferPos, uint16_t* _outRemoteId, cx_err_t* _err);
 
