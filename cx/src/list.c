@@ -28,10 +28,15 @@ void cx_list_destroy(cx_list_t* _list, cx_destroyer_cb _cb)
     free(_list);
 }
 
-void cx_list_clear(cx_list_t* _list, cx_destroyer_cb _cb)
+void cx_list_clear(cx_list_t* _list, cx_destroyer_cb _nodeDestroyer)
 {
     CX_CHECK_NOT_NULL(_list);
-    cx_list_foreach(_list, (cx_list_func_cb)_list_node_destroyer, _cb);
+
+    if (NULL != _nodeDestroyer)
+    {
+        cx_list_foreach(_list, (cx_list_func_cb)_list_node_destroyer, _nodeDestroyer);
+    }
+
     _list->size = 0;
     _list->first = NULL;
     _list->last = NULL;
@@ -141,13 +146,8 @@ void cx_list_foreach(cx_list_t* _list, cx_list_func_cb _func, void* _userData)
 
 static void _list_node_destroyer(cx_list_t* _list, cx_list_node_t* _node, uint32_t _index, void* _dataDestroyer)
 {
-    if (NULL != _dataDestroyer)
-    {
-        cx_destroyer_cb dataDestroyer = (cx_destroyer_cb)_dataDestroyer;
-        dataDestroyer(_node->data);
-    }
-
-    free(_node);
+    cx_destroyer_cb dataDestroyer = (cx_destroyer_cb)_dataDestroyer;
+    dataDestroyer(_node);
 }
 
 static cx_list_node_t* _list_node_new(cx_list_node_t* _prev, cx_list_node_t* _next, void* _data)

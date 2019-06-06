@@ -22,9 +22,11 @@ int t_list_cleanup()
     return CUNIT_RESULT(success);
 }
 
-static void _t_list_data_destroyer(void* _data)
+static void _t_list_node_destroyer(void* _data)
 {
-    CU_ASSERT((uint32_t)_data == ++counter);
+    cx_list_node_t* node = (cx_list_node_t*)_data;
+    CU_ASSERT((uint32_t)node->data == ++counter);
+    free(node);
 }
 
 static void _t_list_func_iter(cx_list_t* _list, cx_list_node_t* _node, uint32_t _index, void* _userData)
@@ -41,7 +43,8 @@ static void _t_list_should_push_single_item(bool _front)
     
     nodeA->next = (cx_list_node_t*)0x01;
     nodeA->prev = (cx_list_node_t*)0x01;
-    
+    nodeA->data = (void*)0x999;
+
     if (_front)
         cx_list_push_front(list, nodeA);
     else
@@ -58,7 +61,7 @@ static void _t_list_should_push_single_item(bool _front)
 
     CU_ASSERT(nodeA->next == NULL);
     CU_ASSERT(nodeA->prev == NULL);
-    CU_ASSERT(nodeA->data == NULL);
+    CU_ASSERT(nodeA->data == (void*)0x999);
 }
 
 static void _t_list_should_pop_single_item(bool _front)
@@ -66,9 +69,11 @@ static void _t_list_should_pop_single_item(bool _front)
     cx_list_node_t* nodeA = NULL;
     
     if (_front)
-        cx_list_pop_front(list);
+        nodeA = cx_list_pop_front(list);
     else
-        cx_list_pop_back(list);
+        nodeA = cx_list_pop_back(list);
+
+    CU_ASSERT(nodeA->data == (void*)0x999);
 
     CU_ASSERT(list->first == NULL);
     CU_ASSERT(cx_list_peek_front(list) == NULL);
@@ -163,7 +168,7 @@ void t_list_should_iterate_items()
 void t_list_should_remove_all_items()
 {
     counter = 0;
-    cx_list_clear(list, (cx_destroyer_cb)_t_list_data_destroyer);
+    cx_list_clear(list, (cx_destroyer_cb)_t_list_node_destroyer);
     CU_ASSERT(numElems == counter);
     CU_ASSERT(0 == cx_list_size(list));
 }
@@ -171,5 +176,4 @@ void t_list_should_remove_all_items()
 void t_list_should_be_destroyed()
 {
     cx_list_destroy(list, NULL);
-    CU_ASSERT(0 == cx_list_size(list));
 }
