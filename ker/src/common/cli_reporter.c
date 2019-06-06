@@ -25,31 +25,6 @@ void cli_report_info(const char* _info)
     printf("%s\n\n", _info);
 }
 
-void cli_report_compact(const task_t* _task, double _blockedTime)
-{
-    data_compact_t* data = _task->data;
-    if (ERR_NONE == _task->err.code)
-    {
-        printf("Table '%s' compacted successfully. (%.3f sec blocked)\n", data->tableName, _blockedTime);
-    }
-    else
-    {
-        printf("Table '%s' COMPACT failed. %s\n", data->tableName, _task->err.desc);
-    }
-}
-
-void cli_report_dumped(const task_t* _task, const char* _tableName, const char* _fileName)
-{
-    if (ERR_NONE == _task->err.code)
-    {
-        printf("Table '%s' dumped successfully.\n", _tableName);
-    }
-    else
-    {
-        printf("Table '%s' DUMP failed. %s\n", _tableName, _task->err.desc);
-    }
-}
-
 void cli_report_select(const task_t* _task)
 {
     CLI_REPORT_BEGIN;

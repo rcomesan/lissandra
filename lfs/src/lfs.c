@@ -794,7 +794,14 @@ static bool task_completed(task_t* _task)
     {
         if (NULL != table)
         {
-            cli_report_dumped(_task, table->meta.name, NULL);
+            if (ERR_NONE == _task->err.code)
+            {
+                CX_INFO("table '%s' dumped successfully.", table->meta.name);
+            }
+            else
+            {
+                CX_INFO("table '%s' dump failed. %s", table->meta.name, _task->err.desc);
+            }
         }
         break;
     }
@@ -812,7 +819,15 @@ static bool task_completed(task_t* _task)
         {
             blockedTime = 0;
         }
-        cli_report_compact(_task, blockedTime);
+
+        if (ERR_NONE == _task->err.code)
+        {
+            CX_INFO("table '%s' compacted successfully. (%.3f sec blocked)", table->meta.name, blockedTime);
+        }
+        else
+        {
+            CX_INFO("table '%s' compaction failed. %s", table->meta.name, _task->err.desc);
+        }
         break;
     }
 

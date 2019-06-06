@@ -14,10 +14,6 @@ void cli_report_error(cx_err_t* err);
 
 void cli_report_info(const char* _info);
 
-void cli_report_dumped(const task_t* _task, const char* _tableName, const char* _fileName);
-
-void cli_report_compact(const task_t* _task, double _blockedTime);
-
 void cli_report_select(const task_t* _task);
 
 void cli_report_insert(const task_t* _task);
