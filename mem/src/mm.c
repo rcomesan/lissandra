@@ -14,6 +14,16 @@ static mm_ctx_t*        m_mmCtx = NULL;
  ***  PRIVATE DECLARATIONS
  ***************************************************************************************/
 
+static void             _mm_lru_push_front(page_t* _page);
+
+static page_t*          _mm_lru_pop_back();
+
+static void             _mm_lru_touch(page_t* _page);
+
+static void             _mm_lru_remove(page_t* _page);
+
+static void             _mm_lru_reset();
+
 static void             _mm_page_to_record(uint16_t _pageHandle, table_record_t* _outRecord);
 
 static void             _mm_record_to_page(table_record_t* _record, uint16_t _pageHandle);
@@ -249,7 +259,7 @@ bool mm_page_alloc(segment_t* _parent, bool _isModification, page_t** _outPage, 
     if (cx_handle_count(m_mmCtx->pagesHalloc) == cx_handle_capacity(m_mmCtx->pagesHalloc))
     {
         // get the LRU page and re-use it
-        (*_outPage) = (page_t*)list_remove(m_mmCtx->pagesLru, list_size(m_mmCtx->pagesLru) - 1);
+        (*_outPage) = _mm_lru_pop_back();
         
         if (NULL != (*_outPage))
         {
@@ -279,12 +289,14 @@ bool mm_page_alloc(segment_t* _parent, bool _isModification, page_t** _outPage, 
             (*_outPage)->handle = handle;
             (*_outPage)->modified = _isModification;
             (*_outPage)->parent = _parent;
-            success = (0 == pthread_rwlock_init(&(*_outPage)->rwlock, NULL));
+            (*_outPage)->node = cx_list_node_alloc((*_outPage));
+            success = (NULL != (*_outPage)->node) && (0 == pthread_rwlock_init(&(*_outPage)->rwlock, NULL));
             
             if (!success)
             {
                 // abort allocation
                 cx_handle_free(m_mmCtx->pagesHalloc, handle);
+                free((*_outPage)->node);
                 free(*_outPage);
                 (*_outPage) = NULL;
                 CX_ERR_SET(_err, ERR_GENERIC, "pthread_rwlock_init failed.");
@@ -296,10 +308,10 @@ bool mm_page_alloc(segment_t* _parent, bool _isModification, page_t** _outPage, 
         }
     }
 
-    // if this is a replaceable page push it to the front of the list
     if (success && !_isModification)
     {
-        list_add_in_index(m_mmCtx->pagesLru, 0, (*_outPage));
+        // if this is a replaceable page push it to the front of the cache
+        _mm_lru_push_front((*_outPage));
     }
 
     pthread_mutex_unlock(&m_mmCtx->pagesMtx);
@@ -322,6 +334,7 @@ bool mm_page_read(segment_t* _table, uint16_t _key, table_record_t* _outRecord, 
         // make sure the page is still assigned to this segment
         if (_table == page->parent) 
         {
+            _mm_lru_touch(page); // cache hit
             _mm_page_to_record(page->handle, _outRecord);
             success = true;
         }
@@ -363,11 +376,11 @@ bool mm_page_write(segment_t* _table, table_record_t* _record, bool _isModificat
 
                 if (!page->modified && _isModification)
                 {
-                    //TODO remove it from LRU
+                    _mm_lru_remove(page);
                 }
                 else if (page->modified && !_isModification)
                 {
-                    //TODO add it to LRU
+                    _mm_lru_push_front(page);
                 }
 
                 page->modified = _isModification;
@@ -523,8 +536,8 @@ void mm_journal_run(task_t* _task)
     cx_cdict_clear(m_mmCtx->tablesMap, (cx_destroyer_cb)mm_segment_destroy);
     CX_CHECK(cx_handle_count(m_mmCtx->pagesHalloc) == 0, "we're leaking page handles!");
 
-    // clear lru
-    list_clean(m_mmCtx->pagesLru);
+    // reset lru
+    _mm_lru_reset();
 }
 
 void mm_unblock(double* _blockedTime)
@@ -548,6 +561,33 @@ void mm_unblock(double* _blockedTime)
 /****************************************************************************************
  ***  PRIVATE FUNCTIONS
  ***************************************************************************************/
+
+static void _mm_lru_push_front(page_t* _page)
+{
+    cx_list_push_front(m_mmCtx->pagesLru, _page->node);
+}
+
+static page_t* _mm_lru_pop_back()
+{
+    cx_list_node_t* last = cx_list_pop_back(m_mmCtx->pagesLru);
+    return (page_t*)last->data;
+}
+
+static void _mm_lru_touch(page_t* _page)
+{
+    cx_list_remove(m_mmCtx->pagesLru, _page->node);
+    cx_list_push_front(m_mmCtx->pagesLru, _page->node);
+}
+
+static void _mm_lru_remove(page_t* _page)
+{
+    cx_list_remove(m_mmCtx->pagesLru, _page->node);
+}
+
+static void _mm_lru_reset()
+{
+    cx_list_clear(m_mmCtx->pagesLru, NULL);
+}
 
 static void _mm_page_to_record(uint16_t _pageHandle, table_record_t* _outRecord)
 {

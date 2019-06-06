@@ -7,12 +7,12 @@
 #include <cx/net.h>
 #include <cx/cdict.h>
 #include <cx/reslock.h>
+#include <cx/list.h>
 
 #include <commons/config.h>
 #include <commons/log.h>
 #include <commons/collections/dictionary.h>
 #include <commons/collections/queue.h>
-#include <commons/collections/list.h>
 
 typedef enum MEM_TIMER
 {
@@ -56,6 +56,7 @@ typedef struct page_t
     bool                modified;                   // whether it contains changes that need to be reflected in the LFS or not.
     pthread_rwlock_t    rwlock;                     // read-write lock object for protecting page data.
     segment_t*          parent;                     // parent segment that currently owns this page.
+    cx_list_node_t*     node;                       // pointer to the node that contains this page in the LRU cache.
 } page_t;
 
 typedef struct mm_ctx_t
@@ -70,7 +71,7 @@ typedef struct mm_ctx_t
     cx_reslock_t        reslock;                    // resource lock to protect this memory.
     cx_handle_alloc_t*  pagesHalloc;                // pointer to pages handle allocator.
     pthread_mutex_t     pagesMtx;                   // mutex for syncing allocation/deallocation of pages.
-    t_list*             pagesLru;                   // linked list for storing LRU pages.
+    cx_list_t*          pagesLru;                   // linked list for storing LRU pages.
 } mm_ctx_t;
 
 typedef struct mem_ctx_t
