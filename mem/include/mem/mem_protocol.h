@@ -13,6 +13,7 @@ typedef enum
     MEMP_NONE = _CX_NETP_BEGIN_,
     MEMP_AUTH,
     MEMP_ACK,
+    MEMP_REQ_JOURNAL,
     MEMP_REQ_CREATE,
     MEMP_REQ_DROP,
     MEMP_REQ_DESCRIBE,
@@ -36,6 +37,8 @@ typedef enum
 void mem_handle_auth(cx_net_common_t* _common, void* _userData, const char* _buffer, uint16_t _bufferSize);
 
 void mem_handle_ack(cx_net_common_t* _common, void* _userData, const char* _buffer, uint16_t _bufferSize);
+
+void mem_handle_req_journal(const cx_net_common_t* _common, void* _userData, const char* _buffer, uint16_t _bufferSize);
 
 void mem_handle_req_create(const cx_net_common_t* _common, void* _userData, const char* _buffer, uint16_t _bufferSize);
 
@@ -66,6 +69,8 @@ void mem_handle_res_insert(const cx_net_common_t* _common, void* _userData, cons
 uint32_t mem_pack_auth(char* _buffer, uint16_t _size, password_t _passwd, uint16_t _memNumber);
 
 uint32_t mem_pack_ack(char* _buffer, uint16_t _size, uint16_t _valueSize);
+
+uint32_t mem_pack_req_journal(char* _buffer, uint16_t _size, uint16_t _remoteId);
 
 uint32_t mem_pack_req_create(char* _buffer, uint16_t _size, uint16_t _remoteId, const char* _tableName, uint8_t _consistency, uint16_t _numPartitions, uint32_t _compactionInterval);
 

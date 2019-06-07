@@ -55,11 +55,20 @@ void mem_handle_ack(cx_net_common_t* _common, void* _userData, const char* _buff
     g_ctx.lfsHandshaking = false;
 }
 
+void mem_handle_req_journal(const cx_net_common_t* _common, void* _userData, const char* _buffer, uint16_t _bufferSize)
+{
+    REQ_BEGIN(TASK_MT_JOURNAL);
+    {
+        task->data = NULL;
+    }
+    REQ_END;
+}
+
 void mem_handle_req_create(const cx_net_common_t* _common, void* _userData, const char* _buffer, uint16_t _bufferSize)
 {
     REQ_BEGIN(TASK_WT_CREATE);
     {
-        task->data = common_unpack_req_create(_buffer, _bufferSize, &bufferPos, &task->remoteId);
+        task->data = common_unpack_req_create(_buffer, _bufferSize, &bufferPos, NULL);
     }
     REQ_END;
 }
@@ -68,7 +77,7 @@ void mem_handle_req_drop(const cx_net_common_t* _common, void* _userData, const 
 {
     REQ_BEGIN(TASK_WT_DROP);
     {
-        task->data = common_unpack_req_drop(_buffer, _bufferSize, &bufferPos, &task->remoteId);
+        task->data = common_unpack_req_drop(_buffer, _bufferSize, &bufferPos, NULL);
     }
     REQ_END;
 }
@@ -77,7 +86,7 @@ void mem_handle_req_describe(const cx_net_common_t* _common, void* _userData, co
 {
     REQ_BEGIN(TASK_WT_DESCRIBE);
     {
-        task->data = common_unpack_req_describe(_buffer, _bufferSize, &bufferPos, &task->remoteId);
+        task->data = common_unpack_req_describe(_buffer, _bufferSize, &bufferPos, NULL);
     }
     REQ_END;
 }
@@ -86,7 +95,7 @@ void mem_handle_req_select(const cx_net_common_t* _common, void* _userData, cons
 {
     REQ_BEGIN(TASK_WT_SELECT);
     {
-        task->data = common_unpack_req_select(_buffer, _bufferSize, &bufferPos, &task->remoteId);
+        task->data = common_unpack_req_select(_buffer, _bufferSize, &bufferPos, NULL);
     }
     REQ_END;
 }
@@ -95,7 +104,7 @@ void mem_handle_req_insert(const cx_net_common_t* _common, void* _userData, cons
 {
     REQ_BEGIN(TASK_WT_INSERT);
     {
-        task->data = common_unpack_req_insert(_buffer, _bufferSize, &bufferPos, &task->remoteId);
+        task->data = common_unpack_req_insert(_buffer, _bufferSize, &bufferPos, NULL);
     }
     REQ_END;
 }
@@ -184,6 +193,13 @@ uint32_t mem_pack_ack(char* _buffer, uint16_t _size, uint16_t _valueSize)
 {
     uint32_t pos = 0;
     cx_binw_uint16(_buffer, _size, &pos, _valueSize);
+    return pos;
+}
+
+uint32_t mem_pack_req_journal(char* _buffer, uint16_t _size, uint16_t _remoteId)
+{
+    uint32_t pos = 0;
+    common_pack_remote_id(_buffer, _size, &pos, _remoteId);
     return pos;
 }
 

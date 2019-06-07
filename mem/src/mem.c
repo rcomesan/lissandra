@@ -442,6 +442,7 @@ static bool net_init(cx_err_t* _err)
 
     // message headers to handlers mappings
     svCtxArgs.msgHandlers[MEMP_AUTH] = (cx_net_handler_cb)mem_handle_auth;
+    svCtxArgs.msgHandlers[MEMP_REQ_JOURNAL] = (cx_net_handler_cb)mem_handle_req_journal;
     svCtxArgs.msgHandlers[MEMP_REQ_CREATE] = (cx_net_handler_cb)mem_handle_req_create;
     svCtxArgs.msgHandlers[MEMP_REQ_DROP] = (cx_net_handler_cb)mem_handle_req_drop;
     svCtxArgs.msgHandlers[MEMP_REQ_DESCRIBE] = (cx_net_handler_cb)mem_handle_req_describe;
@@ -502,13 +503,8 @@ static void handle_cli_command(const cx_cli_cmd_t* _cmd)
     }
     else if (strcmp("JOURNAL", _cmd->header) == 0)
     {
-        // enqueue a journal request. 
-        task_t* task = taskman_create(TASK_ORIGIN_CLI, TASK_MT_JOURNAL, NULL, NULL);
-        if (NULL != task)
-        {
-            task->state = TASK_STATE_NEW;
-            cli_report_info("Memory journal scheduled.");
-        }
+        packetSize = mem_pack_req_journal(g_ctx.buff1, sizeof(g_ctx.buff1), 0);
+        mem_handle_req_journal((cx_net_common_t*)g_ctx.sv, NULL, g_ctx.buff1, packetSize);
     }
     else if (strcmp("CREATE", _cmd->header) == 0)
     {
@@ -689,7 +685,7 @@ static bool task_reschedule(task_t* _task)
 static bool task_req_abort(task_t* _task, void* _userData)
 {
     pthread_mutex_lock(&_task->responseMtx);
-    if (TASK_STATE_RUNNING_AWAITING == _task->startTime)
+    if (TASK_STATE_RUNNING_AWAITING == _task->state)
     {
         _task->state = TASK_STATE_RUNNING;
         CX_ERR_SET(&_task->err, ERR_NET_LFS_UNAVAILABLE, "LFS node is unavailable.");
@@ -767,7 +763,8 @@ static bool task_completed(task_t* _task)
 
     case TASK_MT_JOURNAL:
     {
-        //noop
+        if (TASK_ORIGIN_CLI == _task->origin)
+            cli_report_info("Memory journal scheduled.");
         break;
     }
 
