@@ -5,6 +5,7 @@
 #include <cx/str.h>
 #include <cx/math.h>
 #include <cx/timer.h>
+#include <cx/linesf.h>
 
 #include <ctype.h>
 #include <string.h>
@@ -38,8 +39,7 @@ bool cli_parse_select(const cx_cli_cmd_t* _cmd, cx_err_t* _err, char** _outTable
 {
     CX_CHECK(0 == strcmp("SELECT", _cmd->header), "invalid command!");
 
-    if (true
-        && _cmd->argsCount >= 2
+    if (_cmd->argsCount >= 2
         && valid_table(_cmd->args[0])
         && valid_key(_cmd->args[1]))
     {
@@ -56,8 +56,7 @@ bool cli_parse_insert(const cx_cli_cmd_t* _cmd, cx_err_t* _err, char** _outTable
 {
     CX_CHECK(0 == strcmp("INSERT", _cmd->header), "invalid command!");
 
-    if (true
-        && _cmd->argsCount >= 3
+    if (_cmd->argsCount >= 3
         && valid_table(_cmd->args[0])
         && valid_key(_cmd->args[1])
         && valid_value(_cmd->args[2])
@@ -66,7 +65,7 @@ bool cli_parse_insert(const cx_cli_cmd_t* _cmd, cx_err_t* _err, char** _outTable
         (*_outTableName) = _cmd->args[0];
         cx_str_to_uint16(_cmd->args[1], _outKey);
         (*_outValue) = _cmd->args[2];
-        (*_outTimestamp) = cx_time_epoch();
+        (*_outTimestamp) = cx_time_epoch(); //TODO fixme. https://github.com/sisoputnfrba/foro/issues/1309
 
         if (_cmd->argsCount >= 4)
         {
@@ -84,8 +83,7 @@ bool cli_parse_create(const cx_cli_cmd_t* _cmd, cx_err_t* _err, char** _outTable
 {
     CX_CHECK(0 == strcmp("CREATE", _cmd->header), "invalid command!");
 
-    if (true
-        && _cmd->argsCount >= 4
+    if (_cmd->argsCount >= 4
         && valid_table(_cmd->args[0])
         && valid_consistency(_cmd->args[1])
         && valid_partitions_number(_cmd->args[2])
@@ -131,8 +129,7 @@ bool cli_parse_drop(const cx_cli_cmd_t* _cmd, cx_err_t* _err, char** _outTableNa
 {
     CX_CHECK(0 == strcmp("DROP", _cmd->header), "invalid command!");
 
-    if (true
-        && _cmd->argsCount >= 1
+    if (_cmd->argsCount >= 1
         && valid_table(_cmd->args[0]))
     {
         (*_outTableName) = _cmd->args[0];
@@ -143,27 +140,27 @@ bool cli_parse_drop(const cx_cli_cmd_t* _cmd, cx_err_t* _err, char** _outTableNa
     return false;
 }
 
-bool cli_parse_run(const cx_cli_cmd_t* _cmd, cx_err_t* _err, char** _outLqlPath)
+bool cli_parse_run(const cx_cli_cmd_t* _cmd, cx_err_t* _err, cx_path_t* _outLqlPath)
 {
     CX_CHECK(0 == strcmp("RUN", _cmd->header), "invalid command!");
 
-    if (true
-        && _cmd->argsCount >= 1)
+    if (_cmd->argsCount >= 1)
     {
-        (*_outLqlPath) = _cmd->args[0];
+        cx_file_path(_outLqlPath, "%s", _cmd->args[0]);
         return true;
     }
-
-    CX_ERR_SET(_err, 1, "Invalid Syntax. Usage: RUN [LQL_FILE_PATH]");
-    return false;
+    else
+    {
+        CX_ERR_SET(_err, 1, "Invalid Syntax. Usage: RUN [LQL_FILE_PATH]");
+        return false;
+    }
 }
 
 bool cli_parse_add_memory(const cx_cli_cmd_t* _cmd, cx_err_t* _err, uint16_t* _outMemNumber, uint8_t* _outConsistency)
 {
     CX_CHECK(0 == strcmp("ADD", _cmd->header), "invalid command!");
 
-    if (true
-        && _cmd->argsCount >= 4
+    if (_cmd->argsCount >= 4
         && (0 == strcasecmp("MEMORY", _cmd->args[0]))
         && valid_memory_number(_cmd->args[1])
         && (0 == strcasecmp("TO", _cmd->args[2]))

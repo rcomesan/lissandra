@@ -6,15 +6,22 @@
 #include <stdint.h>
 #include <cx/cx.h>
 #include <cx/net.h>
+#include <cx/linesf.h>
 
 #define TABLE_NAME_LEN_MIN 1
 #define TABLE_NAME_LEN_MAX NAME_MAX
 
 #define MEMTABLE_INITIAL_CAPACITY 256
+
 #define MAX_TASKS 4096
 #define MAX_TABLES 4096
+
 #define MAX_FILE_FRAG 1024
+
 #define MAX_MEM_SEEDS 16
+#define MAX_MEM_NODES 100
+#define INVALID_MEM_NUMBER 0
+
 #define MIN_PASSWD_LEN 12
 #define MAX_PASSWD_LEN 32
 
@@ -30,6 +37,7 @@ typedef enum ERR_CODE
     ERR_GENERIC = 1,
     ERR_LOGGER_FAILED,
     ERR_INIT_MTX,
+    ERR_INIT_RWL,
     ERR_INIT_HALLOC,
     ERR_INIT_THREADPOOL,
     ERR_INIT_QUEUE,
@@ -52,32 +60,53 @@ typedef enum ERR_CODE
     ERR_TABLE_BLOCKED,
     ERR_MEMORY_BLOCKED,
     ERR_MEMORY_FULL,
-} ERRR_CODE;
+    ERR_QUANTUM_EXHAUSTED
+} ERR_CODE;
 
 
 #define RESOURCE_TYPE_TABLE 1
 
-#define CONSISTENCY_STRONG 1
-#define CONSISTENCY_STRONG_HASH 2
-#define CONSISTENCY_EVENTUAL 3
+typedef enum E_QUERY
+{
+    QUERY_NONE = 0,
+    QUERY_CREATE,
+    QUERY_DROP,
+    QUERY_DESCRIBE,
+    QUERY_SELECT,
+    QUERY_INSERT,
+    QUERY_COUNT
+} E_QUERY;
+
+static const char *QUERY_NAME[] = {
+    "NONE", "CREATE", "DROP", "DESCRIBE", "SELECT", "INSERT"
+};
+
+typedef enum E_CONSISTENCY
+{
+    CONSISTENCY_NONE = 0,
+    CONSISTENCY_STRONG,
+    CONSISTENCY_STRONG_HASHED,
+    CONSISTENCY_EVENTUAL,
+    CONSISTENCY_COUNT
+} E_CONSISTENCY;
 
 static const char *CONSISTENCY_NAME[] = {
-    "", "STRONG", "STRONG-HASH", "EVENTUAL"
+    "INDISTINCT", "STRONG", "STRONG-HASHED", "EVENTUAL"
 };
 
 typedef struct table_meta_t
 {
-    table_name_t            name;                           // name of the table.
-    uint8_t                 consistency;                    // constistency needed for this table.
-    uint16_t                partitionsCount;                // number of partitions for this table.
-    uint32_t                compactionInterval;             // interval in ms to perform table compaction.
+    table_name_t    name;                           // name of the table.
+    uint8_t         consistency;                    // constistency needed for this table.
+    uint16_t        partitionsCount;                // number of partitions for this table.
+    uint32_t        compactionInterval;             // interval in ms to perform table compaction.
 } table_meta_t;
 
 typedef struct table_record_t
 {
-    uint16_t            key;
-    uint32_t            timestamp;
-    char*               value;
+    uint16_t        key;
+    uint32_t        timestamp;
+    char*           value;
 } table_record_t;
 
 typedef struct data_create_t
@@ -130,7 +159,9 @@ typedef struct data_free_t
 
 typedef struct data_run_t
 {
-    int32_t         foo;
+    cx_path_t       scriptFilePath;
+    cx_linesf_t*    script;
+    uint32_t        lineNumber;
 } data_run_t;
 
 typedef struct data_add_memory_t
@@ -139,4 +170,3 @@ typedef struct data_add_memory_t
 } data_add_memory_t;
 
 #endif // DEFINES_H_
-

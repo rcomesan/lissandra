@@ -3,6 +3,7 @@
 
 #include <cx/cx.h>
 #include <cx/cli.h>
+#include <cx/file.h>
 
 /****************************************************************************************
  ***  PUBLIC FUNCTIONS
@@ -18,7 +19,7 @@ bool cli_parse_describe(const cx_cli_cmd_t* _cmd, cx_err_t* _err, char** _outTab
 
 bool cli_parse_drop(const cx_cli_cmd_t* _cmd, cx_err_t* _err, char** _outTableName);
 
-bool cli_parse_run(const cx_cli_cmd_t* _cmd, cx_err_t* _err, char** _outLqlPath);
+bool cli_parse_run(const cx_cli_cmd_t* _cmd, cx_err_t* _err, cx_path_t* _outLqlPath);
 
 bool cli_parse_add_memory(const cx_cli_cmd_t* _cmd, cx_err_t* _err, uint16_t* _outMemNumber, uint8_t* _outConsistency);
 

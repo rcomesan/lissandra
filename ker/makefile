@@ -27,8 +27,10 @@ CFLAGS ?=                                 \
 	-D$(PROJECT_NAME_UCASE)               \
 	-g3 -Wall -Wextra                     \
 	-Wno-unused-variable                  \
-	-Wno-unused-parameter
+	-Wno-unused-parameter                 \
+	-Wno-address
 
+LIBS := -l:$(LIB_COMMONS) -l:$(LIB_CX) -l:libpthread.so -l:libm.so
 LDFLAGS ?= -Wl,-R -Wl,/home/utnso/lissandra/cx/build/$(TARGET)
 
 # Paths
@@ -64,6 +66,7 @@ _build: directory resource dependency $(PATH_BUILD)$(BIN_OUTPUT)
 release: export TARGET := release
 release: export PATH_BUILD := $(PATH_BUILD)$(TARGET)/
 release: export LIB_CX := $(LIB_CX_RELEASE)
+release: export CFLAGS := $(CFLAGS) -DCX_RELEASE_VERBOSE
 release:
 	@echo ""
 	@echo ${COLOR_WHITE}"** [$(BIN_OUTPUT)] Building RELEASE..."${COLOR_NONE}
@@ -111,16 +114,16 @@ valgrind: debug
 	@echo ""
 
 $(PATH_BUILD).obj/common/mem/%.o: $(PATH_COMMON_MEM)%.c
-	$(CC) $(CFLAGS) -c $< -o $@ -l:$(LIB_COMMONS) -l:$(LIB_CX)
+	$(CC) $(CFLAGS) -c $< -o $@
 
 $(PATH_BUILD).obj/common/lfs/%.o: $(PATH_COMMON_LFS)%.c
-	$(CC) $(CFLAGS) -c $< -o $@ -l:$(LIB_COMMONS) -l:$(LIB_CX)
+	$(CC) $(CFLAGS) -c $< -o $@
 
 $(PATH_BUILD).obj/%.o: $(PATH_SRC)%.c
-	$(CC) $(CFLAGS) -c $< -o $@ -l:$(LIB_COMMONS) -l:$(LIB_CX)
+	$(CC) $(CFLAGS) -c $< -o $@
 
 $(PATH_BUILD)$(BIN_OUTPUT): $(FILES_O)
-	$(CC) $(CFLAGS) $(FILES_O) -o $(PATH_BUILD)$(BIN_OUTPUT) $(LDFLAGS) -l:$(LIB_COMMONS) -l:$(LIB_CX)
+	$(CC) $(CFLAGS) $(FILES_O) -o $(PATH_BUILD)$(BIN_OUTPUT) $(LDFLAGS) $(LIBS)
 
 .PHONY: dependency
 dependency:

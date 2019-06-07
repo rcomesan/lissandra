@@ -22,6 +22,9 @@
     <None Include="res\.desc">
       <Filter>res</Filter>
     </None>
+    <None Include="res\ker.cfg">
+      <Filter>res</Filter>
+    </None>
   </ItemGroup>
   <ItemGroup>
     <ClCompile Include="src\ker.c">
@@ -30,12 +33,51 @@
     <ClCompile Include="src\common\ker_protocol.c">
       <Filter>src\common</Filter>
     </ClCompile>
+    <ClCompile Include="src\common\cli_parser.c">
+      <Filter>src\common</Filter>
+    </ClCompile>
+    <ClCompile Include="src\common\cli_reporter.c">
+      <Filter>src\common</Filter>
+    </ClCompile>
+    <ClCompile Include="src\common\taskman.c">
+      <Filter>src\common</Filter>
+    </ClCompile>
+    <ClCompile Include="src\common\common_protocol.c">
+      <Filter>src\common</Filter>
+    </ClCompile>
+    <ClCompile Include="src\ker_worker.c">
+      <Filter>src</Filter>
+    </ClCompile>
+    <ClCompile Include="src\mempool.c">
+      <Filter>src</Filter>
+    </ClCompile>
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="include\ker\ker_protocol.h">
       <Filter>include\ker</Filter>
     </ClInclude>
     <ClInclude Include="src\ker.h">
+      <Filter>src</Filter>
+    </ClInclude>
+    <ClInclude Include="include\ker\cli_parser.h">
+      <Filter>include\ker</Filter>
+    </ClInclude>
+    <ClInclude Include="include\ker\defines.h">
+      <Filter>include\ker</Filter>
+    </ClInclude>
+    <ClInclude Include="include\ker\cli_reporter.h">
+      <Filter>include\ker</Filter>
+    </ClInclude>
+    <ClInclude Include="include\ker\taskman.h">
+      <Filter>include\ker</Filter>
+    </ClInclude>
+    <ClInclude Include="include\ker\common_protocol.h">
+      <Filter>include\ker</Filter>
+    </ClInclude>
+    <ClInclude Include="src\ker_worker.h">
+      <Filter>src</Filter>
+    </ClInclude>
+    <ClInclude Include="src\mempool.h">
       <Filter>src</Filter>
     </ClInclude>
   </ItemGroup>
