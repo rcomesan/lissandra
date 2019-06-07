@@ -55,13 +55,18 @@ void mem_handle_ack(cx_net_common_t* _common, void* _userData, const char* _buff
     g_ctx.lfsHandshaking = false;
 }
 
-void mem_handle_req_journal(const cx_net_common_t* _common, void* _userData, const char* _buffer, uint16_t _bufferSize)
+void mem_handle_journal(const cx_net_common_t* _common, void* _userData, const char* _buffer, uint16_t _bufferSize)
 {
-    REQ_BEGIN(TASK_MT_JOURNAL);
+    TASK_ORIGIN origin = NULL == _userData 
+        ? TASK_ORIGIN_CLI 
+        : TASK_ORIGIN_API;
+
+    task_t* task = taskman_create(origin, TASK_MT_JOURNAL, NULL, NULL);
+
+    if (NULL != task)
     {
-        task->data = NULL;
+        task->state = TASK_STATE_NEW;
     }
-    REQ_END;
 }
 
 void mem_handle_req_create(const cx_net_common_t* _common, void* _userData, const char* _buffer, uint16_t _bufferSize)
@@ -196,10 +201,9 @@ uint32_t mem_pack_ack(char* _buffer, uint16_t _size, uint16_t _valueSize)
     return pos;
 }
 
-uint32_t mem_pack_req_journal(char* _buffer, uint16_t _size, uint16_t _remoteId)
+uint32_t mem_pack_journal(char* _buffer, uint16_t _size)
 {
     uint32_t pos = 0;
-    common_pack_remote_id(_buffer, _size, &pos, _remoteId);
     return pos;
 }
 

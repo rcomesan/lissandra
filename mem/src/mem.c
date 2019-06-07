@@ -442,7 +442,7 @@ static bool net_init(cx_err_t* _err)
 
     // message headers to handlers mappings
     svCtxArgs.msgHandlers[MEMP_AUTH] = (cx_net_handler_cb)mem_handle_auth;
-    svCtxArgs.msgHandlers[MEMP_REQ_JOURNAL] = (cx_net_handler_cb)mem_handle_req_journal;
+    svCtxArgs.msgHandlers[MEMP_JOURNAL] = (cx_net_handler_cb)mem_handle_journal;
     svCtxArgs.msgHandlers[MEMP_REQ_CREATE] = (cx_net_handler_cb)mem_handle_req_create;
     svCtxArgs.msgHandlers[MEMP_REQ_DROP] = (cx_net_handler_cb)mem_handle_req_drop;
     svCtxArgs.msgHandlers[MEMP_REQ_DESCRIBE] = (cx_net_handler_cb)mem_handle_req_describe;
@@ -503,8 +503,8 @@ static void handle_cli_command(const cx_cli_cmd_t* _cmd)
     }
     else if (strcmp("JOURNAL", _cmd->header) == 0)
     {
-        packetSize = mem_pack_req_journal(g_ctx.buff1, sizeof(g_ctx.buff1), 0);
-        mem_handle_req_journal((cx_net_common_t*)g_ctx.sv, NULL, g_ctx.buff1, packetSize);
+        packetSize = mem_pack_journal(g_ctx.buff1, sizeof(g_ctx.buff1));
+        mem_handle_journal((cx_net_common_t*)g_ctx.sv, NULL, g_ctx.buff1, packetSize);
     }
     else if (strcmp("CREATE", _cmd->header) == 0)
     {
