@@ -14,18 +14,21 @@
 #ifdef KER
 
 #include "../ker.h"
+#include "../mempool.h"
 
 void ker_handle_ack(cx_net_common_t* _common, void* _userData, const char* _buffer, uint16_t _bufferSize)
 {
     cx_net_ctx_cl_t* cl = (cx_net_ctx_cl_t*)_common;
     uint32_t pos = 0;
 
-    //TODO. MEM accepted our client connection :)
-    
-    //cx_binr_uint16(_buffer, _bufferSize, &pos, &g_ctx.cfg.valueSize);
-    //cx_net_validate(cl, INVALID_HANDLE);
-    //g_ctx.lfsAvail = true;
-    //g_ctx.lfsHandshaking = false;
+    mem_node_t* memNode = (mem_node_t*)cl->userData;
+
+    cx_net_validate(cl, INVALID_HANDLE);
+    memNode->handshaking = false;
+    memNode->available = true;
+
+    // by default, assign this memory to CONSISTENCY_NONE criterion.
+    mempool_assign(memNode->number, CONSISTENCY_NONE, NULL);
 }
 
 void ker_handle_req_create(const cx_net_common_t* _common, void* _userData, const char* _buffer, uint16_t _bufferSize)
@@ -139,8 +142,10 @@ void ker_handle_res_insert(const cx_net_common_t* _common, void* _userData, cons
  ***  MESSAGE PACKERS
  ***************************************************************************************/
 
-uint32_t ker_pack_ack(char* _buffer, uint16_t _size, uint16_t _valueSize)
+uint32_t ker_pack_ack(char* _buffer, uint16_t _size)
 {
+    uint32_t pos = 0;
+    return pos;
 }
 
 uint32_t ker_pack_req_create(char* _buffer, uint16_t _size, uint16_t _remoteId, const char* _tableName, uint8_t _consistency, uint16_t _numPartitions, uint32_t _compactionInterval)

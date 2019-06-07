@@ -37,6 +37,7 @@ typedef struct metrics_t
 typedef struct mem_node_t
 {
     uint16_t            number;                             // MEM node number (unique identifier in the pool assigned to each node).
+    bool                available;
     bool                handshaking;                        // true if we're authenticating with the MEM node.
     ipv4_t              ip;                                 // ip address on which the MEM node will listen on.
     uint16_t            port;                               // tcp port on which the MEM node will listen on.

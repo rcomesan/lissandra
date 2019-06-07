@@ -58,7 +58,7 @@ void ker_handle_res_insert(const cx_net_common_t* _common, void* _userData, cons
  ***  MESSAGE PACKERS
  ***************************************************************************************/
 
-uint32_t ker_pack_ack(char* _buffer, uint16_t _size, uint16_t _valueSize);
+uint32_t ker_pack_ack(char* _buffer, uint16_t _size);
 
 uint32_t ker_pack_req_create(char* _buffer, uint16_t _size, uint16_t _remoteId, const char* _tableName, uint8_t _consistency, uint16_t _numPartitions, uint32_t _compactionInterval);
 

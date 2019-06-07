@@ -137,7 +137,17 @@ void mempool_destroy()
 
 void mempool_update()
 {
+    mem_node_t* memNode = NULL;
 
+    for (uint32_t i = 1; i < MAX_MEM_NODES; i++)
+    {
+        memNode = &m_mempoolCtx->nodes[i];
+        
+        if (NULL != memNode->conn)
+        {
+            cx_net_poll_events(memNode->conn, 0);
+        }
+    }
 }
 
 void mempool_feed_tables(data_describe_t* _data)
@@ -199,10 +209,7 @@ void mempool_add(uint16_t _memNumber, ipv4_t _ip, uint16_t _port)
 
         // start client context
         memNode->conn = cx_net_connect(&args);
-        CX_WARN(NULL == memNode->conn, "memNode client context creation failed!");
-
-        // assign it to CONSISTENCY_NONE criteria by default.
-        mempool_assign(_memNumber, CONSISTENCY_NONE, NULL);
+        CX_WARN(NULL != memNode->conn, "memNode client context creation failed!");
     }
 }
 
@@ -251,8 +258,8 @@ bool mempool_assign(uint16_t _memNumber, E_CONSISTENCY _type, cx_err_t* _err)
             memNode->listNode[_type] = cx_list_node_alloc(memNode);
             cx_list_push_front(criteria->assignedNodes, memNode->listNode[_type]);
 
-            CX_INFO("MEM node #%d successfully assigned to %s consistency.", 
-                CONSISTENCY_NAME[_type], memNode->number);
+            CX_INFO("MEM node #%d assigned to %s consistency.", 
+                memNode->number, CONSISTENCY_NAME[_type]);
         }
         pthread_mutex_unlock(&criteria->mtx);
     }
@@ -377,14 +384,20 @@ int32_t mempool_node_req(uint16_t _memNumber, uint8_t _header, const char* _payl
 
     if (_valid_mem_number(_memNumber, NULL))
     {
-        mem_node_t* node = &m_mempoolCtx->nodes[_memNumber];
+        mem_node_t* memNode = &m_mempoolCtx->nodes[_memNumber];
 
-        pthread_rwlock_rdlock(&node->rwl);
-        if (NULL != node->conn)
+        pthread_rwlock_rdlock(&memNode->rwl);
+        if (NULL != memNode->conn)
         {
-            result = cx_net_send(node->conn, _header, _payload, _payloadSize, INVALID_HANDLE);
+            result = cx_net_send(memNode->conn, _header, _payload, _payloadSize, INVALID_HANDLE);
+
+            if (CX_NET_SEND_DISCONNECTED)
+            {
+                cx_net_destroy((void*)memNode->conn);
+                memNode->conn = NULL;
+            }
         }
-        pthread_rwlock_unlock(&node->rwl);
+        pthread_rwlock_unlock(&memNode->rwl);
     }
 
     return result;
@@ -436,7 +449,7 @@ static void _on_connected_to_mem(cx_net_ctx_cl_t* _ctx)
 
     payload_t payload;
     uint32_t payloadSize = mem_pack_auth(payload, sizeof(payload), 
-        g_ctx.cfg.memPassword, node->number);
+        g_ctx.cfg.memPassword, 0);
 
     cx_net_send(_ctx, MEMP_AUTH, payload, payloadSize, INVALID_HANDLE);
 }
@@ -454,7 +467,7 @@ static void _on_disconnected_from_mem(cx_net_ctx_cl_t* _ctx)
         cx_net_destroy((void*)memNode->conn);
         memNode->conn = NULL;
     }
-    else
+    else if (memNode->available)
     {       
         // the connection with this MEM node is now gone.
         // unassign it from the criteria so that no worker threads pick it up
@@ -487,7 +500,7 @@ static void _on_disconnected_from_mem(cx_net_ctx_cl_t* _ctx)
         memNode->conn = NULL;
         pthread_rwlock_unlock(&memNode->rwl);
 
-        CX_INFO("MEM node #%d (%s:%d) just disconnected from the pool.", memNode->ip, memNode->port);
+        CX_INFO("MEM node #%d (%s:%d) just disconnected from the pool.", memNode->number, memNode->ip, memNode->port);
     }
 }
 static bool _task_req_abort(task_t* _task, void* _userData)

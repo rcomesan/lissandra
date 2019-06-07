@@ -1,5 +1,6 @@
 #include <ker/common_protocol.h>
 #include <mem/mem_protocol.h>
+#include <ker/ker_protocol.h>
 #include <ker/defines.h>
 
 #include <cx/binr.h>
@@ -20,6 +21,8 @@ void mem_handle_auth(cx_net_common_t* _common, void* _userData, const char* _buf
     cx_net_ctx_sv_t* sv = (cx_net_ctx_sv_t*)_common;
     cx_net_client_t* client = (cx_net_client_t*)_userData;
     uint32_t pos = 0;
+    payload_t payload;
+    uint32_t payloadSize = 0;
 
     password_t passwd;
     cx_binr_str(_buffer, _bufferSize, &pos, passwd, sizeof(passwd));
@@ -35,6 +38,11 @@ void mem_handle_auth(cx_net_common_t* _common, void* _userData, const char* _buf
         {
             uint16_t memNumber = 0;
             cx_binr_uint16(_buffer, _bufferSize, &pos, &memNumber);
+        }
+        else
+        {
+            payloadSize = ker_pack_ack(payload, sizeof(payload));
+            cx_net_send(sv, KERP_ACK, payload, payloadSize, client->handle);
         }
     }
     else
