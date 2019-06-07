@@ -8,6 +8,8 @@
     cx_net_ctx_sv_t* svCtx = (cx_net_ctx_sv_t*)_common;                                 \
     cx_net_client_t* client = (cx_net_client_t*)_userData;                              \
     uint32_t bufferPos = 0;                                                             \
+    uint16_t remoteId = INVALID_HANDLE;                                                 \
+    cx_binr_uint16(_buffer, _bufferSize, &bufferPos, &remoteId);                        \
     task_t* task = taskman_create(                                                      \
         NULL == _userData                                                               \
             ? TASK_ORIGIN_CLI                                                           \
@@ -20,6 +22,7 @@
     {
 
 #define REQ_END                                                                         \
+        task->remoteId = remoteId;                                                      \
         task->state = TASK_STATE_NEW;                                                   \
         CX_CHECK(bufferPos == _bufferSize, "%d bytes were not consumed from the buffer!", _bufferSize - bufferPos); \
     }
@@ -71,6 +74,10 @@ uint32_t            common_pack_res_insert(char* _buffer, uint16_t _size, uint16
 uint32_t            common_pack_table_meta(char* _buffer, uint16_t _size, const table_meta_t* _table);
 
 uint32_t            common_pack_table_record(char* _buffer, uint16_t _size, const table_record_t* _record);
+
+void                common_pack_remote_id(char* _buffer, uint16_t _bufferSize, uint32_t* _bufferPos, uint16_t _remoteId);
+
+void                common_unpack_remote_id(const char* _buffer, uint16_t _bufferSize, uint32_t* _bufferPos, uint16_t* _outRemoteId);
 
 /****************************************************************************************
  ***  COMMON MESSAGE UNPACKERS

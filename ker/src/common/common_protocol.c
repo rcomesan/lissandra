@@ -13,8 +13,6 @@ static void         _common_pack_res_generic(char* _buffer, uint16_t _bufferSize
 
 static void         _common_unpack_res_generic(const char* _buffer, uint16_t _bufferSize, uint32_t* _bufferPos, uint16_t* _outRemoteId, cx_err_t* _err);
 
-static void         _common_unpack_remote_id(const char* _buffer, uint16_t _bufferSize, uint32_t* _bufferPos, uint16_t* _outRemoteId);
-
 /****************************************************************************************
  ***  COMMON MESSAGE PACKERS
  ***************************************************************************************/
@@ -22,7 +20,7 @@ static void         _common_unpack_remote_id(const char* _buffer, uint16_t _buff
 uint32_t common_pack_req_create(char* _buffer, uint16_t _size, uint16_t _remoteId, const char* _tableName, uint8_t _consistency, uint16_t _numPartitions, uint32_t _compactionInterval)
 {
     uint32_t pos = 0;
-    cx_binw_uint16(_buffer, _size, &pos, _remoteId);
+    common_pack_remote_id(_buffer, _size, &pos, _remoteId);
     cx_binw_str(_buffer, _size, &pos, _tableName);
     cx_binw_uint8(_buffer, _size, &pos, _consistency);
     cx_binw_uint16(_buffer, _size, &pos, _numPartitions);
@@ -33,7 +31,7 @@ uint32_t common_pack_req_create(char* _buffer, uint16_t _size, uint16_t _remoteI
 uint32_t common_pack_req_drop(char* _buffer, uint16_t _size, uint16_t _remoteId, const char* _tableName)
 {
     uint32_t pos = 0;
-    cx_binw_uint16(_buffer, _size, &pos, _remoteId);
+    common_pack_remote_id(_buffer, _size, &pos, _remoteId);
     cx_binw_str(_buffer, _size, &pos, _tableName);
     return pos;
 }
@@ -41,7 +39,7 @@ uint32_t common_pack_req_drop(char* _buffer, uint16_t _size, uint16_t _remoteId,
 uint32_t common_pack_req_describe(char* _buffer, uint16_t _size, uint16_t _remoteId, const char* _tableName)
 {
     uint32_t pos = 0;
-    cx_binw_uint16(_buffer, _size, &pos, _remoteId);
+    common_pack_remote_id(_buffer, _size, &pos, _remoteId);
     cx_binw_str(_buffer, _size, &pos, (NULL != _tableName) ? _tableName : "");
     return pos;
 }
@@ -49,7 +47,7 @@ uint32_t common_pack_req_describe(char* _buffer, uint16_t _size, uint16_t _remot
 uint32_t common_pack_req_select(char* _buffer, uint16_t _size, uint16_t _remoteId, const char* _tableName, uint16_t _key)
 {
     uint32_t pos = 0;
-    cx_binw_uint16(_buffer, _size, &pos, _remoteId);
+    common_pack_remote_id(_buffer, _size, &pos, _remoteId);
     cx_binw_str(_buffer, _size, &pos, _tableName);
     cx_binw_uint16(_buffer, _size, &pos, _key);
     return pos;
@@ -58,7 +56,7 @@ uint32_t common_pack_req_select(char* _buffer, uint16_t _size, uint16_t _remoteI
 uint32_t common_pack_req_insert(char* _buffer, uint16_t _size, uint16_t _remoteId, const char* _tableName, uint16_t _key, const char* _value, uint32_t _timestamp)
 {
     uint32_t pos = 0;
-    cx_binw_uint16(_buffer, _size, &pos, _remoteId);
+    common_pack_remote_id(_buffer, _size, &pos, _remoteId);
     cx_binw_str(_buffer, _size, &pos, _tableName);
     cx_binw_uint16(_buffer, _size, &pos, _key);
     cx_binw_str(_buffer, _size, &pos, _value);
@@ -117,6 +115,22 @@ uint32_t common_pack_table_record(char* _buffer, uint16_t _size, const table_rec
     return pos;
 }
 
+void common_pack_remote_id(char* _buffer, uint16_t _bufferSize, uint32_t* _bufferPos, uint16_t _remoteId)
+{
+    cx_binw_uint16(_buffer, _bufferSize, _bufferPos, _remoteId);
+}
+
+void common_unpack_remote_id(const char* _buffer, uint16_t _bufferSize, uint32_t* _bufferPos, uint16_t* _outRemoteId)
+{
+    if (NULL != _outRemoteId)
+    {
+        // only unpack the remoteId if requested (pointer is not NULL)
+        // in some cases such as in RES_BEGIN/RES_END macros, remoteId is already 
+        // consumed from the stream to assign the response result to the requester (task).
+        cx_binr_uint16(_buffer, _bufferSize, _bufferPos, _outRemoteId);
+    }
+}
+
 /****************************************************************************************
  ***  COMMON MESSAGE UNPACKERS
  ***************************************************************************************/
@@ -124,7 +138,7 @@ uint32_t common_pack_table_record(char* _buffer, uint16_t _size, const table_rec
 data_create_t* common_unpack_req_create(const char* _buffer, uint16_t _bufferSize, uint32_t* _bufferPos, uint16_t* _outRemoteId)
 {
     data_create_t* data = CX_MEM_STRUCT_ALLOC(data);
-    cx_binr_uint16(_buffer, _bufferSize, _bufferPos, _outRemoteId);
+    common_unpack_remote_id(_buffer, _bufferSize, _bufferPos, _outRemoteId);
     cx_binr_str(_buffer, _bufferSize, _bufferPos, data->tableName, sizeof(data->tableName));
     cx_binr_uint8(_buffer, _bufferSize, _bufferPos, &data->consistency);
     cx_binr_uint16(_buffer, _bufferSize, _bufferPos, &data->numPartitions);
@@ -135,7 +149,7 @@ data_create_t* common_unpack_req_create(const char* _buffer, uint16_t _bufferSiz
 data_drop_t* common_unpack_req_drop(const char* _buffer, uint16_t _bufferSize, uint32_t* _bufferPos, uint16_t* _outRemoteId)
 {
     data_drop_t* data = CX_MEM_STRUCT_ALLOC(data);
-    cx_binr_uint16(_buffer, _bufferSize, _bufferPos, _outRemoteId);
+    common_unpack_remote_id(_buffer, _bufferSize, _bufferPos, _outRemoteId);
     cx_binr_str(_buffer, _bufferSize, _bufferPos, data->tableName, sizeof(data->tableName));
     return data;
 }
@@ -143,7 +157,7 @@ data_drop_t* common_unpack_req_drop(const char* _buffer, uint16_t _bufferSize, u
 data_describe_t* common_unpack_req_describe(const char* _buffer, uint16_t _bufferSize, uint32_t* _bufferPos, uint16_t* _outRemoteId)
 {
     data_describe_t* data = CX_MEM_STRUCT_ALLOC(data);
-    cx_binr_uint16(_buffer, _bufferSize, _bufferPos, _outRemoteId);
+    common_unpack_remote_id(_buffer, _bufferSize, _bufferPos, _outRemoteId);
 
     char tableName[TABLE_NAME_LEN_MAX + 1];
     cx_binr_str(_buffer, _bufferSize, _bufferPos, tableName, sizeof(tableName));
@@ -165,7 +179,7 @@ data_describe_t* common_unpack_req_describe(const char* _buffer, uint16_t _buffe
 data_select_t* common_unpack_req_select(const char* _buffer, uint16_t _bufferSize, uint32_t* _bufferPos, uint16_t* _outRemoteId)
 {
     data_select_t* data = CX_MEM_STRUCT_ALLOC(data);
-    cx_binr_uint16(_buffer, _bufferSize, _bufferPos, _outRemoteId);
+    common_unpack_remote_id(_buffer, _bufferSize, _bufferPos, _outRemoteId);
     cx_binr_str(_buffer, _bufferSize, _bufferPos, data->tableName, sizeof(data->tableName));
     cx_binr_uint16(_buffer, _bufferSize, _bufferPos, &data->record.key);
     return data;
@@ -174,7 +188,7 @@ data_select_t* common_unpack_req_select(const char* _buffer, uint16_t _bufferSiz
 data_insert_t* common_unpack_req_insert(const char* _buffer, uint16_t _bufferSize, uint32_t* _bufferPos, uint16_t* _outRemoteId)
 {
     data_insert_t* data = CX_MEM_STRUCT_ALLOC(data);
-    cx_binr_uint16(_buffer, _bufferSize, _bufferPos, _outRemoteId);
+    common_unpack_remote_id(_buffer, _bufferSize, _bufferPos, _outRemoteId);
     cx_binr_str(_buffer, _bufferSize, _bufferPos, data->tableName, sizeof(data->tableName));
 
     common_unpack_table_record(_buffer, _bufferSize, _bufferPos, &data->record);
@@ -196,7 +210,7 @@ void common_unpack_res_describe(const char* _buffer, uint16_t _bufferSize, uint3
 {
     uint16_t tablesCount = 0;
 
-    _common_unpack_remote_id(_buffer, _bufferSize, _bufferPos, _outRemoteId);
+    common_unpack_remote_id(_buffer, _bufferSize, _bufferPos, _outRemoteId);
 
     // first packet (from the list of chunks)
     if (_outData->tablesRemaining == 0)
@@ -278,7 +292,7 @@ void common_unpack_table_record(const char* _buffer, uint16_t _bufferSize, uint3
 
 static void _common_pack_res_generic(char* _buffer, uint16_t _bufferSize, uint32_t* _bufferPos, uint16_t _remoteId, const cx_err_t* _err)
 {
-    cx_binw_uint16(_buffer, _bufferSize, _bufferPos, _remoteId);
+    common_pack_remote_id(_buffer, _bufferSize, _bufferPos, _remoteId);
     cx_binw_uint32(_buffer, _bufferSize, _bufferPos, _err->code);
 
     if (ERR_NONE != _err->code)
@@ -289,22 +303,11 @@ static void _common_pack_res_generic(char* _buffer, uint16_t _bufferSize, uint32
 
 static void _common_unpack_res_generic(const char* _buffer, uint16_t _bufferSize, uint32_t* _bufferPos, uint16_t* _outRemoteId, cx_err_t* _err)
 {
-    _common_unpack_remote_id(_buffer, _bufferSize, _bufferPos, _outRemoteId);
+    common_unpack_remote_id(_buffer, _bufferSize, _bufferPos, _outRemoteId);
     cx_binr_uint32(_buffer, _bufferSize, _bufferPos, &_err->code);
 
     if (ERR_NONE != _err->code)
     {
         cx_binr_str(_buffer, _bufferSize, _bufferPos, _err->desc, sizeof(_err->desc));
-    }
-}
-
-static void _common_unpack_remote_id(const char* _buffer, uint16_t _bufferSize, uint32_t* _bufferPos, uint16_t* _outRemoteId)
-{
-    if (NULL != _outRemoteId)
-    {
-        // only unpack the remoteId if requested (pointer is not NULL)
-        // in some cases such as in RES_BEGIN/RES_END macros, remoteId is already 
-        // consumed from the stream to assign the response result to the requester (task).
-        cx_binr_uint16(_buffer, _bufferSize, _bufferPos, _outRemoteId);
     }
 }

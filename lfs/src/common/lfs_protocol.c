@@ -45,7 +45,7 @@ void lfs_handle_req_create(cx_net_common_t* _common, void* _userData, const char
 {
     REQ_BEGIN(TASK_WT_CREATE);
     {
-        task->data = common_unpack_req_create(_buffer, _bufferSize, &bufferPos, &task->remoteId);
+        task->data = common_unpack_req_create(_buffer, _bufferSize, &bufferPos, NULL);
     }
     REQ_END;
 }
@@ -54,7 +54,7 @@ void lfs_handle_req_drop(cx_net_common_t* _common, void* _userData, const char* 
 {
     REQ_BEGIN(TASK_WT_DROP);
     {
-        task->data = common_unpack_req_drop(_buffer, _bufferSize, &bufferPos, &task->remoteId);
+        task->data = common_unpack_req_drop(_buffer, _bufferSize, &bufferPos, NULL);
     }
     REQ_END;
 }
@@ -63,7 +63,7 @@ void lfs_handle_req_describe(cx_net_common_t* _common, void* _userData, const ch
 {
     REQ_BEGIN(TASK_WT_DESCRIBE);
     {
-        task->data = common_unpack_req_describe(_buffer, _bufferSize, &bufferPos, &task->remoteId);
+        task->data = common_unpack_req_describe(_buffer, _bufferSize, &bufferPos, NULL);
     }
     REQ_END;
 }
@@ -72,7 +72,7 @@ void lfs_handle_req_select(cx_net_common_t* _common, void* _userData, const char
 {
     REQ_BEGIN(TASK_WT_SELECT);
     {
-        task->data = common_unpack_req_select(_buffer, _bufferSize, &bufferPos, &task->remoteId);
+        task->data = common_unpack_req_select(_buffer, _bufferSize, &bufferPos, NULL);
     }
     REQ_END;
 }
@@ -81,7 +81,7 @@ void lfs_handle_req_insert(cx_net_common_t* _common, void* _userData, const char
 {
     REQ_BEGIN(TASK_WT_INSERT);
     {
-        task->data = common_unpack_req_insert(_buffer, _bufferSize, &bufferPos, &task->remoteId);
+        task->data = common_unpack_req_insert(_buffer, _bufferSize, &bufferPos, NULL);
     }
     REQ_END;
 }
