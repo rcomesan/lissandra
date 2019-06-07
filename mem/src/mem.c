@@ -125,12 +125,13 @@ int main(int _argc, char** _argv)
     }
 
     CX_INFO("node is shutting down. reason: %s.", g_ctx.shutdownReason);
-    cx_cli_destroy();
-    taskman_destroy();
-    net_destroy();
-    mem_destroy();
-    cfg_destroy();
-    cx_timer_destroy();
+    cx_cli_destroy();       // destroys command line interface.
+    cx_timer_destroy();     // destroys timers.
+    taskman_stop();         // denies new tasks creation & pauses the pool so that no enqueued tasks start executing.
+    net_destroy();          // destroys all the communication contexts waking up & aborting all the tasks waiting on remote responses.
+    taskman_destroy();      // safely destroys the pool and the blocked queues.
+    mem_destroy();          // destroys memory manager.
+    cfg_destroy();          // destroys config.
 
     if (0 == err.code)
     {

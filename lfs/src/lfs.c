@@ -133,8 +133,9 @@ int main(int _argc, char** _argv)
 
     CX_INFO("node is shutting down. reason: %s.", g_ctx.shutdownReason);
     cx_cli_destroy();
-    taskman_destroy();
+    taskman_stop();
     net_destroy();
+    taskman_destroy();
     lfs_destroy();
     cfg_destroy();
     cx_timer_destroy();
