@@ -329,19 +329,23 @@ uint16_t mempool_get(mempool_hints_t* _hints, cx_err_t* _err)
             criteria_t* criteria = &m_mempoolCtx->criteria[cons];
 
             pthread_mutex_lock(&criteria->mtx);
-            if (CONSISTENCY_STRONG == cons)
+
+            if (cx_list_size(criteria->assignedNodes) > 0)
             {
-                listNode = cx_list_peek_front(criteria->assignedNodes);
-            }
-            else if (CONSISTENCY_STRONG_HASHED == cons)
-            {
-                uint32_t index = _hints->key % cx_list_size(criteria->assignedNodes);
-                listNode = cx_list_get(criteria->assignedNodes, index);
-            }
-            else
-            {
-                listNode = cx_list_pop_front(criteria->assignedNodes);
-                cx_list_push_back(criteria->assignedNodes, listNode);
+                if (CONSISTENCY_STRONG == cons)
+                {
+                    listNode = cx_list_peek_front(criteria->assignedNodes);
+                }
+                else if (CONSISTENCY_STRONG_HASHED == cons)
+                {
+                    uint32_t index = _hints->key % cx_list_size(criteria->assignedNodes);
+                    listNode = cx_list_get(criteria->assignedNodes, index);
+                }
+                else
+                {
+                    listNode = cx_list_pop_front(criteria->assignedNodes);
+                    cx_list_push_back(criteria->assignedNodes, listNode);
+                }
             }
 
             if (NULL != listNode)
