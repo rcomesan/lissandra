@@ -391,15 +391,14 @@ static bool handle_timer_tick(uint64_t _expirations, uint32_t _type, void* _user
         // for now, we'll just keep adding our known MEM node over and over
         mempool_add(g_ctx.cfg.memNumber, g_ctx.cfg.memIp, g_ctx.cfg.memPort);
 
-        // send describe request to any node in the pool
-        uint16_t memNumber = mempool_get_any(&err);
-        if (INVALID_MEM_NUMBER != memNumber)
+        task_t* task = taskman_create(TASK_ORIGIN_INTERNAL_PRIORITY, TASK_WT_DESCRIBE, NULL, NULL);
+        if (NULL != task)
         {
-            payload_t payload;
-            uint32_t payloadSize = mem_pack_req_describe(payload, sizeof(payload), 0, NULL);
-            mempool_node_req(memNumber, MEMP_REQ_DESCRIBE, payload, payloadSize);
+            data_describe_t* data = CX_MEM_STRUCT_ALLOC(data);
+            task->data = data;
+            task->state = TASK_STATE_NEW;
         }
-        CX_WARN(INVALID_MEM_NUMBER != memNumber, "metadata refresh timer failed. %s", err.desc);
+        CX_WARN(NULL != task, "metadata refresh timer failed (taskman_create returned null)");
         break;
     }
 

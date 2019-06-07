@@ -161,6 +161,7 @@ void taskman_destroy()
     free(m_taskmanCtx);
 }
 
+//TODO refactor this. taskman shouldn't know about cx_net_client_t. passing a client handle is just fine.
 task_t* taskman_create(TASK_ORIGIN _origin, TASK_TYPE _type, void* _data, cx_net_client_t* _client)
 {
     CX_CHECK_NOT_NULL(m_taskmanCtx);
@@ -226,7 +227,14 @@ void taskman_update()
 
                 if (TASK_WT & task->type)
                 {
-                    cx_pool_submit(m_taskmanCtx->pool, task);
+                    if (TASK_ORIGIN_INTERNAL_PRIORITY == task->origin)
+                    {
+                        cx_pool_submit_first(m_taskmanCtx->pool, task);
+                    }
+                    else
+                    {
+                        cx_pool_submit(m_taskmanCtx->pool, task);
+                    }
                 }
                 else
                 {

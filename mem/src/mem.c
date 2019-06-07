@@ -596,7 +596,7 @@ static bool handle_timer_tick(uint64_t _expirations, uint32_t _type, void* _user
     case MEM_TIMER_JOURNAL:
     {
         // enqueue a journal request. 
-        task_t* task = taskman_create(TASK_ORIGIN_INTERNAL, TASK_MT_JOURNAL, NULL, NULL);
+        task_t* task = taskman_create(TASK_ORIGIN_INTERNAL_PRIORITY, TASK_MT_JOURNAL, NULL, NULL);
         if (NULL != task)
         {
             task->state = TASK_STATE_NEW;

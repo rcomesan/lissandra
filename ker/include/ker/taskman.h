@@ -15,6 +15,7 @@ typedef enum TASK_ORIGIN
     TASK_ORIGIN_CLI,                // the origin of this task is the command line interface.
     TASK_ORIGIN_API,                // the origin of this task is a client connected to our server.
     TASK_ORIGIN_INTERNAL,           // the origin of this task is either a timer, our main thread or a worker thread.
+    TASK_ORIGIN_INTERNAL_PRIORITY,  // same as TASK_ORIGIN_INTERNAL but with higher priority. enqueues first than the others.
 } TASK_ORIGIN;
 
 typedef enum TASK_STATE
