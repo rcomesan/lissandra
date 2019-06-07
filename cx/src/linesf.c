@@ -11,9 +11,11 @@
 #include <stdio.h>
 #include <commons/string.h>
 
-cx_linesf_t* cx_linesf_open(const char* _filePath, CX_LINESF_OPEN_MODE _mode)
+cx_linesf_t* cx_linesf_open(const char* _filePath, CX_LINESF_OPEN_MODE _mode, cx_err_t* _err)
 {
     CX_CHECK(!cx_str_is_empty(_filePath), "_filePath can't be empty");
+
+    cx_linesf_t* file = NULL;
     
     char* mode = "";
     switch (_mode)
@@ -22,30 +24,24 @@ cx_linesf_t* cx_linesf_open(const char* _filePath, CX_LINESF_OPEN_MODE _mode)
     case CX_LINESF_OPEN_WRITE:   mode = "w"; break;
     case CX_LINESF_OPEN_APPEND:  mode = "a"; break;
     default:
-        CX_CHECK(CX_ALW, "Undefined mode %d when opening file: %s", _mode, _filePath);
+        CX_ERR_SET(_err, 1, "Undefined mode %d when opening file: %s.", _mode, _filePath);
         return NULL;
-    }
-
-    cx_linesf_t* file = NULL;
-    FILE* fileHandle = fopen(_filePath, mode);
-
+    }    
+    cx_path_t path;
+    cx_file_path(&path, "%s", _filePath);
+    cx_file_touch(&path, NULL);
+    
+    FILE* fileHandle = fopen(path, mode);
     if (NULL == fileHandle)
     {
-        CX_INFO("File %s does not exist, or is not accessible. %s.", _filePath, strerror(errno));
+        CX_ERR_SET(_err, 1, "File '%s' does not exist, or is not accessible.", path);
+        CX_WARN(CX_ALW, "File '%s' does not exist, or is not accessible. %s.", path, strerror(errno));
     }
     else
     {
         file = CX_MEM_STRUCT_ALLOC(file);
 
-        uint32_t filePathLen = strlen(_filePath);
-        if (filePathLen > sizeof(file->path) - 1)
-        {
-            CX_CHECK(CX_ALW, "The given file path is too long");
-            return NULL;
-        }
-        memcpy(file->path, _filePath, filePathLen);
-        file->path[filePathLen] = '\0';
-
+        cx_str_copy(file->path, sizeof(file->path), path);
         file->handle = fileHandle;
         file->mode = _mode;
         file->lastLinePos = 0;
@@ -188,7 +184,7 @@ void cx_linesf_lines_map(cx_linesf_t** _file, cx_linesf_map_cb _cb, void* _userD
 
     char* inputFilePath = strdup((*_file)->path);
     char* outputFilePath = cx_str_cat_d((*_file)->path, ".new");
-    cx_linesf_t* output = cx_linesf_open(outputFilePath, CX_LINESF_OPEN_WRITE);
+    cx_linesf_t* output = cx_linesf_open(outputFilePath, CX_LINESF_OPEN_WRITE, NULL);
 
     uint32_t bufferSize = 1024;
     char* buffer = malloc(bufferSize);
@@ -228,7 +224,7 @@ void cx_linesf_lines_map(cx_linesf_t** _file, cx_linesf_map_cb _cb, void* _userD
     cx_linesf_close(output);
     
     rename(outputFilePath, inputFilePath);
-    (*_file) = cx_linesf_open(inputFilePath, CX_LINESF_OPEN_READ);
+    (*_file) = cx_linesf_open(inputFilePath, CX_LINESF_OPEN_READ, NULL);
 
     free(inputFilePath);
     free(outputFilePath);
