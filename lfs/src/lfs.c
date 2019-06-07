@@ -541,7 +541,7 @@ static void table_free(table_t* _table)
 
 static void table_create_task_dump(const char* _tableName, table_t* _table, void* _userData)
 {
-    task_t* task = taskman_create(TASK_ORIGIN_INTERNAL, TASK_WT_DUMP, NULL, NULL);
+    task_t* task = taskman_create(TASK_ORIGIN_INTERNAL_PRIORITY, TASK_WT_DUMP, NULL, NULL);
     if (NULL != task)
     {
         data_dump_t* data = CX_MEM_STRUCT_ALLOC(data);
@@ -625,7 +625,7 @@ static bool task_run_mt(task_t* _task)
                     // and also there's just only 1 pending operation on it (that's us) we can safely start compacting it now.
                     table->compacting = true;
 
-                    task = taskman_create(TASK_ORIGIN_INTERNAL, TASK_WT_COMPACT, NULL, NULL);
+                    task = taskman_create(TASK_ORIGIN_INTERNAL_PRIORITY, TASK_WT_COMPACT, NULL, NULL);
                     if (NULL != task)
                     {
                         data_compact_t* data = CX_MEM_STRUCT_ALLOC(data);
