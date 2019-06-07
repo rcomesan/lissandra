@@ -114,6 +114,11 @@ void ker_handle_res_describe(const cx_net_common_t* _common, void* _userData, co
         data_describe_t* data = task->data;
         common_unpack_res_describe(_buffer, _bufferSize, &bufferPos, NULL, data, &task->err);
         complete = (0 == data->tablesRemaining);
+
+        if (complete)
+        {
+            mempool_feed_tables(data->tables, data->tablesCount);
+        }
     }
     RES_END;
 }

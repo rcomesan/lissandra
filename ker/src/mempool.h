@@ -75,7 +75,7 @@ void        mempool_destroy();
 
 void        mempool_update();
 
-void        mempool_feed_tables(data_describe_t* _data);
+void        mempool_feed_tables(table_meta_t* _tables, uint32_t _tablesCount);
 
 void        mempool_add(uint16_t _memNumber, ipv4_t _ip, uint16_t _port);
 

@@ -9,7 +9,11 @@
  ***  PRIVATE DECLARATIONS
  ***************************************************************************************/
 
+static void         _common_pack_err(char* _buffer, uint16_t _bufferSize, uint32_t* _bufferPos, const cx_err_t* _err);
+
 static void         _common_pack_res_generic(char* _buffer, uint16_t _bufferSize, uint32_t* _bufferPos, uint16_t _remoteId, const cx_err_t* _err);
+
+static void         _common_unpack_err(const char* _buffer, uint16_t _bufferSize, uint32_t* _bufferPos, cx_err_t* _err);
 
 static void         _common_unpack_res_generic(const char* _buffer, uint16_t _bufferSize, uint32_t* _bufferPos, uint16_t* _outRemoteId, cx_err_t* _err);
 
@@ -76,6 +80,49 @@ uint32_t common_pack_res_drop(char* _buffer, uint16_t _size, uint16_t _remoteId,
     uint32_t pos = 0;
     _common_pack_res_generic(_buffer, _size, &pos, _remoteId, _err);
     return pos;
+}
+
+bool common_pack_res_describe(char* _buffer, uint16_t _bufferSize, uint32_t* _bufferPos, uint16_t _remoteId, table_meta_t* _tables, uint16_t _tablesCount, uint16_t* _tablesPacked, const cx_err_t* _err)
+{
+    // reset the buffer position. each call to this method assumes a new packet will be send
+    (*_bufferPos) = 0;
+
+    common_pack_remote_id(_buffer, _bufferSize, _bufferPos, _remoteId);
+
+    if ((*_tablesPacked) == 0) // first packet, send the total amount
+        cx_binw_uint16(_buffer, _bufferSize, _bufferPos, _tablesCount);
+
+    if (1 == _tablesCount)
+    {
+        _common_pack_err(_buffer, _bufferSize, _bufferPos, _err);
+        if (ERR_NONE != _err->code)
+        {
+            return true; // finished packing the only 1 element (failed describe).
+        }
+    }
+
+    // start sending them in chunks
+    payload_t tmp;
+    uint32_t  tableSize = 0;
+
+    for (uint16_t i = (*_tablesPacked); i < _tablesCount; i++)
+    {
+        // pack this table's metadata into tmp
+        tableSize = common_pack_table_meta(tmp, sizeof(tmp), &_tables[i]);
+
+        if (tableSize > _bufferSize - (*_bufferPos))
+        {
+            // not enough space to append this one            
+            return false; // the packing is not yet complete
+        }
+
+        // append it
+        memcpy(&_buffer[*_bufferPos], tmp, tableSize);
+        (*_bufferPos) = (*_bufferPos) + tableSize;
+        (*_tablesPacked) = (*_tablesPacked) + 1;
+    }
+
+    return true;
 }
 
 uint32_t common_pack_res_select(char* _buffer, uint16_t _size, uint16_t _remoteId, const cx_err_t* _err, const table_record_t* _record)
@@ -290,9 +337,8 @@ void common_unpack_table_record(const char* _buffer, uint16_t _bufferSize, uint3
  ***  PRIVATE DECLARATIONS
  ***************************************************************************************/
 
-static void _common_pack_res_generic(char* _buffer, uint16_t _bufferSize, uint32_t* _bufferPos, uint16_t _remoteId, const cx_err_t* _err)
+static void _common_pack_err(char* _buffer, uint16_t _bufferSize, uint32_t* _bufferPos, const cx_err_t* _err)
 {
-    common_pack_remote_id(_buffer, _bufferSize, _bufferPos, _remoteId);
     cx_binw_uint32(_buffer, _bufferSize, _bufferPos, _err->code);
 
     if (ERR_NONE != _err->code)
@@ -301,13 +347,24 @@ static void _common_pack_res_generic(char* _buffer, uint16_t _bufferSize, uint32
     }
 }
 
-static void _common_unpack_res_generic(const char* _buffer, uint16_t _bufferSize, uint32_t* _bufferPos, uint16_t* _outRemoteId, cx_err_t* _err)
+static void _common_pack_res_generic(char* _buffer, uint16_t _bufferSize, uint32_t* _bufferPos, uint16_t _remoteId, const cx_err_t* _err)
 {
-    common_unpack_remote_id(_buffer, _bufferSize, _bufferPos, _outRemoteId);
+    common_pack_remote_id(_buffer, _bufferSize, _bufferPos, _remoteId);
+    _common_pack_err(_buffer, _bufferSize, _bufferPos, _err);
+}
+
+static void _common_unpack_err(const char* _buffer, uint16_t _bufferSize, uint32_t* _bufferPos, cx_err_t* _err)
+{
     cx_binr_uint32(_buffer, _bufferSize, _bufferPos, &_err->code);
 
     if (ERR_NONE != _err->code)
     {
         cx_binr_str(_buffer, _bufferSize, _bufferPos, _err->desc, sizeof(_err->desc));
     }
+}
+
+static void _common_unpack_res_generic(const char* _buffer, uint16_t _bufferSize, uint32_t* _bufferPos, uint16_t* _outRemoteId, cx_err_t* _err)
+{
+    common_unpack_remote_id(_buffer, _bufferSize, _bufferPos, _outRemoteId);
+    _common_unpack_err(_buffer, _bufferSize, _bufferPos, _err);
 }

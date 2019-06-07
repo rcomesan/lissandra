@@ -16,7 +16,6 @@
 #include <cx/file.h>
 #include <cx/cdict.h>
 #include <cx/sort.h>
-#include <cx/binw.h> //TODO sacar esto una vez que mueva api_response_describe a common
 #include <cx/math.h>
 
 #include <ker/common_protocol.h>
@@ -969,42 +968,13 @@ static void api_response_drop(const task_t* _task)
 static void api_response_describe(const task_t* _task)
 {
     data_describe_t* data = _task->data;
-
-    uint32_t tableSize = 0;
     uint32_t pos = 0;
-    cx_binw_uint16(g_ctx.buff1, sizeof(g_ctx.buff1), &pos, _task->remoteId);
-    cx_binw_uint16(g_ctx.buff1, sizeof(g_ctx.buff1), &pos, data->tablesCount);
+    uint16_t tablesPacked = 0;
 
-    if (1 == data->tablesCount)
+    while (!common_pack_res_describe(g_ctx.buff1, sizeof(g_ctx.buff1), &pos,
+        _task->remoteId, data->tables, data->tablesCount, &tablesPacked, &_task->err))
     {
-        cx_binw_uint32(g_ctx.buff1, sizeof(g_ctx.buff1), &pos, _task->err.code);
-        if (ERR_NONE != _task->err.code)
-        {
-            cx_binw_str(g_ctx.buff1, sizeof(g_ctx.buff1), &pos, _task->err.desc);
-            cx_net_send(g_ctx.sv, MEMP_RES_DESCRIBE, g_ctx.buff1, pos, _task->clientHandle);
-            return;
-        }
-    }
-
-    // start sending them in chunks
-    for (uint16_t i = 0; i < data->tablesCount; i++)
-    {
-        // pack this table's metadata into temp buffer #2
-        tableSize = common_pack_table_meta(g_ctx.buff2, sizeof(g_ctx.buff2), &data->tables[i]);
-        
-        if (tableSize > sizeof(g_ctx.buff1) - pos)
-        {
-            // not enough space to append this one, flush our packet
-            cx_net_send(g_ctx.sv, MEMP_RES_DESCRIBE, g_ctx.buff1, pos, _task->clientHandle);
-
-            // start a new packet
-            pos = 0;
-            cx_binw_uint16(g_ctx.buff1, sizeof(g_ctx.buff1), &pos, _task->remoteId);
-        }
-        
-        // append it
-        memcpy(&g_ctx.buff1[pos], g_ctx.buff2, tableSize);
-        pos += tableSize;
+        cx_net_send(g_ctx.sv, MEMP_RES_DESCRIBE, g_ctx.buff1, pos, _task->clientHandle);
     }
     
     if (pos > sizeof(uint16_t))

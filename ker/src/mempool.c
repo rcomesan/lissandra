@@ -150,7 +150,7 @@ void mempool_update()
     }
 }
 
-void mempool_feed_tables(data_describe_t* _data)
+void mempool_feed_tables(table_meta_t* _tables, uint32_t _tablesCount)
 {
     table_meta_t* table = NULL;
     table_meta_t* curTable = NULL;
@@ -158,10 +158,10 @@ void mempool_feed_tables(data_describe_t* _data)
     pthread_mutex_lock(&m_mempoolCtx->tablesMap->mtx);
     cx_cdict_clear(m_mempoolCtx->tablesMap, (cx_destroyer_cb)free);
 
-    for (uint32_t i = 0; i < _data->tablesCount; i++)
+    for (uint32_t i = 0; i < _tablesCount; i++)
     {
         table = CX_MEM_STRUCT_ALLOC(table);
-        memcpy(table, &_data->tables[i], sizeof(*table));
+        memcpy(table, &_tables[i], sizeof(*table));
 
         cx_cdict_set(m_mempoolCtx->tablesMap, table->name, table);
     }

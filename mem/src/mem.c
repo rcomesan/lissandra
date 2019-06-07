@@ -6,8 +6,10 @@
 #include <ker/cli_reporter.h>
 #include <ker/taskman.h>
 
+#include <ker/common_protocol.h>
 #include <mem/mem_protocol.h>
 #include <lfs/lfs_protocol.h>
+#include <ker/ker_protocol.h>
 
 #include <cx/cx.h>
 #include <cx/mem.h>
@@ -939,25 +941,51 @@ static void on_disconnection(cx_net_ctx_sv_t* _ctx, cx_net_client_t* _client)
 
 static void api_response_create(const task_t* _task)
 {
-    //TODO. reply back to the KER node that requested this query.
+    uint32_t payloadSize = ker_pack_res_create(g_ctx.buff1, sizeof(g_ctx.buff1),
+        _task->remoteId, &_task->err);
+
+    cx_net_send(g_ctx.sv, KERP_RES_CREATE, g_ctx.buff1, payloadSize, _task->clientHandle);
 }
 
 static void api_response_drop(const task_t* _task)
 {
-    //TODO. reply back to the KER node that requested this query.
+    uint32_t payloadSize = ker_pack_res_drop(g_ctx.buff1, sizeof(g_ctx.buff1),
+        _task->remoteId, &_task->err);
+
+    cx_net_send(g_ctx.sv, KERP_RES_DROP, g_ctx.buff1, payloadSize, _task->clientHandle);
 }
 
 static void api_response_describe(const task_t* _task)
 {
-    //TODO. reply back to the KER node that requested this query.
+    data_describe_t* data = _task->data;
+    uint32_t pos = 0;
+    uint16_t tablesPacked = 0;
+
+    while (!common_pack_res_describe(g_ctx.buff1, sizeof(g_ctx.buff1), &pos,
+        _task->remoteId, data->tables, data->tablesCount, &tablesPacked, &_task->err))
+    {
+        cx_net_send(g_ctx.sv, KERP_RES_DESCRIBE, g_ctx.buff1, pos, _task->clientHandle);
+    }
+
+    if (pos > sizeof(uint16_t))
+    {
+        cx_net_send(g_ctx.sv, KERP_RES_DESCRIBE, g_ctx.buff1, pos, _task->clientHandle);
+    }
 }
 
 static void api_response_select(const task_t* _task)
 {
-    //TODO. reply back to the KER node that requested this query.
+    data_select_t* data = _task->data;
+    uint32_t payloadSize = ker_pack_res_select(g_ctx.buff1, sizeof(g_ctx.buff1),
+        _task->remoteId, &_task->err, &data->record);
+
+    cx_net_send(g_ctx.sv, KERP_RES_SELECT, g_ctx.buff1, payloadSize, _task->clientHandle);
 }
 
 static void api_response_insert(const task_t* _task)
 {
-    //TODO. reply back to the KER node that requested this query.
+    uint32_t payloadSize = ker_pack_res_insert(g_ctx.buff1, sizeof(g_ctx.buff1),
+        _task->remoteId, &_task->err);
+
+    cx_net_send(g_ctx.sv, KERP_RES_INSERT, g_ctx.buff1, payloadSize, _task->clientHandle);
 }

@@ -53,6 +53,8 @@
  ***  COMMON MESSAGE PACKERS
  ***************************************************************************************/
 
+//TODO refactor pack_req methods to receive a pointer to a buffer position (uint32_t) and return void
+
 uint32_t            common_pack_req_create(char* _buffer, uint16_t _size, uint16_t _remoteId, const char* _tableName, uint8_t _consistency, uint16_t _numPartitions, uint32_t _compactionInterval);
 
 uint32_t            common_pack_req_drop(char* _buffer, uint16_t _size, uint16_t _remoteId, const char* _tableName);
@@ -66,6 +68,8 @@ uint32_t            common_pack_req_insert(char* _buffer, uint16_t _size, uint16
 uint32_t            common_pack_res_create(char* _buffer, uint16_t _size, uint16_t _remoteId, const cx_err_t* _err);
 
 uint32_t            common_pack_res_drop(char* _buffer, uint16_t _size, uint16_t _remoteId, const cx_err_t* _err);
+
+bool                common_pack_res_describe(char* _buffer, uint16_t _bufferSize, uint32_t* _bufferPos, uint16_t _remoteId, table_meta_t* _tables, uint16_t _tablesCount, uint16_t* _tablesPacked, const cx_err_t* _err);
 
 uint32_t            common_pack_res_select(char* _buffer, uint16_t _size, uint16_t _remoteId, const cx_err_t* _err, const table_record_t* _record);
 
