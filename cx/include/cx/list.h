@@ -57,4 +57,6 @@ cx_list_node_t*         cx_list_peek_back(cx_list_t* _list);
 
 void                    cx_list_foreach(cx_list_t* _list, cx_list_func_cb _func, void* _userData);
 
+cx_list_node_t*         cx_list_get(cx_list_t* _list, uint32_t _index);
+
 #endif // CX_LIST_H_

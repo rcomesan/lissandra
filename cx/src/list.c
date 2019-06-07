@@ -140,6 +140,21 @@ void cx_list_foreach(cx_list_t* _list, cx_list_func_cb _func, void* _userData)
     }
 }
 
+cx_list_node_t* cx_list_get(cx_list_t* _list, uint32_t _index)
+{
+    uint32_t count = 0;
+    cx_list_node_t* node = _list->first;
+
+    while (count < _index)
+    {
+        if (NULL == node) return NULL;
+        node = node->next;
+        count++;
+    }
+
+    return node;
+}
+
 /****************************************************************************************
 ***  PRIVATE FUNCTIONS
 ***************************************************************************************/

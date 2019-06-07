@@ -128,6 +128,18 @@ void t_list_should_push_pop_multiple_items()
     }    
 }
 
+void t_list_should_get_items_by_index()
+{
+    uint32_t size = cx_list_size(list);
+    cx_list_node_t* node = NULL;
+
+    for (uint32_t i = 0; i < size; i++)
+    {
+        node = cx_list_get(list, i);
+        CU_ASSERT((uint32_t)node->data == (i + 1));
+    }
+}
+
 void t_list_should_remove_in_between()
 {
     cx_list_node_t* first = cx_list_peek_front(list);
