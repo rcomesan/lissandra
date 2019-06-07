@@ -16,7 +16,7 @@
 typedef enum MEM_TIMER
 {
     MEM_TIMER_JOURNAL = 0,
-    MEM_TIMER_GOSSIPING = 1,
+    MEM_TIMER_GOSSIP = 1,
     MEM_TIMER_COUNT
 } MEM_TIMER;
 
@@ -83,6 +83,8 @@ typedef struct mem_ctx_t
     bool                lfsAvail;                   // true if the LFS node is available to process our requests.
     payload_t           buff1;                      // temporary pre-allocated buffer for building packets.
     payload_t           buff2;                      // temporary pre-allocated buffer for building packets.
+    uint16_t            timerJournal;               // cx timer handle for running the journaling operation.
+    uint16_t            timerGossip;                // cx timer handle for running the gossiping operation.
     char*               shutdownReason;             // reason that caused this MEM node to exit.
 } mem_ctx_t;
 

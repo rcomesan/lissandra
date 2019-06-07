@@ -378,12 +378,38 @@ static void cfg_destroy()
 
 static bool mem_init(cx_err_t* _err)
 {
+    g_ctx.timerJournal = cx_timer_add(g_ctx.cfg.intervalJournaling, MEM_TIMER_JOURNAL, NULL);
+    if (INVALID_HANDLE == g_ctx.timerJournal)
+    {
+        CX_ERR_SET(_err, ERR_INIT_TIMER, "journal timer creation failed.");
+        return false;
+    }
+
+    g_ctx.timerGossip = cx_timer_add(g_ctx.cfg.intervalGossiping, MEM_TIMER_GOSSIP, NULL);
+    if (INVALID_HANDLE == g_ctx.timerGossip)
+    {
+        CX_ERR_SET(_err, ERR_INIT_TIMER, "gossip timer creation failed.");
+        return false;
+    }
+
     return mm_init(g_ctx.cfg.memSize, g_ctx.cfg.valueSize, _err);
 }
 
 static void mem_destroy()
 {
     mm_destroy();
+
+    if (INVALID_HANDLE != g_ctx.timerJournal)
+    {
+        cx_timer_remove(g_ctx.timerJournal);
+        g_ctx.timerJournal = INVALID_HANDLE;
+    }
+
+    if (INVALID_HANDLE != g_ctx.timerGossip)
+    {
+        cx_timer_remove(g_ctx.timerGossip);
+        g_ctx.timerGossip = INVALID_HANDLE;
+    }
 }
 
 static bool net_init(cx_err_t* _err)
@@ -565,6 +591,26 @@ static bool handle_timer_tick(uint64_t _expirations, uint32_t _type, void* _user
 
     switch (_type)
     {
+    case MEM_TIMER_JOURNAL:
+    {
+        // enqueue a journal request. 
+        task_t* task = taskman_create(TASK_ORIGIN_INTERNAL, TASK_MT_JOURNAL, NULL, NULL);
+        if (NULL != task)
+        {
+            task->state = TASK_STATE_NEW;
+        }
+        else
+        {
+            CX_WARN(CX_ALW, "MEM_TIMER_JOURNAL tick ignored. we ran out of tasks handles!");
+        }
+        break;
+    }
+
+    case MEM_TIMER_GOSSIP:
+    {
+        //TODO
+        break;
+    }
 
     default:
         CX_WARN(CX_ALW, "undefined <tick> behaviour for timer of type #%d.", _type);
