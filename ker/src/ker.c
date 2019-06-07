@@ -6,6 +6,7 @@
 #include <ker/cli_reporter.h>
 #include <ker/taskman.h>
 #include <ker/ker_protocol.h>
+#include <mem/mem_protocol.h>
 
 #include <cx/cx.h>
 #include <cx/mem.h>
@@ -247,12 +248,25 @@ static void cfg_destroy()
 
 static bool ker_init(cx_err_t* _err)
 {
+    g_ctx.timerMetaRefresh = cx_timer_add(g_ctx.cfg.intervalMetaRefresh, KER_TIMER_METAREFRESH, NULL);
+    if (INVALID_HANDLE == g_ctx.timerMetaRefresh)
+    {
+        CX_ERR_SET(_err, ERR_INIT_TIMER, "metarefresh timer creation failed.");
+        return false;
+    }
+
     return mempool_init(_err);
 }
 
 static void ker_destroy()
 {
     mempool_destroy();
+
+    if (INVALID_HANDLE != g_ctx.timerMetaRefresh)
+    {
+        cx_timer_remove(g_ctx.timerMetaRefresh);
+        g_ctx.timerMetaRefresh = INVALID_HANDLE;
+    }
 }
 
 static void handle_cli_command(const cx_cli_cmd_t* _cmd)
@@ -354,6 +368,24 @@ static bool handle_timer_tick(uint64_t _expirations, uint32_t _type, void* _user
 
     switch (_type)
     {
+    case KER_TIMER_METAREFRESH:
+    {
+        cx_err_t err;
+
+        // for now, we'll just keep adding our known MEM node over and over
+        mempool_add(1, g_ctx.cfg.memIp, g_ctx.cfg.memPort);
+
+        // send describe request to any node in the pool
+        uint16_t memNumber = mempool_get_any(&err);
+        if (INVALID_MEM_NUMBER != memNumber)
+        {
+            payload_t payload;
+            uint32_t payloadSize = mem_pack_req_describe(payload, sizeof(payload), 0, NULL);
+            mempool_node_req(memNumber, MEMP_REQ_DESCRIBE, payload, payloadSize);
+        }
+        CX_WARN(INVALID_MEM_NUMBER != memNumber, "metadata refresh timer failed. %s", err.desc);
+        break;
+    }
 
     default:
         CX_WARN(CX_ALW, "undefined <tick> behaviour for timer of type #%d.", _type);
