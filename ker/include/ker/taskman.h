@@ -49,7 +49,8 @@ typedef enum TASK_TYPE
     TASK_WT_DUMP =      TASK_WT | UINT8_C(6),   // worker thread task to dump a table.
     TASK_WT_COMPACT =   TASK_WT | UINT8_C(7),   // worker thread task to compact a table.
     TASK_WT_JOURNAL =   TASK_WT | UINT8_C(8),   // worker thread task to run a memory journal.
-    TASK_WT_RUN =       TASK_WT | UINT8_C(9),   // worker thread task to run an LQL script.
+    TASK_WT_ADDMEM =    TASK_WT | UINT8_C(9),   // worker thread task to assign a MEM node number to consistency criteria.
+    TASK_WT_RUN =       TASK_WT | UINT8_C(10),  // worker thread task to run an LQL script.
 } TASK_TYPE;
 
 typedef struct task_t

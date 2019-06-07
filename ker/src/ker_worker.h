@@ -17,6 +17,8 @@ void        worker_handle_select(task_t* _req, bool _scripted);
 
 void        worker_handle_insert(task_t* _req, bool _scripted);
 
+void        worker_handle_addmem(task_t* _req, bool _scripted);
+
 void        worker_handle_run(task_t* _req);
 
 #endif // KER_WORKER_H_

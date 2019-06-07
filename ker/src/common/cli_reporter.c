@@ -113,6 +113,22 @@ void cli_report_drop(const task_t* _task)
     CLI_REPORT_END;
 }
 
+void cli_report_addmem(const task_t* _task)
+{
+    CLI_REPORT_BEGIN;
+    if (ERR_NONE == _task->err.code)
+    {
+        data_addmem_t* data = _task->data;
+        printf("MEM node #%d successfully assigned to %s consistency.\n", 
+            data->memNumber, CONSISTENCY_NAME[data->consistency]);
+    }
+    else
+    {
+        printf("ADD MEMORY failed. %s\n", _task->err.desc);
+    }
+    CLI_REPORT_END;
+}
+
 void cli_report_run(const task_t* _task)
 {
     printf("cli_report_run\n");

@@ -164,9 +164,10 @@ typedef struct data_run_t
     uint32_t        lineNumber;
 } data_run_t;
 
-typedef struct data_add_memory_t
+typedef struct data_addmem_t
 {
-    int32_t         bar;
-} data_add_memory_t;
+    uint16_t        memNumber;
+    uint8_t         consistency;
+} data_addmem_t;
 
 #endif // DEFINES_H_

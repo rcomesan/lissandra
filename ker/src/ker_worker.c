@@ -123,9 +123,17 @@ void worker_handle_insert(task_t* _req, bool _scripted)
     if (!_scripted) _worker_parse_result(_req);
 }
 
+void worker_handle_addmem(task_t* _req, bool _scripted)
+{
+    data_addmem_t* data = _req->data;
+
+    mempool_assign(data->memNumber, data->consistency, &_req->err);
+
+    if (!_scripted) _worker_parse_result(_req);
+}
+
 void worker_handle_run(task_t* _req)
 {
-
     _worker_parse_result(_req);
 }
 

@@ -76,15 +76,29 @@ void ker_handle_req_insert(const cx_net_common_t* _common, void* _userData, cons
     REQ_END;
 }
 
+void ker_handle_req_addmem(const cx_net_common_t* _common, void* _userData, const char* _buffer, uint16_t _bufferSize)
+{
+    REQ_BEGIN(TASK_WT_ADDMEM);
+    {
+        data_addmem_t* data = CX_MEM_STRUCT_ALLOC(data);
+        cx_binr_uint16(_buffer, _bufferSize, &bufferPos, &data->memNumber);
+        cx_binr_uint8(_buffer, _bufferSize, &bufferPos, &data->consistency);
+
+        task->data = data;
+    }
+    REQ_END;
+}
+
 void ker_handle_req_run(const cx_net_common_t* _common, void* _userData, const char* _buffer, uint16_t _bufferSize)
 {
     REQ_BEGIN(TASK_WT_INSERT);
     {
-        data_run_t* data = (data_run_t*)task->data;
-        
+        data_run_t* data = CX_MEM_STRUCT_ALLOC(data);
         cx_binr_str(_buffer, _bufferSize, &bufferPos, data->scriptFilePath, sizeof(data->scriptFilePath));
         data->script = NULL;
         data->lineNumber = 0;
+
+        task->data = data;
     }
     REQ_END;
 }
@@ -183,6 +197,15 @@ uint32_t ker_pack_req_run(char* _buffer, uint16_t _size, uint16_t _remoteId, con
     uint32_t pos = 0;
     common_pack_remote_id(_buffer, _size, &pos, _remoteId);
     cx_binw_str(_buffer, _size, &pos, _lqlFilePath);
+    return pos;
+}
+
+uint32_t ker_pack_req_addmem(char* _buffer, uint16_t _size, uint16_t _remoteId, uint16_t _memNumber, uint8_t _consistency)
+{
+    uint32_t pos = 0;
+    common_pack_remote_id(_buffer, _size, &pos, _remoteId);
+    cx_binw_uint16(_buffer, _size, &pos, _memNumber);
+    cx_binw_uint8(_buffer, _size, &pos, _consistency);
     return pos;
 }
 

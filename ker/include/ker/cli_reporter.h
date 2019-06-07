@@ -24,6 +24,8 @@ void cli_report_describe(const task_t* _task);
 
 void cli_report_drop(const task_t* _task);
 
+void cli_report_addmem(const task_t* _task);
+
 void cli_report_run(const task_t* _task);
 
 void cli_report_add_memory(const task_t* _task);

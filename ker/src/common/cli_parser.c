@@ -168,6 +168,7 @@ bool cli_parse_add_memory(const cx_cli_cmd_t* _cmd, cx_err_t* _err, uint16_t* _o
     {
         cx_str_to_uint16(_cmd->args[1], _outMemNumber);
         cx_str_to_uint8(_cmd->args[3], _outConsistency);
+        return true;
     }
 
     CX_ERR_SET(_err, 1, "Invalid Syntax. Usage: ADD MEMORY [MEM_NUMBER] TO [CONSISTENCY]");

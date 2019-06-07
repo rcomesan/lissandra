@@ -299,6 +299,7 @@ static void handle_cli_command(const cx_cli_cmd_t* _cmd)
     uint32_t    compactionInterval = 0;
     cx_path_t   lqlScriptPath;
     uint32_t    packetSize = 0;
+    uint16_t    memNumber = 0;
 
     if (strcmp("EXIT", _cmd->header) == 0)
     {
@@ -355,6 +356,14 @@ static void handle_cli_command(const cx_cli_cmd_t* _cmd)
         {
             packetSize = ker_pack_req_insert(g_ctx.buff1, sizeof(g_ctx.buff1), 0, tableName, key, value, timestamp);
             ker_handle_req_insert(NULL, NULL, g_ctx.buff1, packetSize);
+        }
+    }
+    else if (strcmp("ADD", _cmd->header) == 0)
+    {
+        if (cli_parse_add_memory(_cmd, &err, &memNumber, &consistency))
+        {
+            packetSize = ker_pack_req_addmem(g_ctx.buff1, sizeof(g_ctx.buff1), 0, memNumber, consistency);
+            ker_handle_req_addmem(NULL, NULL, g_ctx.buff1, packetSize);
         }
     }
     else if (strcmp("RUN", _cmd->header) == 0)
@@ -436,11 +445,13 @@ static bool task_run_wk(task_t* _task)
         worker_handle_insert(_task, false);
         break;
 
+    case TASK_WT_ADDMEM:
+        worker_handle_addmem(_task, false);
+        break;
+
     case TASK_WT_RUN:
-    {
         worker_handle_run(_task);
         break;
-    }
 
     default:
         CX_WARN(CX_ALW, "undefined <worker-thread> behaviour for task type #%d.", _task->type);
@@ -537,6 +548,13 @@ static bool task_completed(task_t* _task)
         break;
     }
 
+    case TASK_WT_ADDMEM:
+    {
+        if (TASK_ORIGIN_CLI == _task->origin)
+            cli_report_addmem(_task);
+        break;
+    }
+
     case TASK_WT_RUN:
     {
         if (TASK_ORIGIN_CLI == _task->origin)
@@ -564,13 +582,13 @@ static bool task_free(task_t* _task)
     {
     case TASK_WT_CREATE:
     {
-        data_create_t* data = (data_create_t*)_task->data;
+        //noop
         break;
     }
 
     case TASK_WT_DROP:
     {
-        data_drop_t* data = (data_drop_t*)_task->data;
+        //noop
         break;
     }
 
@@ -596,6 +614,12 @@ static bool task_free(task_t* _task)
         data_insert_t* data = (data_insert_t*)_task->data;
         free(data->record.value);
         data->record.value = NULL;
+        break;
+    }
+
+    case TASK_WT_ADDMEM:
+    {
+        //noop
         break;
     }
 
