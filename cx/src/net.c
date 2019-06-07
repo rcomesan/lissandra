@@ -118,6 +118,9 @@ cx_net_ctx_sv_t* cx_net_listen(cx_net_args_t* _args)
 
         ctx->c.errorNumber = errno;
         CX_WARN(CX_ALW, "[%s<--] listen failed: %s (%s:%d)", ctx->c.name, strerror(errno), ctx->c.ip, ctx->c.port);
+
+        cx_net_destroy(ctx);
+        ctx = NULL;
     }
 
     return ctx;
