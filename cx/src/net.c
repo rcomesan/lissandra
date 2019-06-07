@@ -41,7 +41,7 @@ cx_net_ctx_sv_t* cx_net_listen(cx_net_args_t* _args)
     memcpy(ctx->c.msgHandlers, _args->msgHandlers, sizeof(_args->msgHandlers));
     ctx->c.port = _args->port;
     ctx->c.state = CX_NET_STATE_SERVER | CX_NET_STATE_ERROR;
-    ctx->c.validationTimeout = cx_math_max(1, _args->validationTimeout);
+    ctx->c.validationTimeout = cx_math_max(5, _args->validationTimeout);
     ctx->clientsMax = _args->maxClients > 0 ? _args->maxClients : 1;
     ctx->onConnection = _args->onConnection;
     ctx->onDisconnection = _args->onDisconnection;
@@ -131,7 +131,7 @@ cx_net_ctx_cl_t* cx_net_connect(cx_net_args_t* _args)
     memcpy(ctx->c.msgHandlers, _args->msgHandlers, sizeof(_args->msgHandlers));
     ctx->c.port = _args->port;
     ctx->c.state = CX_NET_STATE_CLIENT | CX_NET_STATE_ERROR;
-    ctx->c.validationTimeout = cx_math_max(1, _args->validationTimeout);
+    ctx->c.validationTimeout = cx_math_max(5, _args->validationTimeout);
     ctx->onConnected = _args->onConnected;
     ctx->onDisconnected = _args->onDisconnected;
     ctx->userData = _args->userData;

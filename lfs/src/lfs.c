@@ -307,7 +307,7 @@ static bool lfs_init(cx_err_t* _err)
     g_ctx.timerDump = cx_timer_add(g_ctx.cfg.dumpInterval, LFS_TIMER_DUMP, NULL);
     if (INVALID_HANDLE == g_ctx.timerDump)
     {
-        CX_ERR_SET(_err, ERR_INIT_TIMER, "thread pool creation failed.");
+        CX_ERR_SET(_err, ERR_INIT_TIMER, "dump timer creation failed.");
         return false;
     }
 
