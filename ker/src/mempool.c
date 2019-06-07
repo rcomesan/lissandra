@@ -95,7 +95,8 @@ void mempool_disconnect()
         if (NULL != memNode->conn)
         {
             cx_net_disconnect(memNode->conn, INVALID_HANDLE, "mempool is shutting down");
-            CX_CHECK(NULL == memNode->conn, "onDisconnected callback is not freeing our MEM node #%d connection context!", i);
+            cx_net_destroy(memNode->conn);
+            memNode->conn = NULL;
         }
     }
 }
@@ -145,7 +146,17 @@ void mempool_update()
         
         if (NULL != memNode->conn)
         {
-            cx_net_poll_events(memNode->conn, 0);
+            if (!memNode->handshaking && (!(CX_NET_STATE_CONNECTED & memNode->conn->c.state) || !memNode->available))
+            {
+                pthread_rwlock_wrlock(&memNode->rwl);
+                cx_net_destroy((void*)memNode->conn);
+                memNode->conn = NULL;
+                pthread_rwlock_unlock(&memNode->rwl);
+            }
+            else
+            {
+                cx_net_poll_events(memNode->conn, 0);
+            }
         }
     }
 }
@@ -390,12 +401,6 @@ int32_t mempool_node_req(uint16_t _memNumber, uint8_t _header, const char* _payl
         if (NULL != memNode->conn)
         {
             result = cx_net_send(memNode->conn, _header, _payload, _payloadSize, INVALID_HANDLE);
-
-            if (CX_NET_SEND_DISCONNECTED)
-            {
-                cx_net_destroy((void*)memNode->conn);
-                memNode->conn = NULL;
-            }
         }
         pthread_rwlock_unlock(&memNode->rwl);
     }
@@ -462,14 +467,12 @@ static void _on_disconnected_from_mem(cx_net_ctx_cl_t* _ctx)
     {
         // handshake process failed.
         memNode->handshaking = false;
-
-        // destroy the client context.
-        cx_net_destroy((void*)memNode->conn);
-        memNode->conn = NULL;
     }
     else if (memNode->available)
     {       
         // the connection with this MEM node is now gone.
+        memNode->available = false;
+
         // unassign it from the criteria so that no worker threads pick it up
         criteria_t* criteria = NULL;
 
@@ -495,14 +498,10 @@ static void _on_disconnected_from_mem(cx_net_ctx_cl_t* _ctx)
         // let's abort and wake up all the tasks with pending requests on it.
         taskman_foreach((taskman_func_cb)_task_req_abort, (void*)((uint32_t)memNode->number));
 
-        pthread_rwlock_wrlock(&memNode->rwl);
-        cx_net_destroy((void*)memNode->conn);
-        memNode->conn = NULL;
-        pthread_rwlock_unlock(&memNode->rwl);
-
         CX_INFO("MEM node #%d (%s:%d) just disconnected from the pool.", memNode->number, memNode->ip, memNode->port);
     }
 }
+
 static bool _task_req_abort(task_t* _task, void* _userData)
 {
     uint32_t memNumber = (uint32_t)_userData; //TODO test me please
