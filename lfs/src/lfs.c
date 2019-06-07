@@ -361,7 +361,7 @@ static bool net_init(cx_err_t* _err)
 
 static void net_destroy()
 {
-    cx_net_close(g_ctx.sv);
+    cx_net_destroy(g_ctx.sv);
     g_ctx.sv = NULL;
 }
 

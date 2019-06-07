@@ -210,7 +210,7 @@ cx_net_ctx_cl_t* cx_net_connect(cx_net_args_t* _args)
     return ctx;
 }
 
-void cx_net_close(void* _ctx)
+void cx_net_destroy(void* _ctx)
 {
     if (NULL == _ctx) return;
 
@@ -228,26 +228,37 @@ void cx_net_close(void* _ctx)
         }
 
         //flush & disconnect all clients
-        uint16_t clientsCount = cx_handle_count(ctx.sv->clientsHalloc);
-        uint16_t handle = INVALID_HANDLE;
-        uint16_t j = 0;
-        for (uint16_t i = 0; i < clientsCount; i++)
+        if (NULL != ctx.sv->clientsHalloc)
         {
-            handle = cx_handle_at(ctx.sv->clientsHalloc, i);
-            ctx.sv->tmpHandles[j++] = handle;
-            cx_net_flush(ctx.sv, handle);
+            uint16_t clientsCount = cx_handle_count(ctx.sv->clientsHalloc);
+            uint16_t handle = INVALID_HANDLE;
+            uint16_t j = 0;
+            for (uint16_t i = 0; i < clientsCount; i++)
+            {
+                handle = cx_handle_at(ctx.sv->clientsHalloc, i);
+                ctx.sv->tmpHandles[j++] = handle;
+                cx_net_flush(ctx.sv, handle);
+            }
+
+            _cx_net_poll_events_server(ctx.sv, 0);
+
+            for (uint16_t i = 0; i < j; i++)
+            {
+                cx_net_disconnect(ctx.sv, ctx.sv->tmpHandles[i], "context closed");
+            }
+
+            cx_halloc_destroy(ctx.sv->clientsHalloc);
+            ctx.sv->clientsHalloc = NULL;
+
+            free(ctx.sv->clients);
+            ctx.sv->clients = NULL;
         }
         
-        _cx_net_poll_events_server(ctx.sv, 0);
-
-        for (uint16_t i = 0; i < j; i++)
+        if (NULL != ctx.sv->tmpHandles)
         {
-            cx_net_disconnect(ctx.sv, ctx.sv->tmpHandles[i], "context closed");
+            free(ctx.sv->tmpHandles);
+            ctx.sv->tmpHandles = NULL;
         }
-
-        free(ctx.sv->clients);
-        cx_halloc_destroy(ctx.sv->clientsHalloc);
-        free(ctx.sv->tmpHandles);
         
         CX_INFO("[%s<--] finished serving on %s:%d", ctx.c->name, ctx.c->ip, ctx.c->port);
     }
@@ -269,14 +280,20 @@ void cx_net_close(void* _ctx)
         close(ctx.c->epollDescriptor);
         ctx.c->epollDescriptor = INVALID_DESCRIPTOR;
     }
-    free(ctx.c->epollEvents);
 
+    if (NULL != ctx.c->epollEvents)
+    {
+        free(ctx.c->epollEvents);
+        ctx.c->epollEvents = NULL;
+    }
+    
     // destroy mutexes
     if (ctx.c->mtxInitialized)
     {
         pthread_mutex_destroy(&ctx.c->mtx);
         ctx.c->mtxInitialized = false;
     }
+
     free(_ctx);
 }
 
@@ -537,6 +554,7 @@ void cx_net_disconnect(void* _ctx, uint16_t _clientHandle, const char* _reason)
 void cx_net_wait_outboundbuff(void* _ctx, uint16_t _clientHandle, int32_t _timeout)
 {
     //TODO
+    CX_WARN(CX_ALW, "cx_net_wait_outboundbuff is not implemented yet!");
 }
 
 /****************************************************************************************

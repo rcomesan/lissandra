@@ -55,7 +55,7 @@ typedef enum
     CX_NET_STATE_LISTENING      = 0x8,              // the server is listening.
     CX_NET_STATE_CONNECTING     = 0x10,             // the client is attempting to connect to the given server.
     CX_NET_STATE_CONNECTED      = 0x20,             // the client is connected to the server.
-    CX_NET_STATE_CLOSING        = 0x40,             // the context is being closed (running cx_net_close method).
+    CX_NET_STATE_CLOSING        = 0x40,             // the context is being closed (running cx_net_destroy method).
 } CX_NET_STATE;
 
 struct cx_net_client_t
@@ -152,7 +152,7 @@ cx_net_ctx_sv_t*        cx_net_listen(cx_net_args_t* _args);
 
 cx_net_ctx_cl_t*        cx_net_connect(cx_net_args_t* _args);
 
-void                    cx_net_close(void* _ctx);
+void                    cx_net_destroy(void* _ctx);
 
 void                    cx_net_poll_events(void* _ctx, int32_t _timeout);
 
