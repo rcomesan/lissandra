@@ -166,6 +166,16 @@ static bool cfg_init(const char* _cfgFilePath, cx_err_t* _err)
             goto key_missing;
         }
 
+        key = "memNumber";
+        if (config_has_property(g_ctx.cfg.handle, key))
+        {
+            g_ctx.cfg.memNumber = (uint16_t)config_get_int_value(g_ctx.cfg.handle, key);
+        }
+        else
+        {
+            goto key_missing;
+        }
+
         key = "memIp";
         if (config_has_property(g_ctx.cfg.handle, key))
         {
@@ -255,7 +265,13 @@ static bool ker_init(cx_err_t* _err)
         return false;
     }
 
-    return mempool_init(_err);
+    if (mempool_init(_err))
+    {
+        mempool_add(g_ctx.cfg.memNumber, g_ctx.cfg.memIp, g_ctx.cfg.memPort);
+        return true;
+    }
+
+    return false;
 }
 
 static void ker_destroy()
@@ -373,7 +389,7 @@ static bool handle_timer_tick(uint64_t _expirations, uint32_t _type, void* _user
         cx_err_t err;
 
         // for now, we'll just keep adding our known MEM node over and over
-        mempool_add(1, g_ctx.cfg.memIp, g_ctx.cfg.memPort);
+        mempool_add(g_ctx.cfg.memNumber, g_ctx.cfg.memIp, g_ctx.cfg.memPort);
 
         // send describe request to any node in the pool
         uint16_t memNumber = mempool_get_any(&err);

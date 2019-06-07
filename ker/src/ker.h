@@ -17,6 +17,7 @@ typedef struct
     t_config*           handle;                     // pointer to so-commons-lib config adt.
     uint16_t            workers;                    // number of worker threads to spawn to process requests.
     uint8_t             quantum;                    // maximum amount of lines of LQL scripts to run sequentially without returning control back to scheduler.
+    uint16_t            memNumber;                  // this shouldn't be required (WIP)
     ipv4_t              memIp;                      // ip address to connect to a MEM node.
     uint16_t            memPort;                    // tcp port to connect to a MEM node.
     password_t          memPassword;                // password to authenticate with the MEM node.
