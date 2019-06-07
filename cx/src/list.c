@@ -50,7 +50,11 @@ uint32_t cx_list_size(cx_list_t* _list)
 
 void cx_list_remove(cx_list_t* _list, cx_list_node_t* _node)
 {
-    if (NULL == _node) return;
+    if (NULL == _node)
+    {
+        CX_WARN(CX_ALW, "you're trying to remove a NULL node!");
+        return;
+    }
 
     if (1 == _list->size)
     {
@@ -178,6 +182,12 @@ static void _list_node_insert_before(cx_list_t* _list, cx_list_node_t* _pos, cx_
 {
     bool setLast = false;
     bool setFirst = false;
+
+    if (NULL == _node)
+    {
+        CX_WARN(CX_ALW, "you're trying to insert a NULL node!");
+        return;
+    }
 
     if (0 == _list->size)           // empty list
     {
