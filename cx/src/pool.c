@@ -48,24 +48,36 @@ cx_pool_t* cx_pool_init(const char* name, uint16_t _numWorkers, cx_pool_handler_
                 CX_INFO("[pool: %s] initiating thread pool with %d workers...", pool->name, _numWorkers);
                 pool->state = CX_POOL_STATE_RUNNING;
 
-                for (uint16_t i = 0; i < _numWorkers; i++)
+                if (0 != pthread_barrier_init(&pool->barrier, NULL, _numWorkers + 1))
                 {
-                    args = CX_MEM_STRUCT_ALLOC(args);
-                    args->pool = pool;
-                    args->index = i;
-
-                    if (0 != pthread_create(&(pool->workers[i].thread), NULL, _cx_pool_main_loop, args))
+                    CX_CHECK(CX_ALW, "[pool: %s] pthread barrier creation failed. %s.", pool->name, strerror(errno));
+                    failed = true;
+                }
+                else
+                {
+                    for (uint16_t i = 0; i < _numWorkers; i++)
                     {
-                        CX_CHECK(CX_ALW, "[pool: %s] thread #%d creation failed. %s.", pool->name, i, strerror(errno));
-                        free(args);
-                        failed = true;
-                        break;
+                        args = CX_MEM_STRUCT_ALLOC(args);
+                        args->pool = pool;
+                        args->index = i;
+
+                        if (0 != pthread_create(&(pool->workers[i].thread), NULL, _cx_pool_main_loop, args))
+                        {
+                            CX_CHECK(CX_ALW, "[pool: %s] thread #%d creation failed. %s.", pool->name, i, strerror(errno));
+                            free(args);
+                            failed = true;
+                            break;
+                        }
+                        pool->workers[i].index = i;
+                        pool->workersCount++;
                     }
-                    pool->workers[i].index = i;
-                    pool->workersCount++;
                 }
 
-                if (!failed) return pool;
+                if (!failed)
+                {
+                    pthread_barrier_wait(&pool->barrier);
+                    return pool;
+                }
             }
         }
     }
@@ -121,7 +133,8 @@ void cx_pool_destroy(cx_pool_t* _pool)
         pthread_cond_destroy(&_pool->condPaused);
         _pool->condPausedInit = false;
     }
-
+    
+    pthread_barrier_destroy(&_pool->barrier);
     cx_mcq_destroy(_pool->queue, NULL);
     free(_pool->workers);
     free(_pool);
@@ -196,6 +209,7 @@ static void* _cx_pool_main_loop(void* _args)
 
     CX_INFO("[pool: %s-%03d] main loop started.", args->pool->name, args->index);
     args->pool->workers[args->index].isRunning = true;
+    pthread_barrier_wait(&args->pool->barrier);
 
     while (true)
     {

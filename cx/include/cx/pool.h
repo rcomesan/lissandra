@@ -47,6 +47,7 @@ typedef struct cx_pool_t
     bool                mtxPauseInit;       // true if mtxPause was successfully initialized.
     bool                condPauseInit;      // true if condPause was successfully initialized.
     bool                condPausedInit;     // true if condPaused was successfully initialized.
+    pthread_barrier_t   barrier;            // barrier to wait until all the threads are successfully initialized.
 } cx_pool_t;
 
 typedef struct cx_pool_handler_args_t
