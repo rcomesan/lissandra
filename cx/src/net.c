@@ -194,6 +194,9 @@ cx_net_ctx_cl_t* cx_net_connect(cx_net_args_t* _args)
 
         ctx->c.errorNumber = errno;
         CX_WARN(CX_ALW, "[-->%s] connect failed: %s (%s:%d)", ctx->c.name, strerror(errno), ctx->c.ip, ctx->c.port);
+
+        cx_net_destroy(ctx);
+        ctx = NULL;
     }
     else
     {
