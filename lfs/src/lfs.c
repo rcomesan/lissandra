@@ -132,13 +132,13 @@ int main(int _argc, char** _argv)
     }
 
     CX_INFO("node is shutting down. reason: %s.", g_ctx.shutdownReason);
-    cx_cli_destroy();
-    taskman_stop();
-    net_destroy();
-    taskman_destroy();
-    lfs_destroy();
-    cfg_destroy();
-    cx_timer_destroy();
+    cx_cli_destroy();       // destroys command line interface.
+    taskman_stop();         // denies new tasks creation & pauses the pool so that current enqueued tasks can't start executing.
+    net_destroy();          // destroys the timers & server context serving MEM nodes.
+    taskman_destroy();      // safely destroys the pool and the blocked queues.
+    lfs_destroy();          // destroys filesystem.
+    cfg_destroy();          // destroys config.
+    cx_timer_destroy();     // destroys timers.
 
     if (ERR_NONE == err.code)
     {
@@ -166,7 +166,6 @@ static bool cfg_init(const char* _cfgFilePath, cx_err_t* _err)
     cx_file_path(&cfgPath, "%s", _cfgFilePath);
 
     g_ctx.cfg.handle = config_create(cfgPath);
-    CX_CHECK_NOT_NULL(g_ctx.cfg.handle);
 
     if (NULL != g_ctx.cfg.handle)
     {

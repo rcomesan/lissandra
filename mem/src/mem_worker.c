@@ -204,7 +204,10 @@ static bool _worker_request_lfs(uint8_t _header, const char* _payload, uint32_t 
     }
     else
     {
+        pthread_mutex_lock(&_task->responseMtx);
         _task->state = TASK_STATE_RUNNING;
+        pthread_mutex_unlock(&_task->responseMtx);
+
         CX_ERR_SET(&_task->err, ERR_NET_LFS_UNAVAILABLE, "LFS node is unavailable.");
     }
 
