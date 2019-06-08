@@ -141,7 +141,6 @@ void cx_cli_cmd_parse(const char* _cmd, cx_cli_cmd_t* _outCmd)
     char        temp[4096];
     bool        endArgument = false;
     uint16_t    pos = 0;
-    
 
     if (NULL != _cmd)
     {
@@ -207,6 +206,9 @@ void cx_cli_cmd_parse(const char* _cmd, cx_cli_cmd_t* _outCmd)
                 pos = 0;
             }
         }
+
+        // force header to be uppercase always
+        cx_str_to_upper(_outCmd->header);
     }
 }
 
