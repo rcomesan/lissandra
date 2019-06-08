@@ -44,6 +44,7 @@ bool cli_parse_select(const cx_cli_cmd_t* _cmd, cx_err_t* _err, char** _outTable
         && valid_key(_cmd->args[1]))
     {
         (*_outTableName) = _cmd->args[0];
+        cx_str_to_upper(*_outTableName);
         cx_str_to_uint16(_cmd->args[1], _outKey);
         return true;
     }
@@ -63,6 +64,7 @@ bool cli_parse_insert(const cx_cli_cmd_t* _cmd, cx_err_t* _err, char** _outTable
         && (_cmd->argsCount >= 4 ? valid_timestamp(_cmd->args[3]) : true))
     {
         (*_outTableName) = _cmd->args[0];
+        cx_str_to_upper(*_outTableName);
         cx_str_to_uint16(_cmd->args[1], _outKey);
         (*_outValue) = _cmd->args[2];
         (*_outTimestamp) = cx_time_epoch(); //TODO fixme. https://github.com/sisoputnfrba/foro/issues/1309
@@ -90,6 +92,7 @@ bool cli_parse_create(const cx_cli_cmd_t* _cmd, cx_err_t* _err, char** _outTable
         && valid_compaction_interval(_cmd->args[3]))
     {
         (*_outTableName) = _cmd->args[0];
+        cx_str_to_upper(*_outTableName);
         cx_str_to_uint8(_cmd->args[1], _outConsistency);
         cx_str_to_uint16(_cmd->args[2], _outNumPartitions);
         cx_str_to_uint32(_cmd->args[3], _outCompactionInterval);
@@ -111,6 +114,7 @@ bool cli_parse_describe(const cx_cli_cmd_t* _cmd, cx_err_t* _err, char** _outTab
         if (valid_table(_cmd->args[0]))
         {
             (*_outTableName) = _cmd->args[0];
+            cx_str_to_upper(*_outTableName);
             return true;
         }
     }
@@ -133,6 +137,7 @@ bool cli_parse_drop(const cx_cli_cmd_t* _cmd, cx_err_t* _err, char** _outTableNa
         && valid_table(_cmd->args[0]))
     {
         (*_outTableName) = _cmd->args[0];
+        cx_str_to_upper(*_outTableName);
         return true;
     }
 
@@ -206,7 +211,7 @@ static bool valid_consistency(const char* _str)
     uint8_t ui8 = 0;
     return true
         && cx_str_to_uint8(_str, &ui8)
-        && cx_math_in_range(ui8, 1, 3); //TODO CHECKME. consistency enum
+        && cx_math_in_range(ui8, 1, CONSISTENCY_COUNT); //TODO CHECKME. consistency enum
 }
 
 static bool valid_partitions_number(const char* _str)
