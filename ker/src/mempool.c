@@ -167,14 +167,21 @@ void mempool_feed_tables(table_meta_t* _tables, uint32_t _tablesCount)
     table_meta_t* curTable = NULL;
 
     pthread_mutex_lock(&m_mempoolCtx->tablesMap->mtx);
-    cx_cdict_clear(m_mempoolCtx->tablesMap, (cx_destroyer_cb)free);
+
+    if (_tablesCount > 1)
+    {
+        // global describe, we can safely remove them all and start over with fresh metadata
+        cx_cdict_clear(m_mempoolCtx->tablesMap, (cx_destroyer_cb)free);
+    }
 
     for (uint32_t i = 0; i < _tablesCount; i++)
     {
-        table = CX_MEM_STRUCT_ALLOC(table);
-        memcpy(table, &_tables[i], sizeof(*table));
-
-        cx_cdict_set(m_mempoolCtx->tablesMap, table->name, table);
+        if (!cx_cdict_contains(m_mempoolCtx->tablesMap, _tables[i].name))
+        {
+            table = CX_MEM_STRUCT_ALLOC(table);
+            memcpy(table, &_tables[i], sizeof(*table));
+            cx_cdict_set(m_mempoolCtx->tablesMap, table->name, table);
+        }
     }
     pthread_mutex_unlock(&m_mempoolCtx->tablesMap->mtx);
 }
