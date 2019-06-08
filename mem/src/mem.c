@@ -84,7 +84,7 @@ int main(int _argc, char** _argv)
     g_ctx.isRunning = true
         && cx_init(PROJECT_NAME, OUTPUT_LOG_ENABLED, NULL, &err)
         && cx_timer_init(MEM_TIMER_COUNT, handle_timer_tick, &err)
-        && cfg_init("res/mem.cfg", &err)
+        && cfg_init((_argc > 1) ? _argv[1] : "res/mem.cfg", &err)
         && taskman_init(g_ctx.cfg.workers, task_run_mt, task_run_wk, task_completed, task_free, task_reschedule, &err)
         && net_init(&err)
         && mem_init(&err)
