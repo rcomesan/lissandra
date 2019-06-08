@@ -166,7 +166,7 @@ static bool cfg_init(const char* _cfgFilePath, cx_err_t* _err)
     {
         CX_INFO("config file: %s", cfgPath);
 
-        key = "password";
+        key = MEM_CFG_PASSWORD;
         if (config_has_property(g_ctx.cfg.handle, key))
         {
             temp = config_get_string_value(g_ctx.cfg.handle, key);
@@ -183,7 +183,7 @@ static bool cfg_init(const char* _cfgFilePath, cx_err_t* _err)
             goto key_missing;
         }
 
-        key = "memNumber";
+        key = MEM_CFG_MEM_NUMBER;
         if (config_has_property(g_ctx.cfg.handle, key))
         {
             g_ctx.cfg.memNumber = (uint16_t)config_get_int_value(g_ctx.cfg.handle, key);
@@ -193,7 +193,7 @@ static bool cfg_init(const char* _cfgFilePath, cx_err_t* _err)
             goto key_missing;
         }
 
-        key = "workers";
+        key = MEM_CFG_WORKERS;
         if (config_has_property(g_ctx.cfg.handle, key))
         {
             g_ctx.cfg.workers = (uint16_t)config_get_int_value(g_ctx.cfg.handle, key);
@@ -203,7 +203,7 @@ static bool cfg_init(const char* _cfgFilePath, cx_err_t* _err)
             goto key_missing;
         }
 
-        key = "listeningIp";
+        key = MEM_CFG_LISTENING_IP;
         if (config_has_property(g_ctx.cfg.handle, key))
         {
             temp = config_get_string_value(g_ctx.cfg.handle, key);
@@ -214,7 +214,7 @@ static bool cfg_init(const char* _cfgFilePath, cx_err_t* _err)
             goto key_missing;
         }
 
-        key = "listeningPort";
+        key = MEM_CFG_LISTENING_PORT;
         if (config_has_property(g_ctx.cfg.handle, key))
         {
             g_ctx.cfg.listeningPort = (uint16_t)config_get_int_value(g_ctx.cfg.handle, key);
@@ -224,7 +224,7 @@ static bool cfg_init(const char* _cfgFilePath, cx_err_t* _err)
             goto key_missing;
         }
 
-        key = "lfsIp";
+        key = MEM_CFG_LFS_IP;
         if (config_has_property(g_ctx.cfg.handle, key))
         {
             temp = config_get_string_value(g_ctx.cfg.handle, key);
@@ -235,7 +235,7 @@ static bool cfg_init(const char* _cfgFilePath, cx_err_t* _err)
             goto key_missing;
         }
 
-        key = "lfsPort";
+        key = MEM_CFG_LFS_PORT;
         if (config_has_property(g_ctx.cfg.handle, key))
         {
             g_ctx.cfg.lfsPort = (uint16_t)config_get_int_value(g_ctx.cfg.handle, key);
@@ -245,7 +245,7 @@ static bool cfg_init(const char* _cfgFilePath, cx_err_t* _err)
             goto key_missing;
         }
 
-        key = "lfsPassword";
+        key = MEM_CFG_LFS_PASSWORD;
         if (config_has_property(g_ctx.cfg.handle, key))
         {
             temp = config_get_string_value(g_ctx.cfg.handle, key);
@@ -262,7 +262,7 @@ static bool cfg_init(const char* _cfgFilePath, cx_err_t* _err)
             goto key_missing;
         }
 
-        key = "seedsIp";
+        key = MEM_CFG_SEEDS_IP;
         if (config_has_property(g_ctx.cfg.handle, key))
         {
             char** ips = config_get_array_value(g_ctx.cfg.handle, key);
@@ -283,7 +283,7 @@ static bool cfg_init(const char* _cfgFilePath, cx_err_t* _err)
             goto key_missing;
         }
 
-        key = "seedsPort";
+        key = MEM_CFG_SEEDS_PORT;
         if (config_has_property(g_ctx.cfg.handle, key))
         {
             char** ports = config_get_array_value(g_ctx.cfg.handle, key);
@@ -305,7 +305,7 @@ static bool cfg_init(const char* _cfgFilePath, cx_err_t* _err)
             goto key_missing;
         }
 
-        key = "delayMem";
+        key = MEM_CFG_DELAY_MEM;
         if (config_has_property(g_ctx.cfg.handle, key))
         {
             g_ctx.cfg.delayMem = (uint32_t)config_get_int_value(g_ctx.cfg.handle, key);
@@ -315,7 +315,7 @@ static bool cfg_init(const char* _cfgFilePath, cx_err_t* _err)
             goto key_missing;
         }
 
-        key = "delayLfs";
+        key = MEM_CFG_DELAY_LFS;
         if (config_has_property(g_ctx.cfg.handle, key))
         {
             g_ctx.cfg.delayLfs = (uint32_t)config_get_int_value(g_ctx.cfg.handle, key);
@@ -325,7 +325,7 @@ static bool cfg_init(const char* _cfgFilePath, cx_err_t* _err)
             goto key_missing;
         }
 
-        key = "memSize";
+        key = MEM_CFG_MEM_SIZE;
         if (config_has_property(g_ctx.cfg.handle, key))
         {
             g_ctx.cfg.memSize = (uint32_t)config_get_int_value(g_ctx.cfg.handle, key);
@@ -335,7 +335,7 @@ static bool cfg_init(const char* _cfgFilePath, cx_err_t* _err)
             goto key_missing;
         }
 
-        key = "intervalJournaling";
+        key = MEM_CFG_INT_JOURNALING;
         if (config_has_property(g_ctx.cfg.handle, key))
         {
             g_ctx.cfg.intervalJournaling = (uint32_t)config_get_int_value(g_ctx.cfg.handle, key);
@@ -345,7 +345,7 @@ static bool cfg_init(const char* _cfgFilePath, cx_err_t* _err)
             goto key_missing;
         }
 
-        key = "intervalGossiping";
+        key = MEM_CFG_INT_GOSSIPING;
         if (config_has_property(g_ctx.cfg.handle, key))
         {
             g_ctx.cfg.intervalGossiping = (uint32_t)config_get_int_value(g_ctx.cfg.handle, key);

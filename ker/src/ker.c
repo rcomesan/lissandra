@@ -147,7 +147,7 @@ static bool cfg_init(const char* _cfgFilePath, cx_err_t* _err)
     {
         CX_INFO("config file: %s", cfgPath);
 
-        key = "workers";
+        key = KER_CFG_WORKERS;
         if (config_has_property(g_ctx.cfg.handle, key))
         {
             g_ctx.cfg.workers = (uint16_t)config_get_int_value(g_ctx.cfg.handle, key);
@@ -157,7 +157,7 @@ static bool cfg_init(const char* _cfgFilePath, cx_err_t* _err)
             goto key_missing;
         }
 
-        key = "quantum";
+        key = KER_CFG_QUANTUM;
         if (config_has_property(g_ctx.cfg.handle, key))
         {
             g_ctx.cfg.quantum = (uint8_t)config_get_int_value(g_ctx.cfg.handle, key);
@@ -167,7 +167,7 @@ static bool cfg_init(const char* _cfgFilePath, cx_err_t* _err)
             goto key_missing;
         }
 
-        key = "memNumber";
+        key = KER_CFG_MEM_NUMBER;
         if (config_has_property(g_ctx.cfg.handle, key))
         {
             g_ctx.cfg.memNumber = (uint16_t)config_get_int_value(g_ctx.cfg.handle, key);
@@ -177,7 +177,7 @@ static bool cfg_init(const char* _cfgFilePath, cx_err_t* _err)
             goto key_missing;
         }
 
-        key = "memIp";
+        key = KER_CFG_MEM_IP;
         if (config_has_property(g_ctx.cfg.handle, key))
         {
             temp = config_get_string_value(g_ctx.cfg.handle, key);
@@ -188,7 +188,7 @@ static bool cfg_init(const char* _cfgFilePath, cx_err_t* _err)
             goto key_missing;
         }
 
-        key = "memPort";
+        key = KER_CFG_MEM_PORT;
         if (config_has_property(g_ctx.cfg.handle, key))
         {
             g_ctx.cfg.memPort = (uint16_t)config_get_int_value(g_ctx.cfg.handle, key);
@@ -198,7 +198,7 @@ static bool cfg_init(const char* _cfgFilePath, cx_err_t* _err)
             goto key_missing;
         }
 
-        key = "memPassword";
+        key = KER_CFG_MEM_PASSWORD;
         if (config_has_property(g_ctx.cfg.handle, key))
         {
             temp = config_get_string_value(g_ctx.cfg.handle, key);
@@ -215,7 +215,7 @@ static bool cfg_init(const char* _cfgFilePath, cx_err_t* _err)
             goto key_missing;
         }
 
-        key = "delayRun";
+        key = KER_CFG_DELAY_RUN;
         if (config_has_property(g_ctx.cfg.handle, key))
         {
             g_ctx.cfg.delayRun = (uint32_t)config_get_int_value(g_ctx.cfg.handle, key);
@@ -225,7 +225,7 @@ static bool cfg_init(const char* _cfgFilePath, cx_err_t* _err)
             goto key_missing;
         }
 
-        key = "intervalMetaRefresh";
+        key = KER_CFG_INT_METAREFRESH;
         if (config_has_property(g_ctx.cfg.handle, key))
         {
             g_ctx.cfg.intervalMetaRefresh = (uint32_t)config_get_int_value(g_ctx.cfg.handle, key);

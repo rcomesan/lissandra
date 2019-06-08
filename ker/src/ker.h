@@ -6,6 +6,15 @@
 
 #include <commons/config.h>
 
+#define KER_CFG_WORKERS         "workers"
+#define KER_CFG_QUANTUM         "quantum"
+#define KER_CFG_MEM_NUMBER      "memNumber"
+#define KER_CFG_MEM_IP          "memIp"
+#define KER_CFG_MEM_PORT        "memPort"
+#define KER_CFG_MEM_PASSWORD    "memPassword"
+#define KER_CFG_DELAY_RUN       "delayRun"
+#define KER_CFG_INT_METAREFRESH "intervalMetaRefresh"
+
 typedef enum KER_TIMER
 {
     KER_TIMER_METAREFRESH = 0,

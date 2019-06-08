@@ -13,6 +13,17 @@
 #include <commons/collections/dictionary.h>
 #include <commons/collections/queue.h>
 
+#define LFS_CFG_PASSWORD        "password"
+#define LFS_CFG_LISTENING_IP    "listeningIp"
+#define LFS_CFG_LISTENING_PORT  "listeningPort"
+#define LFS_CFG_WORKERS         "workers"
+#define LFS_CFG_ROOT_DIR        "rootDirectory"
+#define LFS_CFG_BLOCKS_COUNT    "blocksCount"
+#define LFS_CFG_BLOCKS_SIZE     "blocksSize"
+#define LFS_CFG_DELAY           "delay"
+#define LFS_CFG_VALUE_SIZE      "valueSize"
+#define LFS_CFG_INT_DUMP        "dumpInterval"
+
 typedef enum LFS_TIMER
 {
     LFS_TIMER_DUMP = 0,

@@ -13,6 +13,22 @@
 #include <commons/collections/dictionary.h>
 #include <commons/collections/queue.h>
 
+#define MEM_CFG_PASSWORD        "password"
+#define MEM_CFG_MEM_NUMBER      "memNumber"
+#define MEM_CFG_WORKERS         "workers"
+#define MEM_CFG_LISTENING_IP    "listeningIp"
+#define MEM_CFG_LISTENING_PORT  "listeningPort"
+#define MEM_CFG_LFS_IP          "lfsIp"
+#define MEM_CFG_LFS_PORT        "lfsPort"
+#define MEM_CFG_LFS_PASSWORD    "lfsPassword"
+#define MEM_CFG_SEEDS_IP        "seedsIp"
+#define MEM_CFG_SEEDS_PORT      "seedsPort"
+#define MEM_CFG_DELAY_MEM       "delayMem"
+#define MEM_CFG_DELAY_LFS       "delayLfs"
+#define MEM_CFG_MEM_SIZE        "memSize"
+#define MEM_CFG_INT_JOURNALING  "intervalJournaling"
+#define MEM_CFG_INT_GOSSIPING   "intervalGossiping"
+
 typedef enum MEM_TIMER
 {
     MEM_TIMER_JOURNAL = 0,

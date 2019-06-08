@@ -170,7 +170,7 @@ static bool cfg_init(const char* _cfgFilePath, cx_err_t* _err)
     {
         CX_INFO("config file: %s", cfgPath);
 
-        key = "password";
+        key = LFS_CFG_PASSWORD;
         if (config_has_property(g_ctx.cfg.handle, key))
         {
             temp = config_get_string_value(g_ctx.cfg.handle, key);
@@ -187,7 +187,7 @@ static bool cfg_init(const char* _cfgFilePath, cx_err_t* _err)
             goto key_missing;
         }
 
-        key = "listeningIp";
+        key = LFS_CFG_LISTENING_IP;
         if (config_has_property(g_ctx.cfg.handle, key))
         {
             temp = config_get_string_value(g_ctx.cfg.handle, key);
@@ -198,7 +198,7 @@ static bool cfg_init(const char* _cfgFilePath, cx_err_t* _err)
             goto key_missing;
         }
 
-        key = "listeningPort";
+        key = LFS_CFG_LISTENING_PORT;
         if (config_has_property(g_ctx.cfg.handle, key))
         {
             g_ctx.cfg.listeningPort = (uint16_t)config_get_int_value(g_ctx.cfg.handle, key);
@@ -208,7 +208,7 @@ static bool cfg_init(const char* _cfgFilePath, cx_err_t* _err)
             goto key_missing;
         }
          
-        key = "workers";
+        key = LFS_CFG_WORKERS;
         if (config_has_property(g_ctx.cfg.handle, key))
         {
             g_ctx.cfg.workers = (uint16_t)config_get_int_value(g_ctx.cfg.handle, key);
@@ -218,7 +218,7 @@ static bool cfg_init(const char* _cfgFilePath, cx_err_t* _err)
             goto key_missing;
         }
          
-        key = "rootDirectory";
+        key = LFS_CFG_ROOT_DIR;
         if (config_has_property(g_ctx.cfg.handle, key))
         {
             temp = config_get_string_value(g_ctx.cfg.handle, key);
@@ -229,7 +229,7 @@ static bool cfg_init(const char* _cfgFilePath, cx_err_t* _err)
             goto key_missing;
         }
 
-        key = "blocksCount";
+        key = LFS_CFG_BLOCKS_COUNT;
         if (config_has_property(g_ctx.cfg.handle, key))
         {
             g_ctx.cfg.blocksCount = (uint32_t)config_get_int_value(g_ctx.cfg.handle, key);
@@ -239,7 +239,7 @@ static bool cfg_init(const char* _cfgFilePath, cx_err_t* _err)
             goto key_missing;
         }
 
-        key = "blocksSize";
+        key = LFS_CFG_BLOCKS_SIZE;
         if (config_has_property(g_ctx.cfg.handle, key))
         {
             g_ctx.cfg.blocksSize = (uint32_t)config_get_int_value(g_ctx.cfg.handle, key);
@@ -249,7 +249,7 @@ static bool cfg_init(const char* _cfgFilePath, cx_err_t* _err)
             goto key_missing;
         }
 
-        key = "delay";
+        key = LFS_CFG_DELAY;
         if (config_has_property(g_ctx.cfg.handle, key))
         {
             g_ctx.cfg.delay = (uint32_t)config_get_int_value(g_ctx.cfg.handle, key);
@@ -259,7 +259,7 @@ static bool cfg_init(const char* _cfgFilePath, cx_err_t* _err)
             goto key_missing;
         }
          
-        key = "valueSize";
+        key = LFS_CFG_VALUE_SIZE;
         if (config_has_property(g_ctx.cfg.handle, key))
         {
             g_ctx.cfg.valueSize = (uint16_t)config_get_int_value(g_ctx.cfg.handle, key);
@@ -269,7 +269,7 @@ static bool cfg_init(const char* _cfgFilePath, cx_err_t* _err)
             goto key_missing;
         }
 
-        key = "dumpInterval";
+        key = LFS_CFG_INT_DUMP;
         if (config_has_property(g_ctx.cfg.handle, key))
         {
             g_ctx.cfg.dumpInterval = (uint32_t)config_get_int_value(g_ctx.cfg.handle, key);
