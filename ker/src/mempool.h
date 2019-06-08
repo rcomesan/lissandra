@@ -39,6 +39,7 @@ typedef struct mem_node_t
     uint16_t            number;                             // MEM node number (unique identifier in the pool assigned to each node).
     bool                available;
     bool                handshaking;                        // true if we're authenticating with the MEM node.
+    bool                known;                              // true if this MEM node was added at some point using mempool_add so that we know its ip address and port.
     ipv4_t              ip;                                 // ip address on which the MEM node will listen on.
     uint16_t            port;                               // tcp port on which the MEM node will listen on.
     cx_list_node_t*     listNode[CONSISTENCY_COUNT];        // pointer to the node in the linked list of each criteria (only if this node is assigned to it).
@@ -84,6 +85,8 @@ bool        mempool_assign(uint16_t _memNumber, E_CONSISTENCY _type, cx_err_t* _
 uint16_t    mempool_get(mempool_hints_t* _hints, cx_err_t* _err);
 
 uint16_t    mempool_get_any(cx_err_t* _err);
+
+bool        mempool_journal(cx_err_t* _err);
 
 int32_t     mempool_node_req(uint16_t _memNumber, uint8_t _header, const char* _payload, uint32_t _payloadSize);
 

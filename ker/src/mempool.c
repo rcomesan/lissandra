@@ -193,6 +193,7 @@ void mempool_add(uint16_t _memNumber, ipv4_t _ip, uint16_t _port)
 
     if (NULL == memNode->conn)
     {
+        memNode->known = true;
         memNode->handshaking = true;
         cx_str_copy(memNode->ip, sizeof(memNode->ip), _ip);
         memNode->port = _port;
@@ -237,47 +238,54 @@ bool mempool_assign(uint16_t _memNumber, E_CONSISTENCY _type, cx_err_t* _err)
     criteria_t* criteria = &m_mempoolCtx->criteria[_type];
 
     pthread_mutex_lock(&memNode->listNodeMtx);
-    if (NULL == memNode->listNode[_type])
+    if (memNode->known)
     {
-        pthread_mutex_lock(&criteria->mtx);
-        if (CONSISTENCY_STRONG == _type)
+        if (NULL == memNode->listNode[_type])
         {
-            success = (0 == cx_list_size(criteria->assignedNodes));
-            if (!success)
+            pthread_mutex_lock(&criteria->mtx);
+            if (CONSISTENCY_STRONG == _type)
             {
-                mem_node_t* curMemNode = (mem_node_t*)cx_list_peek_front(criteria->assignedNodes)->data;
-                CX_ERR_SET(_err, ERR_GENERIC, "%s consistency already has MEM node #%d assigned.",
-                    CONSISTENCY_NAME[_type], curMemNode->number);
+                success = (0 == cx_list_size(criteria->assignedNodes));
+                if (!success)
+                {
+                    mem_node_t* curMemNode = (mem_node_t*)cx_list_peek_front(criteria->assignedNodes)->data;
+                    CX_ERR_SET(_err, ERR_GENERIC, "%s consistency already has MEM node #%d assigned.",
+                        CONSISTENCY_NAME[_type], curMemNode->number);
+                }
             }
-        }
-        else if (CONSISTENCY_STRONG_HASHED == _type)
-        {
-            success = true;
-            cx_list_foreach(criteria->assignedNodes, (cx_list_func_cb)_request_mem_journal, NULL);
-        }
-        else if (CONSISTENCY_EVENTUAL == _type)
-        {
-            success = true;
-        }
-        else if (CONSISTENCY_NONE == _type)
-        {
-            success = true;
-        }
+            else if (CONSISTENCY_STRONG_HASHED == _type)
+            {
+                success = true;
+                cx_list_foreach(criteria->assignedNodes, (cx_list_func_cb)_request_mem_journal, NULL);
+            }
+            else if (CONSISTENCY_EVENTUAL == _type)
+            {
+                success = true;
+            }
+            else if (CONSISTENCY_NONE == _type)
+            {
+                success = true;
+            }
 
-        if (success)
-        {
-            memNode->listNode[_type] = cx_list_node_alloc(memNode);
-            cx_list_push_front(criteria->assignedNodes, memNode->listNode[_type]);
+            if (success)
+            {
+                memNode->listNode[_type] = cx_list_node_alloc(memNode);
+                cx_list_push_front(criteria->assignedNodes, memNode->listNode[_type]);
 
-            CX_INFO("MEM node #%d assigned to %s consistency.", 
-                memNode->number, CONSISTENCY_NAME[_type]);
+                CX_INFO("MEM node #%d assigned to %s consistency.",
+                    memNode->number, CONSISTENCY_NAME[_type]);
+            }
+            pthread_mutex_unlock(&criteria->mtx);
         }
-        pthread_mutex_unlock(&criteria->mtx);
+        else
+        {
+            CX_ERR_SET(_err, ERR_GENERIC, "MEM node #%d is already assigned to %s consistency.",
+                _memNumber, CONSISTENCY_NAME[_type]);
+        }
     }
     else
     {
-        CX_ERR_SET(_err, ERR_GENERIC, "MEM node #%d is already assigned to %s consistency.",
-            _memNumber, CONSISTENCY_NAME[_type]);
+        CX_ERR_SET(_err, ERR_GENERIC, "MEM node #%d is unknown.", _memNumber);
     }
     pthread_mutex_unlock(&memNode->listNodeMtx);
 
@@ -391,6 +399,20 @@ uint16_t mempool_get_any(cx_err_t* _err)
         CX_ERR_SET(_err, ERR_GENERIC, "There're no MEM nodes available.")
 
     return memNumber;
+}
+
+bool mempool_journal(cx_err_t* _err)
+{
+    criteria_t* criteria = &m_mempoolCtx->criteria[CONSISTENCY_NONE];
+
+    pthread_mutex_lock(&criteria->mtx);
+
+    cx_list_foreach(criteria->assignedNodes,
+        (cx_list_func_cb)_request_mem_journal, NULL);
+
+    pthread_mutex_unlock(&criteria->mtx);
+
+    return true;
 }
 
 int32_t mempool_node_req(uint16_t _memNumber, uint8_t _header, const char* _payload, uint32_t _payloadSize)
