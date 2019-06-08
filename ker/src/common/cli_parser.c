@@ -69,7 +69,7 @@ bool cli_parse_insert(const cx_cli_cmd_t* _cmd, cx_err_t* _err, char** _outTable
         cx_str_to_upper(*_outTableName);
         cx_str_to_uint16(_cmd->args[1], _outKey);
         (*_outValue) = _cmd->args[2];
-        (*_outTimestamp) = cx_time_epoch(); //TODO fixme. https://github.com/sisoputnfrba/foro/issues/1309
+        (*_outTimestamp) = 0;
 
         if (_cmd->argsCount >= 4)
         {

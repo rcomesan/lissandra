@@ -269,14 +269,26 @@ double cx_time_counter()
     struct timeval now;
     gettimeofday(&now, 0);
 
-    int64_t time = now.tv_sec * INT64_C(1000000) + now.tv_usec;
-    return (double)(time - m_timerCtx.timeOffset) / (double)INT64_C(1000000);
+    int64_t time = now.tv_sec * INT64_C(1000000) + now.tv_usec; // convert to microseconds
+    return (double)(time - m_timerCtx.timeOffset) / (double)INT64_C(1000000); 
 }
 
 uint32_t cx_time_epoch()
 {
-    //TODO CHECKME is seconds precision OK for this?
-    return time(NULL);
+    struct timeval now;
+    gettimeofday(&now, 0);
+
+    uint32_t time = (uint32_t)(now.tv_sec) + (uint32_t)(now.tv_usec / INT64_C(1000000)); // convert to seconds
+    return time;
+}
+
+uint64_t cx_time_epoch_ms()
+{
+    struct timeval now;
+    gettimeofday(&now, 0);
+
+    uint64_t time = (uint64_t)(now.tv_sec * INT64_C(1000)) + (uint64_t)(now.tv_usec / INT64_C(1000)); // convert to milliseconds
+    return time;
 }
 
 void cx_time_stamp(cx_timestamp_t* _outTimestamp)

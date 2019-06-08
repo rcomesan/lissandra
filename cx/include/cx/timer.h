@@ -60,6 +60,8 @@ double          cx_time_counter();
 
 uint32_t        cx_time_epoch();
 
+uint64_t        cx_time_epoch_ms();
+
 void            cx_time_stamp(cx_timestamp_t* _outTimestamp);
 
 #endif // CX_TIMER_H_

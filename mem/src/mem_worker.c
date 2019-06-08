@@ -130,6 +130,9 @@ void worker_handle_insert(task_t* _req)
     {
         if (mm_segment_avail_guard_begin(data->tableName, &_req->err, &table))
         {
+            if (0 == data->record.timestamp)
+                data->record.timestamp = cx_time_epoch();
+
             mm_page_write(table, &data->record, true, &_req->err);
             mm_segment_avail_guard_end(table);
         }

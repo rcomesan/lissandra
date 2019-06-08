@@ -53,7 +53,7 @@ void worker_handle_describe(task_t* _req)
     if (1 == data->tablesCount && NULL != data->tables)
     {
         table_t* table = NULL;
-        //TODO FIXME possible race condition.
+        //TODO FIXME.
         //if (fs_table_avail_guard_begin(data->tables[0].name, &_req->err, &table))
         //{
         if (fs_table_exists(data->tables[0].name, &table))
@@ -157,6 +157,9 @@ void worker_handle_insert(task_t* _req)
 
     if (fs_table_avail_guard_begin(data->tableName, &_req->err, &table))
     {
+        if (0 == data->record.timestamp)
+            data->record.timestamp = cx_time_epoch();
+
         memtable_add(&table->memtable, &data->record, 1);
 
         fs_table_avail_guard_end(table);
