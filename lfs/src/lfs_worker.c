@@ -327,4 +327,9 @@ static void _worker_parse_result(task_t* _req, table_t* _affectedTable)
     {
         taskman_completion(_req);
     }
+
+#ifdef DELAYS_ENABLED
+    sleep(g_ctx.cfg.delay);
+#endif
+
 }

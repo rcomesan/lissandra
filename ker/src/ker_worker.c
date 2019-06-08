@@ -420,5 +420,9 @@ static bool _worker_run_query_scripted(cx_cli_cmd_t* _cmd, task_t* _task)
     _task->data = originalData;
     _task->type = originalType;
 
+#ifdef DELAYS_ENABLED
+    sleep(g_ctx.cfg.delayRun);
+#endif
+
     return (ERR_NONE == _task->err.code);
 }

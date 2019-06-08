@@ -16,6 +16,7 @@ LIB_CX_RELEASE := libcx.so
 LIB_CX_DEBUG := libcxd.so
 
 # Gcc
+DELAYS_ENABLED := 
 CC := gcc
 CFLAGS ?=                                 \
 	-I../cx/include/                      \
@@ -25,6 +26,7 @@ CFLAGS ?=                                 \
 	-I../lfs/include/                     \
 	-DPROJECT_NAME=\"$(PROJECT_NAME)\"    \
 	-D$(PROJECT_NAME_UCASE)               \
+    $(DELAYS_ENABLED)                     \
 	-g3 -Wall -Wextra                     \
 	-Wno-unused-variable                  \
 	-Wno-unused-parameter                 \

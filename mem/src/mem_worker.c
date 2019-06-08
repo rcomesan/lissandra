@@ -178,6 +178,10 @@ static bool _worker_request_lfs(uint8_t _header, const char* _payload, uint32_t 
     _task->state = TASK_STATE_RUNNING_AWAITING;
     pthread_mutex_unlock(&_task->responseMtx);
 
+#ifdef DELAYS_ENABLED
+    sleep(g_ctx.cfg.delayLfs);
+#endif
+
     do
     {
         result = cx_net_send(g_ctx.lfs, _header, _payload, _payloadSize, INVALID_HANDLE);
