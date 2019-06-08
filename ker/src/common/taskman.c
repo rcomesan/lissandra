@@ -224,6 +224,7 @@ void taskman_update()
             {
                 task->state = TASK_STATE_READY;
                 task->startTime = cx_time_counter();
+                CX_ERR_CLEAR(&task->err); // important: re-scheduling
 
                 if (TASK_WT & task->type)
                 {
