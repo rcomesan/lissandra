@@ -66,6 +66,7 @@
   </PropertyGroup>
   <ItemGroup>
     <ClCompile Include="src\common\cli_parser.c" />
+    <ClCompile Include="src\common\common.c" />
     <ClCompile Include="src\common\reporter.c" />
     <ClCompile Include="src\common\common_protocol.c" />
     <ClCompile Include="src\common\ker_protocol.c" />
@@ -86,6 +87,7 @@
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="include\ker\cli_parser.h" />
+    <ClInclude Include="include\ker\common.h" />
     <ClInclude Include="include\ker\reporter.h" />
     <ClInclude Include="include\ker\common_protocol.h" />
     <ClInclude Include="include\ker\defines.h" />

@@ -5,6 +5,7 @@
 #include <ker/cli_parser.h>
 #include <ker/reporter.h>
 #include <ker/taskman.h>
+#include <ker/common.h>
 #include <ker/ker_protocol.h>
 #include <mem/mem_protocol.h>
 
@@ -567,7 +568,7 @@ static bool task_completed(task_t* _task)
     case TASK_WT_JOURNAL:
     {
         if (TASK_ORIGIN_CLI == _task->origin)
-            report_info("Memory journal requested.", stdout);
+            report_journal(_task, stdout);
         break;
     }
 
@@ -612,86 +613,5 @@ static bool task_completed(task_t* _task)
 
 static bool task_free(task_t* _task)
 {
-    switch (_task->type)
-    {
-    case TASK_WT_CREATE:
-    {
-        //noop
-        break;
-    }
-
-    case TASK_WT_DROP:
-    {
-        //noop
-        break;
-    }
-
-    case TASK_WT_DESCRIBE:
-    {
-        data_describe_t* data = (data_describe_t*)_task->data;
-        free(data->tables);
-        data->tables = NULL;
-        data->tablesCount = 0;
-        break;
-    }
-
-    case TASK_WT_SELECT:
-    {
-        data_select_t* data = (data_select_t*)_task->data;
-        free(data->record.value);
-        data->record.value = NULL;
-        break;
-    }
-
-    case TASK_WT_INSERT:
-    {
-        data_insert_t* data = (data_insert_t*)_task->data;
-        free(data->record.value);
-        data->record.value = NULL;
-        break;
-    }
-
-    case TASK_WT_JOURNAL:
-    {
-        //noop
-        break;
-    }
-
-    case TASK_WT_ADDMEM:
-    {
-        //noop
-        break;
-    }
-
-    case TASK_WT_RUN:
-    {
-        data_run_t* data = (data_run_t*)_task->data;
-
-        if (NULL != data->script)
-        {
-            cx_linesf_close(data->script);
-            data->script = NULL;
-        }
-        
-        if (NULL != data->output)
-        {
-            fclose(data->output);
-            data->output = NULL;
-        }
-
-        break;
-    }
-
-    case TASK_MT_FREE:
-    {
-        //noop
-        break;
-    }
-
-    default:
-        CX_WARN(CX_ALW, "undefined <free> behaviour for request type #%d.", _task->type);
-        break;
-    }
-
-    return true;
+    return task_data_free(_task->type, _task->data);
 }

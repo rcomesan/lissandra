@@ -25,6 +25,11 @@ void report_info(const char* _info, FILE* _stream)
     fprintf(_stream, "%s\n\n", _info);
 }
 
+void report_query(const char* _query, FILE* _stream)
+{
+    fprintf(_stream, ">>> %s\n", _query);
+}
+
 void report_select(const task_t* _task, FILE* _stream)
 {
     REPORT_BEGIN;
@@ -112,6 +117,11 @@ void report_drop(const task_t* _task, FILE* _stream)
         fprintf(_stream, "DROP failed. %s\n", _task->err.desc);
     }
     REPORT_END;
+}
+
+void report_journal(const task_t* _task, FILE* _stream)
+{
+    report_info("Memory journal requested.", _stream);
 }
 
 void report_addmem(const task_t* _task, FILE* _stream)
