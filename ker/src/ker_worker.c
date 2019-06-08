@@ -123,6 +123,13 @@ void worker_handle_insert(task_t* _req, bool _scripted)
     if (!_scripted) _worker_parse_result(_req);
 }
 
+void worker_handle_journal(task_t* _req, bool _scripted)
+{
+    mempool_journal(&_req->err);
+
+    if (!_scripted) _worker_parse_result(_req);
+}
+
 void worker_handle_addmem(task_t* _req, bool _scripted)
 {
     data_addmem_t* data = _req->data;

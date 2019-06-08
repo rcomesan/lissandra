@@ -358,6 +358,11 @@ static void handle_cli_command(const cx_cli_cmd_t* _cmd)
             ker_handle_req_insert(NULL, NULL, g_ctx.buff1, packetSize);
         }
     }
+    else if (strcmp("JOURNAL", _cmd->header) == 0)
+    {
+        packetSize = ker_pack_req_journal(g_ctx.buff1, sizeof(g_ctx.buff1), 0);
+        ker_handle_req_journal(NULL, NULL, g_ctx.buff1, packetSize);
+    }
     else if (strcmp("ADD", _cmd->header) == 0)
     {
         if (cli_parse_add_memory(_cmd, &err, &memNumber, &consistency))
@@ -443,6 +448,10 @@ static bool task_run_wk(task_t* _task)
 
     case TASK_WT_INSERT:
         worker_handle_insert(_task, false);
+        break;
+
+    case TASK_WT_JOURNAL:
+        worker_handle_journal(_task, false);
         break;
 
     case TASK_WT_ADDMEM:
@@ -548,6 +557,13 @@ static bool task_completed(task_t* _task)
         break;
     }
 
+    case TASK_WT_JOURNAL:
+    {
+        if (TASK_ORIGIN_CLI == _task->origin)
+            cli_report_info("Memory journal requested.");
+        break;
+    }
+
     case TASK_WT_ADDMEM:
     {
         if (TASK_ORIGIN_CLI == _task->origin)
@@ -614,6 +630,12 @@ static bool task_free(task_t* _task)
         data_insert_t* data = (data_insert_t*)_task->data;
         free(data->record.value);
         data->record.value = NULL;
+        break;
+    }
+
+    case TASK_WT_JOURNAL:
+    {
+        //noop
         break;
     }
 

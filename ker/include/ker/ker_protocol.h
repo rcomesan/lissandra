@@ -40,6 +40,8 @@ void ker_handle_req_select(const cx_net_common_t* _common, void* _userData, cons
 
 void ker_handle_req_insert(const cx_net_common_t* _common, void* _userData, const char* _buffer, uint16_t _bufferSize);
 
+void ker_handle_req_journal(const cx_net_common_t* _common, void* _userData, const char* _buffer, uint16_t _bufferSize);
+
 void ker_handle_req_addmem(const cx_net_common_t* _common, void* _userData, const char* _buffer, uint16_t _bufferSize);
 
 void ker_handle_req_run(const cx_net_common_t* _common, void* _userData, const char* _buffer, uint16_t _bufferSize);
@@ -71,6 +73,8 @@ uint32_t ker_pack_req_describe(char* _buffer, uint16_t _size, uint16_t _remoteId
 uint32_t ker_pack_req_select(char* _buffer, uint16_t _size, uint16_t _remoteId, const char* _tableName, uint16_t _key);
 
 uint32_t ker_pack_req_insert(char* _buffer, uint16_t _size, uint16_t _remoteId, const char* _tableName, uint16_t _key, const char* _value, uint32_t _timestamp);
+
+uint32_t ker_pack_req_journal(char* _buffer, uint16_t _size, uint16_t _remoteId);
 
 uint32_t ker_pack_req_run(char* _buffer, uint16_t _size, uint16_t _remoteId, const char* _lqlFilePath);
 

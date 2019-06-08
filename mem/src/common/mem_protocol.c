@@ -69,7 +69,7 @@ void mem_handle_journal(const cx_net_common_t* _common, void* _userData, const c
         ? TASK_ORIGIN_CLI 
         : TASK_ORIGIN_API;
 
-    task_t* task = taskman_create(origin, TASK_MT_JOURNAL, NULL, NULL);
+    task_t* task = taskman_create(origin, TASK_MT_JOURNAL, NULL, _common);
 
     if (NULL != task)
     {

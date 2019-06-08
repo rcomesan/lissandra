@@ -76,6 +76,15 @@ void ker_handle_req_insert(const cx_net_common_t* _common, void* _userData, cons
     REQ_END;
 }
 
+void ker_handle_req_journal(const cx_net_common_t* _common, void* _userData, const char* _buffer, uint16_t _bufferSize)
+{
+    REQ_BEGIN(TASK_WT_JOURNAL);
+    {
+        task->data = NULL;
+    }
+    REQ_END;
+}
+
 void ker_handle_req_addmem(const cx_net_common_t* _common, void* _userData, const char* _buffer, uint16_t _bufferSize)
 {
     REQ_BEGIN(TASK_WT_ADDMEM);
@@ -190,6 +199,13 @@ uint32_t ker_pack_req_select(char* _buffer, uint16_t _size, uint16_t _remoteId, 
 uint32_t ker_pack_req_insert(char* _buffer, uint16_t _size, uint16_t _remoteId, const char* _tableName, uint16_t _key, const char* _value, uint32_t _timestamp)
 {
     return common_pack_req_insert(_buffer, _size, _remoteId, _tableName, _key, _value, _timestamp);
+}
+
+uint32_t ker_pack_req_journal(char* _buffer, uint16_t _size, uint16_t _remoteId)
+{
+    uint32_t pos = 0;
+    common_pack_remote_id(_buffer, _size, &pos, _remoteId);
+    return pos;
 }
 
 uint32_t ker_pack_req_run(char* _buffer, uint16_t _size, uint16_t _remoteId, const char* _lqlFilePath)
