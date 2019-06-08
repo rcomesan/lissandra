@@ -720,7 +720,6 @@ static bool task_reschedule(task_t* _task)
         || ERR_TABLE_BLOCKED == _task->err.code)
     {
         mm_reschedule_task(_task);
-
     }
     else
     {

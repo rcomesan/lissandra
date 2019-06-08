@@ -130,9 +130,12 @@ void report_addmem(const task_t* _task, FILE* _stream)
     REPORT_END;
 }
 
-void report_run(const task_t* _task, FILE* _stream)
+void report_run(const cx_path_t* _lqlFilePath, const cx_path_t* _logPath, FILE* _stream)
 {
-    fprintf(_stream, "report_run\n");
+    cx_path_t scriptName;
+    cx_file_get_name(_lqlFilePath, false, &scriptName);
+   
+    fprintf(_stream, "Script '%s' scheduled. Output will be written to '%s'.\n", scriptName, *_logPath);
 }
 
 void report_add_memory(const task_t* _task, FILE* _stream)

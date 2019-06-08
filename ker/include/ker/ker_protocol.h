@@ -76,7 +76,7 @@ uint32_t ker_pack_req_insert(char* _buffer, uint16_t _size, uint16_t _remoteId, 
 
 uint32_t ker_pack_req_journal(char* _buffer, uint16_t _size, uint16_t _remoteId);
 
-uint32_t ker_pack_req_run(char* _buffer, uint16_t _size, uint16_t _remoteId, const char* _lqlFilePath);
+uint32_t ker_pack_req_run(char* _buffer, uint16_t _size, uint16_t _remoteId, const char* _lqlFilePath, const char* _logPath);
 
 uint32_t ker_pack_req_addmem(char* _buffer, uint16_t _size, uint16_t _remoteId, uint16_t _memNumber, uint8_t _consistency);
 

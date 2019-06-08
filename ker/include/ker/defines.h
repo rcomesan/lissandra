@@ -161,6 +161,8 @@ typedef struct data_run_t
 {
     cx_path_t       scriptFilePath;
     cx_linesf_t*    script;
+    cx_path_t       outputFilePath;
+    FILE*           output;
     uint32_t        lineNumber;
 } data_run_t;
 

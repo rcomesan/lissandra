@@ -298,6 +298,7 @@ static void handle_cli_command(const cx_cli_cmd_t* _cmd)
     uint16_t    numPartitions = 0;
     uint32_t    compactionInterval = 0;
     cx_path_t   lqlScriptPath;
+    cx_path_t   logPath;
     uint32_t    packetSize = 0;
     uint16_t    memNumber = 0;
 
@@ -375,8 +376,13 @@ static void handle_cli_command(const cx_cli_cmd_t* _cmd)
     {
         if (cli_parse_run(_cmd, &err, &lqlScriptPath))
         {
-            packetSize = ker_pack_req_run(g_ctx.buff1, sizeof(g_ctx.buff1), 0, lqlScriptPath);
+            cx_file_path(&logPath, "%s.log", lqlScriptPath);
+            
+            packetSize = ker_pack_req_run(g_ctx.buff1, sizeof(g_ctx.buff1), 0, lqlScriptPath, logPath);
             ker_handle_req_run(NULL, NULL, g_ctx.buff1, packetSize);
+
+            report_run(&lqlScriptPath, &logPath, stdout);
+            cx_cli_command_end();
         }
     }
     else
@@ -506,9 +512,10 @@ static bool task_run_mt(task_t* _task)
 
 static bool task_reschedule(task_t* _task)
 {
-    if (false)
+    if (ERR_QUANTUM_EXHAUSTED == _task->err.code)
     {
-        //TODO
+        // re-enqueue this task so that it gets executed in a round-robin fashion according to our quantum.
+        _task->state = TASK_STATE_NEW;
     }
     else
     {
@@ -573,8 +580,19 @@ static bool task_completed(task_t* _task)
 
     case TASK_WT_RUN:
     {
-        if (TASK_ORIGIN_CLI == _task->origin)
-            report_run(_task, stdout);
+        data_run_t* data = _task->data;
+
+        cx_path_t fileName;
+        cx_file_get_name(&data->scriptFilePath, false, &fileName);
+
+        if (ERR_NONE == _task->err.code)
+        {
+            CX_INFO("script '%s' completed successfully. (%s).", fileName, data->outputFilePath);
+        }
+        else
+        {
+            CX_INFO("script '%s' failed. %s", fileName, _task->err.desc);
+        }
         break;
     }
 
@@ -648,7 +666,19 @@ static bool task_free(task_t* _task)
     case TASK_WT_RUN:
     {
         data_run_t* data = (data_run_t*)_task->data;
-        //TODO free data_run_t
+
+        if (NULL != data->script)
+        {
+            cx_linesf_close(data->script);
+            data->script = NULL;
+        }
+        
+        if (NULL != data->output)
+        {
+            fclose(data->output);
+            data->output = NULL;
+        }
+
         break;
     }
 

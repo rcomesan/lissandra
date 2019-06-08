@@ -211,7 +211,7 @@ static bool valid_consistency(const char* _str)
     uint8_t ui8 = 0;
     return true
         && cx_str_to_uint8(_str, &ui8)
-        && cx_math_in_range(ui8, 1, CONSISTENCY_COUNT); //TODO CHECKME. consistency enum
+        && cx_math_in_range(ui8, 1, CONSISTENCY_COUNT);
 }
 
 static bool valid_partitions_number(const char* _str)

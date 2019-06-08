@@ -10,6 +10,7 @@
 #include <cx/str.h>
 #include <cx/file.h>
 #include <cx/timer.h>
+#include <cx/cli.h>
 
 #include <unistd.h>
 
@@ -20,6 +21,8 @@
 static void         _worker_parse_result(task_t* _req);
 
 static bool         _worker_request_mem(mempool_hints_t* _hints, uint8_t _header, const char* _payload, uint32_t _payloadSize, task_t* _task);
+
+static bool         _worker_run_query_scripted(cx_cli_cmd_t* _cmd, task_t* _task);
 
 /****************************************************************************************
 ***  PUBLIC FUNCTIONS
@@ -141,6 +144,59 @@ void worker_handle_addmem(task_t* _req, bool _scripted)
 
 void worker_handle_run(task_t* _req)
 {
+    data_run_t* data = _req->data;
+
+    bool initialized = true;
+
+    if (0 == data->lineNumber)
+    {
+        data->script = cx_linesf_open(data->scriptFilePath, CX_LINESF_OPEN_READ, &_req->err);
+        if (NULL != data->script)
+        {
+            if (cx_file_touch(&data->outputFilePath, NULL))
+                data->output = fopen(data->outputFilePath, "w");
+            
+            if (NULL == data->output)
+            {
+                initialized = false;
+                CX_ERR_SET(&_req->err, ERR_GENERIC, "Log file creation failed '%s'.", data->outputFilePath);
+            }
+        }
+        else
+        {
+            initialized = false;
+        }
+
+        if (initialized) data->lineNumber = 1;
+    }
+
+    if (initialized)
+    {
+        bool eof = false;
+        uint16_t quantumCount = 0;
+        cx_cli_cmd_t cmd;
+        char buff[4096 + 1];
+
+        while (quantumCount < g_ctx.cfg.quantum)
+        {
+            eof = (0 == cx_linesf_line_read(data->script, data->lineNumber, buff, sizeof(buff)));
+            if (eof) break;
+
+            cx_cli_cmd_parse(buff, &cmd);
+            if (NULL != cmd.header && strlen(cmd.header) > 0)
+            {
+                if (!_worker_run_query_scripted(&cmd, _req))
+                    break;
+
+                quantumCount++;
+            }
+            cx_cli_cmd_destroy(&cmd);
+        }
+
+        if (quantumCount == g_ctx.cfg.quantum)
+            CX_ERR_SET(&_req->err, ERR_QUANTUM_EXHAUSTED, "Quantum exhausted.");
+    }
+
     _worker_parse_result(_req);
 }
 
@@ -206,4 +262,9 @@ static bool _worker_request_mem(mempool_hints_t* _hints, uint8_t _header, const 
     }
 
     return (ERR_NONE == _task->err.code);
+}
+
+static bool _worker_run_query_scripted(cx_cli_cmd_t* _cmd, task_t* _task)
+{
+    return true;
 }

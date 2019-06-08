@@ -100,11 +100,16 @@ void ker_handle_req_addmem(const cx_net_common_t* _common, void* _userData, cons
 
 void ker_handle_req_run(const cx_net_common_t* _common, void* _userData, const char* _buffer, uint16_t _bufferSize)
 {
-    REQ_BEGIN(TASK_WT_INSERT);
+    REQ_BEGIN(TASK_WT_RUN);
     {
         data_run_t* data = CX_MEM_STRUCT_ALLOC(data);
+
         cx_binr_str(_buffer, _bufferSize, &bufferPos, data->scriptFilePath, sizeof(data->scriptFilePath));
         data->script = NULL;
+
+        cx_binr_str(_buffer, _bufferSize, &bufferPos, data->outputFilePath, sizeof(data->outputFilePath));
+        data->output = NULL;
+
         data->lineNumber = 0;
 
         task->data = data;
@@ -208,11 +213,12 @@ uint32_t ker_pack_req_journal(char* _buffer, uint16_t _size, uint16_t _remoteId)
     return pos;
 }
 
-uint32_t ker_pack_req_run(char* _buffer, uint16_t _size, uint16_t _remoteId, const char* _lqlFilePath)
+uint32_t ker_pack_req_run(char* _buffer, uint16_t _size, uint16_t _remoteId, const char* _lqlFilePath, const char* _logPath)
 {
     uint32_t pos = 0;
     common_pack_remote_id(_buffer, _size, &pos, _remoteId);
     cx_binw_str(_buffer, _size, &pos, _lqlFilePath);
+    cx_binw_str(_buffer, _size, &pos, _logPath);
     return pos;
 }
 

@@ -26,7 +26,7 @@ void report_drop(const task_t* _task, FILE* _stream);
 
 void report_addmem(const task_t* _task, FILE* _stream);
 
-void report_run(const task_t* _task, FILE* _stream);
+void report_run(const cx_path_t* _lqlFilePath, const cx_path_t* _logPath, FILE* _stream);
 
 void report_add_memory(const task_t* _task, FILE* _stream);
 
