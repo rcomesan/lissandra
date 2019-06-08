@@ -592,7 +592,7 @@ static bool task_completed(task_t* _task)
         }
         else
         {
-            CX_INFO("script '%s' failed. %s", fileName, _task->err.desc);
+            CX_INFO("script '%s' failed at line number %d. %s", fileName, data->lineNumber - 1, _task->err.desc);
         }
         break;
     }
