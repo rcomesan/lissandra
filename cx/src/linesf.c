@@ -29,7 +29,9 @@ cx_linesf_t* cx_linesf_open(const char* _filePath, CX_LINESF_OPEN_MODE _mode, cx
     }    
     cx_path_t path;
     cx_file_path(&path, "%s", _filePath);
-    cx_file_touch(&path, NULL);
+
+    if (CX_LINESF_OPEN_WRITE == _mode || CX_LINESF_OPEN_APPEND == _mode)
+        cx_file_touch(&path, NULL);
     
     FILE* fileHandle = fopen(path, mode);
     if (NULL == fileHandle)
