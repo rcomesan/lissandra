@@ -56,4 +56,8 @@ bool                    cx_cli_command_begin(cx_cli_cmd_t** _outCmd);
 
 void                    cx_cli_command_end();
 
+void                    cx_cli_cmd_parse(const char* _cmd, cx_cli_cmd_t* _outCmd);
+
+void                    cx_cli_cmd_destroy(cx_cli_cmd_t* _outCmd);
+
 #endif // CX_CLI_H_

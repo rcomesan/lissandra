@@ -125,18 +125,101 @@ void cx_cli_command_end()
     pthread_mutex_lock(&m_cliCtx->mtx);
     if (CX_CLI_STATE_PROCESSING == m_cliCtx->state)
     {
-        // free the dynamically allocated strings
-        for (int32_t i = 0; i < m_cliCtx->command.argsCount; i++)
-        {
-            free(m_cliCtx->command.args[i]);
-        }
-        CX_MEM_ZERO(m_cliCtx->command);
+        cx_cli_cmd_destroy(&m_cliCtx->command);
 
         // resume reading from stdin
         m_cliCtx->state = CX_CLI_STATE_READING;
         sem_post(&m_cliCtx->sem);
     }
     pthread_mutex_unlock(&m_cliCtx->mtx);
+}
+
+void cx_cli_cmd_parse(const char* _cmd, cx_cli_cmd_t* _outCmd)
+{
+    CX_CLI_PARSING_STAGE stage = CX_CLI_PARSING_HEADER;
+    uint32_t    cmdLen = strlen(_cmd);
+    char        temp[4096];
+    bool        endArgument = false;
+    uint16_t    pos = 0;
+    
+
+    if (NULL != _cmd)
+    {
+        for (uint32_t i = 0; i < cmdLen; i++)
+        {
+            if (' ' == _cmd[i])
+            {
+                if (CX_CLI_PARSING_STRING == stage)
+                {
+                    temp[pos++] = _cmd[i];
+                }
+                else if ((CX_CLI_PARSING_HEADER == stage || CX_CLI_PARSING_TOKEN == stage) && pos > 0)
+                {
+                    endArgument = true;
+                }
+            }
+            else if ('"' == _cmd[i])
+            {
+                if (CX_CLI_PARSING_STRING == stage)
+                {
+                    endArgument = true;
+                }
+                else if (CX_CLI_PARSING_TOKEN == stage && pos == 0)
+                {
+                    // the first char of the token is a quote: this is, in fact, a string
+                    stage = CX_CLI_PARSING_STRING;
+                }
+            }
+            else
+            {
+                temp[pos++] = _cmd[i];
+            }
+
+            if ((endArgument || (i == cmdLen - 1)) && pos > 0)
+            {
+                endArgument = false;
+                temp[pos] = '\0';
+
+                if (_outCmd->argsCount < CX_CLI_MAX_CMD_ARGS)
+                {
+                    if (CX_CLI_PARSING_HEADER == stage)
+                    {
+                        uint8_t headerLen = cx_math_min(pos, CX_CLI_MAX_CMD_LEN);
+                        CX_WARN(pos <= CX_CLI_MAX_CMD_LEN, "truncated command header (max is %d)", CX_CLI_MAX_CMD_LEN);
+
+                        cx_str_copy(_outCmd->header, headerLen + 1, temp);
+                        string_to_upper(_outCmd->header);
+                    }
+                    else
+                    {
+                        _outCmd->args[_outCmd->argsCount] = cx_str_copy_d(temp);
+                        _outCmd->argsCount++;
+                    }
+                }
+                else
+                {
+                    CX_WARN(CX_ALW, "out of arguments buffer space. (max is %d)", CX_CLI_MAX_CMD_ARGS);
+                    break;
+                }
+
+                // start parsing a new token
+                stage = CX_CLI_PARSING_TOKEN;
+                pos = 0;
+            }
+        }
+    }
+}
+
+void cx_cli_cmd_destroy(cx_cli_cmd_t* _cmd)
+{
+    if (NULL == _cmd) return;
+
+    // free the dynamically allocated strings
+    for (int32_t i = 0; i < m_cliCtx->command.argsCount; i++)
+    {
+        free(m_cliCtx->command.args[i]);
+    }
+    CX_MEM_ZERO(m_cliCtx->command);
 }
 
 /****************************************************************************************
@@ -146,8 +229,6 @@ void cx_cli_command_end()
 static void* cx_cli_main_loop(void* _arg)
 {
     char*       cmd = NULL;
-    uint32_t    cmdLen = 0;
-    char        temp[4096];
 
     CX_INFO("command line interface loop started.");
 
@@ -164,77 +245,9 @@ static void* cx_cli_main_loop(void* _arg)
             cmd = readline(">>> ");
             pthread_mutex_lock(&m_cliCtx->mtx);
 
-            cmdLen = strlen(cmd);
-
             if (NULL != cmd)
             {
-                CX_CLI_PARSING_STAGE stage = CX_CLI_PARSING_HEADER;
-                bool endArgument = false;
-                uint16_t pos = 0;
-                
-                for (uint32_t i = 0; i < cmdLen; i++)
-                {
-                    if (' ' == cmd[i])
-                    {
-                        if (CX_CLI_PARSING_STRING == stage)
-                        {
-                            temp[pos++] = cmd[i];
-                        } 
-                        else if ((CX_CLI_PARSING_HEADER == stage || CX_CLI_PARSING_TOKEN == stage) && pos > 0)
-                        {
-                            endArgument = true;
-                        }
-                    }
-                    else if ('"' == cmd[i])
-                    {
-                        if (CX_CLI_PARSING_STRING == stage)
-                        {
-                            endArgument = true;
-                        }
-                        else if (CX_CLI_PARSING_TOKEN == stage && pos == 0)
-                        {
-                            // the first char of the token is a quote: this is, in fact, a string
-                            stage = CX_CLI_PARSING_STRING;
-                        }
-                    }
-                    else
-                    {
-                        temp[pos++] = cmd[i];
-                    }
-
-                    if ((endArgument || (i == cmdLen - 1)) && pos > 0)
-                    {
-                        endArgument = false;
-                        temp[pos] = '\0';
-
-                        if (m_cliCtx->command.argsCount < CX_CLI_MAX_CMD_ARGS)
-                        {
-                            if (CX_CLI_PARSING_HEADER == stage)
-                            {
-                                uint8_t headerLen = cx_math_min(pos, CX_CLI_MAX_CMD_LEN);
-                                CX_WARN(pos <= CX_CLI_MAX_CMD_LEN, "truncated command header (max is %d)", CX_CLI_MAX_CMD_LEN);
-
-                                cx_str_copy(m_cliCtx->command.header, headerLen + 1, temp);
-                                string_to_upper(m_cliCtx->command.header);
-                            }
-                            else
-                            {
-                                m_cliCtx->command.args[m_cliCtx->command.argsCount] = cx_str_copy_d(temp);
-                                m_cliCtx->command.argsCount++;
-                            }
-                        }
-                        else
-                        {
-                            CX_WARN(CX_ALW, "out of arguments buffer space. (max is %d)", CX_CLI_MAX_CMD_ARGS);
-                            break;
-                        }
-
-                        // start parsing a new token
-                        stage = CX_CLI_PARSING_TOKEN;
-                        pos = 0;
-                    }
-                }
-
+                cx_cli_cmd_parse(cmd, &m_cliCtx->command);
                 free(cmd);
                 m_cliCtx->state = CX_CLI_STATE_PENDING;
             }
