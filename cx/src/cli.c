@@ -217,11 +217,15 @@ void cx_cli_cmd_destroy(cx_cli_cmd_t* _cmd)
     if (NULL == _cmd) return;
 
     // free the dynamically allocated strings
-    for (int32_t i = 0; i < m_cliCtx->command.argsCount; i++)
+    for (int32_t i = 0; i < _cmd->argsCount; i++)
     {
-        free(m_cliCtx->command.args[i]);
+        if (NULL != _cmd->args[i])
+        {
+            free(_cmd->args[i]);
+            _cmd->args[i] = NULL;
+        }
     }
-    CX_MEM_ZERO(m_cliCtx->command);
+    CX_MEM_ZERO(*_cmd);
 }
 
 /****************************************************************************************
