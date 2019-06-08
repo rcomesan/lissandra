@@ -25,6 +25,10 @@
 #define CX_RELEASE_VERBOSE 0
 #endif 
 
+#ifndef CX_RELEASE_CHECKS
+#define CX_RELEASE_CHECKS 0
+#endif
+
 #ifndef DEBUG_BREAK
 #define DEBUG_BREAK CX_NOOP()
 #endif
@@ -81,38 +85,40 @@ void            cx_trace(const char* _filePath, uint16_t _lineNumber, const char
     }
 
 #if CX_DEBUG || CX_RELEASE_VERBOSE
-    #define CX_INFO(_format, ...)                                                        \
+    #define CX_INFO(_format, ...)                                                       \
         cx_trace(__FILE__, (uint16_t)__LINE__, "[INFO] " _format, ##__VA_ARGS__)
 
-    #define CX_WARN(_condition, _format, ...)                                            \
-        if (!(_condition))                                                               \
-        {                                                                                \
-            cx_trace(__FILE__, (uint16_t)__LINE__, "[WARN] " _format, ##__VA_ARGS__);    \
+    #define CX_WARN(_condition, _format, ...)                                           \
+        if (!(_condition))                                                              \
+        {                                                                               \
+            cx_trace(__FILE__, (uint16_t)__LINE__, "[WARN] " _format, ##__VA_ARGS__);   \
         }
 
-    #define CX_CHECK(_condition, _format, ...)                                           \
-        if (!(_condition))                                                               \
-        {                                                                                \
-            cx_trace(__FILE__, (uint16_t)__LINE__, "[CHECK] " _format, ##__VA_ARGS__);   \
-            DEBUG_BREAK;                                                                 \
+    #define CX_FATAL(_condition, _format, ...)                                          \
+        if (!(_condition))                                                              \
+        {                                                                               \
+            cx_trace(__FILE__, (uint16_t)__LINE__, "[FATAL] " _format, ##__VA_ARGS__);  \
+            abort();                                                                    \
         }
-        
-    #define CX_CHECK_NOT_NULL(_var)                                                      \
-        CX_CHECK(NULL != (_var), #_var " can't be NULL!")
-
-    #define CX_FATAL(_condition, _format, ...)                                           \
-        if (!(_condition))                                                               \
-        {                                                                                \
-            cx_trace(__FILE__, (uint16_t)__LINE__, "[FATAL] " _format, ##__VA_ARGS__);   \
-            abort();                                                                     \
-        }
-
 #else
     #define CX_INFO(...) CX_NOOP()
     #define CX_WARN(...) CX_NOOP()
+    #define CX_FATAL(...) CX_NOOP()
+#endif
+
+#if CX_DEBUG || CX_RELEASE_CHECKS
+    #define CX_CHECK_NOT_NULL(_var)                                                     \
+            CX_CHECK(NULL != (_var), #_var " can't be NULL!")
+
+    #define CX_CHECK(_condition, _format, ...)                                          \
+        if (!(_condition))                                                              \
+        {                                                                               \
+            cx_trace(__FILE__, (uint16_t)__LINE__, "[CHECK] " _format, ##__VA_ARGS__);  \
+            DEBUG_BREAK;                                                                \
+        }
+#else
     #define CX_CHECK(...) CX_NOOP()
     #define CX_CHECK_NOT_NULL(...) CX_NOOP()
-    #define CX_FATAL(...) CX_NOOP()
 #endif
 
 #endif // CX_CX_H_
