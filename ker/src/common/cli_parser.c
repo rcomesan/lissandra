@@ -31,6 +31,8 @@ static bool     valid_compaction_interval(const char* _str);
 
 static bool     valid_memory_number(const char* _str);
 
+static uint8_t  parse_consistency_str(const char* _str);
+
 /****************************************************************************************
  ***  PUBLIC FUNCTIONS
  ***************************************************************************************/
@@ -93,7 +95,7 @@ bool cli_parse_create(const cx_cli_cmd_t* _cmd, cx_err_t* _err, char** _outTable
     {
         (*_outTableName) = _cmd->args[0];
         cx_str_to_upper(*_outTableName);
-        cx_str_to_uint8(_cmd->args[1], _outConsistency);
+        (*_outConsistency) = parse_consistency_str(_cmd->args[1]);
         cx_str_to_uint16(_cmd->args[2], _outNumPartitions);
         cx_str_to_uint32(_cmd->args[3], _outCompactionInterval);
 
@@ -172,7 +174,7 @@ bool cli_parse_add_memory(const cx_cli_cmd_t* _cmd, cx_err_t* _err, uint16_t* _o
         && valid_consistency(_cmd->args[3]))
     {
         cx_str_to_uint16(_cmd->args[1], _outMemNumber);
-        cx_str_to_uint8(_cmd->args[3], _outConsistency);
+        (*_outConsistency) = parse_consistency_str(_cmd->args[3]);
         return true;
     }
 
@@ -208,10 +210,7 @@ static bool valid_timestamp(const char* _str)
 
 static bool valid_consistency(const char* _str)
 {
-    uint8_t ui8 = 0;
-    return true
-        && cx_str_to_uint8(_str, &ui8)
-        && cx_math_in_range(ui8, 1, CONSISTENCY_COUNT);
+    return cx_math_in_range(parse_consistency_str(_str), 1, CONSISTENCY_COUNT);
 }
 
 static bool valid_partitions_number(const char* _str)
@@ -230,4 +229,24 @@ static bool valid_memory_number(const char* _str)
 {
     uint16_t ui16 = 0;
     return cx_str_to_uint16(_str, &ui16);
+}
+
+static uint8_t parse_consistency_str(const char* _str)
+{
+    if (strcasecmp("SC", _str) == 0)
+    {
+        return CONSISTENCY_STRONG;
+    }
+    else if (strcasecmp("SHC", _str) == 0)
+    {
+        return CONSISTENCY_STRONG_HASHED;
+    }
+    else if (strcasecmp("EC", _str) == 0)
+    {
+        return CONSISTENCY_EVENTUAL;
+    }
+    else
+    {
+        return CONSISTENCY_NONE;
+    }        
 }
