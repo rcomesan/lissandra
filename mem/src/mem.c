@@ -3,7 +3,7 @@
 #include "mm.h"
 
 #include <ker/cli_parser.h>
-#include <ker/cli_reporter.h>
+#include <ker/reporter.h>
 #include <ker/taskman.h>
 
 #include <ker/common_protocol.h>
@@ -521,11 +521,11 @@ static void handle_cli_command(const cx_cli_cmd_t* _cmd)
     {
         if (NULL != cx_logfile())
         {
-            cli_report_info(cx_logfile());
+            report_info(cx_logfile(), stdout);
         }
         else
         {
-            cli_report_info("There is no log file available.");
+            report_info("There is no log file available.", stdout);
         }
         cx_cli_command_end();
     }
@@ -581,7 +581,7 @@ static void handle_cli_command(const cx_cli_cmd_t* _cmd)
 
     if (ERR_NONE != err.code)
     {
-        cli_report_error(&err);
+        report_error(&err, stdout);
         cx_cli_command_end();
     }
 }
@@ -753,7 +753,7 @@ static bool task_completed(task_t* _task)
         if (TASK_ORIGIN_API == _task->origin)
             api_response_create(_task);
         else
-            cli_report_create(_task);
+            report_create(_task, stdout);
         break;
     }
 
@@ -762,7 +762,7 @@ static bool task_completed(task_t* _task)
         if (TASK_ORIGIN_API == _task->origin)
             api_response_drop(_task);
         else
-            cli_report_drop(_task);
+            report_drop(_task, stdout);
         break;
     }
 
@@ -771,7 +771,7 @@ static bool task_completed(task_t* _task)
         if (TASK_ORIGIN_API == _task->origin)
             api_response_describe(_task);
         else
-            cli_report_describe(_task);
+            report_describe(_task, stdout);
         break;
     }
 
@@ -780,7 +780,7 @@ static bool task_completed(task_t* _task)
         if (TASK_ORIGIN_API == _task->origin)
             api_response_select(_task);
         else
-            cli_report_select(_task);
+            report_select(_task, stdout);
         break;
     }
 
@@ -789,7 +789,7 @@ static bool task_completed(task_t* _task)
         if (TASK_ORIGIN_API == _task->origin)
             api_response_insert(_task);
         else
-            cli_report_insert(_task);
+            report_insert(_task, stdout);
         break;
     }
 
@@ -812,7 +812,7 @@ static bool task_completed(task_t* _task)
     case TASK_MT_JOURNAL:
     {
         if (TASK_ORIGIN_CLI == _task->origin)
-            cli_report_info("Memory journal scheduled.");
+            report_info("Memory journal scheduled.", stdout);
         break;
     }
 

@@ -36,9 +36,6 @@
     <ClCompile Include="src\common\cli_parser.c">
       <Filter>src\common</Filter>
     </ClCompile>
-    <ClCompile Include="src\common\cli_reporter.c">
-      <Filter>src\common</Filter>
-    </ClCompile>
     <ClCompile Include="src\common\taskman.c">
       <Filter>src\common</Filter>
     </ClCompile>
@@ -50,6 +47,9 @@
     </ClCompile>
     <ClCompile Include="src\mempool.c">
       <Filter>src</Filter>
+    </ClCompile>
+    <ClCompile Include="src\common\reporter.c">
+      <Filter>src\common</Filter>
     </ClCompile>
   </ItemGroup>
   <ItemGroup>
@@ -65,9 +65,6 @@
     <ClInclude Include="include\ker\defines.h">
       <Filter>include\ker</Filter>
     </ClInclude>
-    <ClInclude Include="include\ker\cli_reporter.h">
-      <Filter>include\ker</Filter>
-    </ClInclude>
     <ClInclude Include="include\ker\taskman.h">
       <Filter>include\ker</Filter>
     </ClInclude>
@@ -79,6 +76,9 @@
     </ClInclude>
     <ClInclude Include="src\mempool.h">
       <Filter>src</Filter>
+    </ClInclude>
+    <ClInclude Include="include\ker\reporter.h">
+      <Filter>include\ker</Filter>
     </ClInclude>
   </ItemGroup>
 </Project>

@@ -3,7 +3,7 @@
 #include "mempool.h"
 
 #include <ker/cli_parser.h>
-#include <ker/cli_reporter.h>
+#include <ker/reporter.h>
 #include <ker/taskman.h>
 #include <ker/ker_protocol.h>
 #include <mem/mem_protocol.h>
@@ -310,11 +310,11 @@ static void handle_cli_command(const cx_cli_cmd_t* _cmd)
     {
         if (NULL != cx_logfile())
         {
-            cli_report_info(cx_logfile());
+            report_info(cx_logfile(), stdout);
         }
         else
         {
-            cli_report_info("There is no log file available.");
+            report_info("There is no log file available.", stdout);
         }
         cx_cli_command_end();
     }
@@ -386,7 +386,7 @@ static void handle_cli_command(const cx_cli_cmd_t* _cmd)
 
     if (ERR_NONE != err.code)
     {
-        cli_report_error(&err);
+        report_error(&err, stdout);
         cx_cli_command_end();
     }
 }
@@ -525,56 +525,56 @@ static bool task_completed(task_t* _task)
     case TASK_WT_CREATE:
     {
         if (TASK_ORIGIN_CLI == _task->origin)
-            cli_report_create(_task);
+            report_create(_task, stdout);
         break;
     }
 
     case TASK_WT_DROP:
     {
         if (TASK_ORIGIN_CLI == _task->origin)
-            cli_report_drop(_task);
+            report_drop(_task, stdout);
         break;
     }
 
     case TASK_WT_DESCRIBE:
     {
         if (TASK_ORIGIN_CLI == _task->origin)
-            cli_report_describe(_task);
+            report_describe(_task, stdout);
         break;
     }
 
     case TASK_WT_SELECT:
     {
         if (TASK_ORIGIN_CLI == _task->origin)
-            cli_report_select(_task);
+            report_select(_task, stdout);
         break;
     }
 
     case TASK_WT_INSERT:
     {
         if (TASK_ORIGIN_CLI == _task->origin)
-            cli_report_insert(_task);
+            report_insert(_task, stdout);
         break;
     }
 
     case TASK_WT_JOURNAL:
     {
         if (TASK_ORIGIN_CLI == _task->origin)
-            cli_report_info("Memory journal requested.");
+            report_info("Memory journal requested.", stdout);
         break;
     }
 
     case TASK_WT_ADDMEM:
     {
         if (TASK_ORIGIN_CLI == _task->origin)
-            cli_report_addmem(_task);
+            report_addmem(_task, stdout);
         break;
     }
 
     case TASK_WT_RUN:
     {
         if (TASK_ORIGIN_CLI == _task->origin)
-            cli_report_run(_task);
+            report_run(_task, stdout);
         break;
     }
 
