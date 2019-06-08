@@ -141,12 +141,12 @@ table_meta_t* fs_describe(uint16_t* _outTablesCount, cx_err_t* _err)
 
         while (cx_cdict_iter_next(m_fsCtx->tablesMap, &key, (void**)&table))
         {
-            if (fs_table_avail_guard_begin(key, NULL, &table))
-            {
-                //TODO FIXME!!
+            //if (fs_table_avail_guard_begin(key, NULL, &table))
+            //{
+                //TODO FIXME!! 
                 memcpy(&(tables[i++]), &(table->meta), sizeof(tables[0]));
-                fs_table_avail_guard_end(table);
-            }
+            //    fs_table_avail_guard_end(table);
+            //}
         }
     }
     cx_cdict_iter_end(m_fsCtx->tablesMap);

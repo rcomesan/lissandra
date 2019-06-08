@@ -53,11 +53,19 @@ void worker_handle_describe(task_t* _req)
     if (1 == data->tablesCount && NULL != data->tables)
     {
         table_t* table = NULL;
-        if (fs_table_avail_guard_begin(data->tables[0].name, &_req->err, &table))
+        //TODO FIXME possible race condition.
+        //if (fs_table_avail_guard_begin(data->tables[0].name, &_req->err, &table))
+        //{
+        if (fs_table_exists(data->tables[0].name, &table))
         {
             memcpy(&data->tables[0], &(table->meta), sizeof(data->tables[0]));
-            fs_table_avail_guard_end(table);
         }
+        else
+        {
+            CX_ERR_SET(&_req->err, ERR_GENERIC, "Table '%s' does not exist.", data->tables[0].name);
+        }
+        //    fs_table_avail_guard_end(table);
+        //}
     }
     else
     {
