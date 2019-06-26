@@ -11,18 +11,6 @@
 
 #include <pthread.h>
 
-#define LFS_ROOT_FILE_MARKER ".lfs_root"
-#define LFS_DIR_METADATA "metadata"
-#define LFS_DIR_TABLES "tables"
-#define LFS_DIR_BLOCKS "blocks"
-#define LFS_FILE_BITMAP "bitmap.bin"
-#define LFS_PART_PREFIX "P"
-#define LFS_PART_EXTENSION "bin"
-#define LFS_PART_EXTENSION_COMPACTION "binc"
-#define LFS_DUMP_EXTENSION "tmp"
-#define LFS_DUMP_EXTENSION_COMPACTION "tmpc"
-#define LFS_DUMP_PREFIX "D"
-
 typedef void(*fs_func_cb)(const char* _tableName, table_t* _table, void* _userData);
 
 /****************************************************************************************

@@ -13,16 +13,44 @@
 #include <commons/collections/dictionary.h>
 #include <commons/collections/queue.h>
 
-#define LFS_CFG_PASSWORD        "password"
-#define LFS_CFG_LISTENING_IP    "listeningIp"
-#define LFS_CFG_LISTENING_PORT  "listeningPort"
-#define LFS_CFG_WORKERS         "workers"
-#define LFS_CFG_ROOT_DIR        "rootDirectory"
-#define LFS_CFG_BLOCKS_COUNT    "blocksCount"
-#define LFS_CFG_BLOCKS_SIZE     "blocksSize"
-#define LFS_CFG_DELAY           "delay"
-#define LFS_CFG_VALUE_SIZE      "valueSize"
-#define LFS_CFG_INT_DUMP        "dumpInterval"
+#define LFS_CFG_PASSWORD                "password"
+#define LFS_CFG_LISTENING_IP            "listeningIp"
+#define LFS_CFG_LISTENING_PORT          "listeningPort"
+#define LFS_CFG_WORKERS                 "workers"
+#define LFS_CFG_ROOT_DIR                "rootDirectory"
+#define LFS_CFG_BLOCKS_COUNT            "blocksCount"
+#define LFS_CFG_BLOCKS_SIZE             "blocksSize"
+#define LFS_CFG_DELAY                   "delay"
+#define LFS_CFG_VALUE_SIZE              "valueSize"
+#define LFS_CFG_INT_DUMP                "dumpInterval"
+
+#define LFS_ROOT_FILE_MARKER            ".lfs_root"
+#define LFS_MAGIC_NUMBER                "LISSANDRA"
+
+#define LFS_DIR_METADATA                "Metadata"
+#define LFS_DIR_TABLES                  "Tables"
+#define LFS_DIR_BLOCKS                  "Bloques"
+
+#define LFS_FILE_METADATA               "Metadata.bin"
+#define LFS_FILE_BITMAP                 "Bitmap.bin"
+
+#define LFS_PART_PREFIX                 "P"
+#define LFS_PART_EXTENSION              "bin"
+#define LFS_PART_EXTENSION_COMPACTION   "binc"
+
+#define LFS_DUMP_PREFIX                 "D"
+#define LFS_DUMP_EXTENSION              "tmp"
+#define LFS_DUMP_EXTENSION_COMPACTION   "tmpc"
+
+#define LFS_BLOCK_PREFIX                ""
+#define LFS_BLOCK_EXTENSION             "bin"
+
+#define LFS_META_PROP_BLOCKS_COUNT      "BLOCKS"
+#define LFS_META_PROP_BLOCKS_SIZE       "BLOCK_SIZE"
+#define LFS_META_PROP_MAGIC_NUMBER      "MAGIC_NUMBER"
+
+#define LFS_FILE_PROP_BLOCKS            "BLOCKS"
+#define LFS_FILE_PROP_SIZE              "SIZE"
 
 typedef enum LFS_TIMER
 {
@@ -50,7 +78,7 @@ typedef struct fs_meta_t
 {
     uint32_t            blocksSize;             // size in bytes of each block in our filesystem.
     uint32_t            blocksCount;            // number of blocks in our filesystem.
-    char                magicNumber[100];       // "Un string fijo con el valor 'lfs'" ????
+    char                magicNumber[100];       // a constant text value used to identify a file format (LISSANDRA).
 } fs_meta_t;
 
 typedef struct fs_file_t

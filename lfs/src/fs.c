@@ -623,7 +623,7 @@ void fs_block_free(uint32_t* _blocksArr, uint32_t _blocksCount)
 int32_t fs_block_read(uint32_t _blockNumber, char* _buffer, cx_err_t* _err)
 {
     cx_path_t blockFilePath;
-    cx_file_path(&blockFilePath, "%s/%s/%d.bin", m_fsCtx->rootDir, LFS_DIR_BLOCKS, _blockNumber);
+    cx_file_path(&blockFilePath, "%s/%s/%s%d.%s", m_fsCtx->rootDir, LFS_DIR_BLOCKS, LFS_BLOCK_PREFIX, _blockNumber, LFS_BLOCK_EXTENSION);
 
     return cx_file_read(&blockFilePath, _buffer, m_fsCtx->meta.blocksSize, _err);
 }
@@ -634,7 +634,7 @@ bool fs_block_write(uint32_t _blockNumber, char* _buffer, uint32_t _bufferSize, 
         m_fsCtx->meta.blocksSize);
 
     cx_path_t blockFilePath;
-    cx_file_path(&blockFilePath, "%s/%s/%d.bin", m_fsCtx->rootDir, LFS_DIR_BLOCKS, _blockNumber);
+    cx_file_path(&blockFilePath, "%s/%s/%s%d.%s", m_fsCtx->rootDir, LFS_DIR_BLOCKS, LFS_BLOCK_PREFIX, _blockNumber, LFS_BLOCK_EXTENSION);
 
     return cx_file_write(&blockFilePath, _buffer, _bufferSize, _err);
 }
@@ -751,19 +751,19 @@ static bool _fs_bootstrap(cx_path_t* _rootDir, uint32_t _maxBlocks, uint32_t _bl
     {
         success = false;
 
-        cx_file_path(&path, "%s/%s/%s", _rootDir, LFS_DIR_METADATA, LFS_DIR_METADATA);
+        cx_file_path(&path, "%s/%s/%s", _rootDir, LFS_DIR_METADATA, LFS_FILE_METADATA);
         cx_file_touch(&path, _err);
 
         t_config* meta = config_create(path);
         if (NULL != meta)
         {
             cx_str_from_uint32(_maxBlocks, temp, sizeof(temp));
-            config_set_value(meta, "blocksCount", temp);
+            config_set_value(meta, LFS_META_PROP_BLOCKS_COUNT, temp);
 
             cx_str_from_uint32(_blockSize, temp, sizeof(temp));
-            config_set_value(meta, "blocksSize", temp);
+            config_set_value(meta, LFS_META_PROP_BLOCKS_SIZE, temp);
 
-            config_set_value(meta, "magicNumber", "LFS");
+            config_set_value(meta, LFS_META_PROP_MAGIC_NUMBER, LFS_MAGIC_NUMBER);
 
             config_save(meta);
             config_destroy(meta);
@@ -803,13 +803,13 @@ static bool _fs_load_meta(cx_err_t* _err)
     char* key = "";
     
     cx_path_t metadataPath;
-    cx_file_path(&metadataPath, "%s/%s/%s", m_fsCtx->rootDir, LFS_DIR_METADATA, LFS_DIR_METADATA);
+    cx_file_path(&metadataPath, "%s/%s/%s", m_fsCtx->rootDir, LFS_DIR_METADATA, LFS_FILE_METADATA);
 
     t_config* meta = config_create(metadataPath);
 
     if (NULL != meta)
     {
-        key = "blocksCount";
+        key = LFS_META_PROP_BLOCKS_COUNT;
         if (config_has_property(meta, key))
         {
             m_fsCtx->meta.blocksCount = (uint32_t)config_get_int_value(meta, key);
@@ -819,7 +819,7 @@ static bool _fs_load_meta(cx_err_t* _err)
             goto key_missing;
         }
 
-        key = "blocksSize";
+        key = LFS_META_PROP_BLOCKS_SIZE;
         if (config_has_property(meta, key))
         {
             m_fsCtx->meta.blocksSize = (uint32_t)config_get_int_value(meta, key);
@@ -829,7 +829,7 @@ static bool _fs_load_meta(cx_err_t* _err)
             goto key_missing;
         }
 
-        key = "magicNumber";
+        key = LFS_META_PROP_MAGIC_NUMBER;
         if (config_has_property(meta, key))
         {
             temp = config_get_string_value(meta, key);
@@ -841,7 +841,15 @@ static bool _fs_load_meta(cx_err_t* _err)
         }
 
         config_destroy(meta);
-        return true;
+
+        if ((0 == strcmp(m_fsCtx->meta.magicNumber, LFS_MAGIC_NUMBER)))
+        {
+            return true;
+        }
+        else
+        {
+            CX_ERR_SET(_err, ERR_INIT_FS_META, "invalid metadata magic number '%s'.", m_fsCtx->meta.magicNumber);
+        }
 
     key_missing:
         CX_ERR_SET(_err, ERR_INIT_FS_META, "key '%s' is missing in the filesystem metadata file '%s'.", key, metadataPath);
@@ -1011,7 +1019,7 @@ static bool _fs_file_load(fs_file_t* _outFile, cx_err_t* _err)
         file = config_create(_outFile->path);
         if (NULL != file)
         {
-            key = "size";
+            key = LFS_FILE_PROP_SIZE;
             if (config_has_property(file, key))
             {
                 _outFile->size = (uint32_t)config_get_int_value(file, key);
@@ -1022,25 +1030,14 @@ static bool _fs_file_load(fs_file_t* _outFile, cx_err_t* _err)
                 goto key_missing;
             }
 
-            key = "blocksCount";
-            if (config_has_property(file, key))
-            {
-                _outFile->blocksCount = (uint32_t)config_get_int_value(file, key);
-            }
-            else
-            {
-                keyMissing = true;
-                goto key_missing;
-            }
-
-            key = "blocks";
+            key = LFS_FILE_PROP_BLOCKS;
             if (config_has_property(file, key))
             {
                 char** blocks = config_get_array_value(file, key);
 
                 uint32_t i = 0, j = 0;
                 bool finished = (NULL == blocks[i]);
-                while (!finished && j < sizeof(_outFile->blocks))
+                while (!finished && j < CX_ARR_SIZE(_outFile->blocks))
                 {
                     cx_str_to_uint32(blocks[i], &(_outFile->blocks[j++]));
                     free(blocks[i++]);
@@ -1049,10 +1046,9 @@ static bool _fs_file_load(fs_file_t* _outFile, cx_err_t* _err)
                 free(blocks);
 
                 CX_CHECK(finished, "there're still pending blocks to read! static buffer of %d elements is not enough!",
-                    sizeof(_outFile->blocks));
+                    CX_ARR_SIZE(_outFile->blocks));
 
-                CX_CHECK(_outFile->blocksCount == j, "blocksCount (%d) and actual amount of blocks read from the array (%d) do not match!",
-                    _outFile->blocksCount, j);
+                _outFile->blocksCount = j;
             }
             else
             {
@@ -1095,10 +1091,7 @@ static bool _fs_file_save(fs_file_t* _file, cx_err_t* _err)
         if (NULL != file)
         {
             cx_str_from_uint32(_file->size, temp, sizeof(temp));
-            config_set_value(file, "size", temp);
-
-            cx_str_from_uint32(_file->blocksCount, temp, sizeof(temp));
-            config_set_value(file, "blocksCount", temp);
+            config_set_value(file, LFS_FILE_PROP_SIZE, temp);
 
             if (_file->blocksCount > 0)
             {
@@ -1114,7 +1107,7 @@ static bool _fs_file_save(fs_file_t* _file, cx_err_t* _err)
                 buffPrev = buff;
                 buff = cx_str_format_d("[%s]", &(buffPrev[1]));
 
-                config_set_value(file, "blocks", buff);
+                config_set_value(file, LFS_FILE_PROP_BLOCKS, buff);
 
                 config_save(file);
                 free(buffPrev);
@@ -1122,7 +1115,7 @@ static bool _fs_file_save(fs_file_t* _file, cx_err_t* _err)
             }
             else
             {
-                config_set_value(file, "blocks", "[]");
+                config_set_value(file, LFS_FILE_PROP_BLOCKS, "[]");
             }
 
             success = true;
