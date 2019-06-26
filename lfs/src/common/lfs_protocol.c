@@ -119,7 +119,7 @@ uint32_t lfs_pack_req_select(char* _buffer, uint16_t _size, uint16_t _remoteId, 
     return common_pack_req_select(_buffer, _size, _remoteId, _tableName, _key);
 }
 
-uint32_t lfs_pack_req_insert(char* _buffer, uint16_t _size, uint16_t _remoteId, const char* _tableName, uint16_t _key, const char* _value, uint32_t _timestamp)
+uint32_t lfs_pack_req_insert(char* _buffer, uint16_t _size, uint16_t _remoteId, const char* _tableName, uint16_t _key, const char* _value, uint64_t _timestamp)
 {
     return common_pack_req_insert(_buffer, _size, _remoteId, _tableName, _key, _value, _timestamp);
 }

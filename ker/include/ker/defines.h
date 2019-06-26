@@ -105,7 +105,7 @@ typedef struct table_meta_t
 typedef struct table_record_t
 {
     uint16_t        key;
-    uint32_t        timestamp;
+    uint64_t        timestamp;
     char*           value;
 } table_record_t;
 

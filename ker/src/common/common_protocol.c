@@ -57,14 +57,14 @@ uint32_t common_pack_req_select(char* _buffer, uint16_t _size, uint16_t _remoteI
     return pos;
 }
 
-uint32_t common_pack_req_insert(char* _buffer, uint16_t _size, uint16_t _remoteId, const char* _tableName, uint16_t _key, const char* _value, uint32_t _timestamp)
+uint32_t common_pack_req_insert(char* _buffer, uint16_t _size, uint16_t _remoteId, const char* _tableName, uint16_t _key, const char* _value, uint64_t _timestamp)
 {
     uint32_t pos = 0;
     common_pack_remote_id(_buffer, _size, &pos, _remoteId);
     cx_binw_str(_buffer, _size, &pos, _tableName);
     cx_binw_uint16(_buffer, _size, &pos, _key);
     cx_binw_str(_buffer, _size, &pos, _value);
-    cx_binw_uint32(_buffer, _size, &pos, _timestamp);
+    cx_binw_uint64(_buffer, _size, &pos, _timestamp);
     return pos;
 }
 
@@ -158,7 +158,7 @@ uint32_t common_pack_table_record(char* _buffer, uint16_t _size, const table_rec
     uint32_t pos = 0;
     cx_binw_uint16(_buffer, _size, &pos, _record->key);
     cx_binw_str(_buffer, _size, &pos, _record->value);
-    cx_binw_uint32(_buffer, _size, &pos, _record->timestamp);
+    cx_binw_uint64(_buffer, _size, &pos, _record->timestamp);
     return pos;
 }
 
@@ -299,13 +299,7 @@ void common_unpack_res_select(const char* _buffer, uint16_t _bufferSize, uint32_
 
     if (ERR_NONE == _err->code)
     {
-        cx_binr_uint16(_buffer, _bufferSize, _bufferPos, &_outData->record.key);
-
-        uint16_t strLen = cx_binr_str(_buffer, _bufferSize, _bufferPos, NULL, 0);
-        _outData->record.value = malloc((strLen + 1) * sizeof(char));
-        cx_binr_str(_buffer, _bufferSize, _bufferPos, _outData->record.value, strLen + 1);
-
-        cx_binr_uint32(_buffer, _bufferSize, _bufferPos, &_outData->record.timestamp);
+        common_unpack_table_record(_buffer, _bufferSize, _bufferPos, &_outData->record);
     }
 }
 
@@ -330,7 +324,7 @@ void common_unpack_table_record(const char* _buffer, uint16_t _bufferSize, uint3
     _outRecord->value = malloc(valueLen);
     cx_binr_str(_buffer, _bufferSize, _bufferPos, _outRecord->value, valueLen);
 
-    cx_binr_uint32(_buffer, _bufferSize, _bufferPos, &_outRecord->timestamp);
+    cx_binr_uint64(_buffer, _bufferSize, _bufferPos, &_outRecord->timestamp);
 }
 
 /****************************************************************************************

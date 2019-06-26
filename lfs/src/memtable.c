@@ -7,6 +7,7 @@
 #include <cx/math.h>
 
 #include <string.h>
+#include <inttypes.h>
 
 /****************************************************************************************
  ***  PRIVATE DECLARATIONS
@@ -255,7 +256,7 @@ bool memtable_find(memtable_t* _table, uint16_t _key, table_record_t* _outRecord
     {
         // linear search ( we don't have our records sorted yet :'c )
 
-        uint32_t highestTimestamp = 0;
+        uint64_t highestTimestamp = 0;
         for (uint32_t i = 0; i < _table->recordsCount; i++)
         {
             if (_table->records[i].key == _key
@@ -334,7 +335,7 @@ static int32_t _memtable_comp_full(const void* _a, const void* _b, void* _userDa
     table_record_t* a = ((table_record_t*)_a);
     table_record_t* b = ((table_record_t*)_b);
     table_t* table = (table_t*)_userData;
-    int32_t result = 0;
+    int64_t result = 0;
 
     // 1) compare partition numbers
     result = (a->key % table->meta.partitionsCount) - (b->key % table->meta.partitionsCount);
@@ -360,7 +361,7 @@ static int32_t _memtable_comp_basic(const void* _a, const void* _b, void* _userD
     table_record_t* a = ((table_record_t*)_a);
     table_record_t* b = ((table_record_t*)_b);
     table_t* table = (table_t*)_userData;
-    int32_t result = 0;
+    int64_t result = 0;
 
     // 1) compare partition numbers
     result = (a->key % table->meta.partitionsCount) - (b->key % table->meta.partitionsCount);
@@ -413,7 +414,8 @@ static bool _memtable_save(memtable_t* _table, fs_file_t* _outFile, cx_err_t* _e
 
         for (uint32_t i = 0; i < _table->recordsCount; i++)
         {
-            tmpLen = snprintf(tmp, tmpSize, "%u;%u;%s;",
+            
+            tmpLen = snprintf(tmp, tmpSize, "%" PRIu64 ";%" PRIu16 ";%s;",
                 _table->records[i].timestamp,
                 _table->records[i].key,
                 _table->records[i].value);
@@ -421,9 +423,9 @@ static bool _memtable_save(memtable_t* _table, fs_file_t* _outFile, cx_err_t* _e
             if (tmpLen >= tmpSize)
             {
                 // ensure the records always terminate with a semicolon, even if our temp 
-                // buffer is not enough and the value is truncated.
-                // it's not really our fault, the value has a length greater than the one 
-                // allowed (specified in the config)
+                // buffer is not enough and the value is truncated. (it's not really our 
+                // fault, the value has a length greater than the allowed one - specified
+                // in the config file)
                 CX_CHECK(CX_ALW, "temp buffer for table '%s' is not enough! the length of the value is %d but the maximum allowed is %d",
                     _table->name, strlen(_table->records[i].value), g_ctx.cfg.valueSize);
                 tmpLen = tmpSize - 1;
@@ -538,7 +540,7 @@ static bool _memtable_load(memtable_t* _table, char* _buff, uint32_t _buffSize, 
                 }
 
                 // initialize and parse the timestamp.
-                cx_str_to_uint32(tmp, &_table->records[_table->recordsCount].timestamp);
+                cx_str_to_uint64(tmp, &_table->records[_table->recordsCount].timestamp);
                 _table->records[_table->recordsCount].value = NULL;
             }
             else if (2 == partCount)

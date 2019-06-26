@@ -280,7 +280,7 @@ static bool _worker_run_query_scripted(cx_cli_cmd_t* _cmd, task_t* _task)
     char*       tableName = NULL;
     uint16_t    key = 0;
     char*       value = NULL;
-    uint32_t    timestamp = 0;
+    uint64_t    timestamp = 0;
     uint8_t     consistency = 0;
     uint16_t    numPartitions = 0;
     uint32_t    compactionInterval = 0;

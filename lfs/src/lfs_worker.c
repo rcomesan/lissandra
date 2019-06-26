@@ -158,7 +158,7 @@ void worker_handle_insert(task_t* _req)
     if (fs_table_avail_guard_begin(data->tableName, &_req->err, &table))
     {
         if (0 == data->record.timestamp)
-            data->record.timestamp = cx_time_epoch();
+            data->record.timestamp = cx_time_epoch_ms();
 
         memtable_add(&table->memtable, &data->record, 1);
 

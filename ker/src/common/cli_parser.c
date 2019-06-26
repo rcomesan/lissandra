@@ -55,7 +55,7 @@ bool cli_parse_select(const cx_cli_cmd_t* _cmd, cx_err_t* _err, char** _outTable
     return false;
 }
 
-bool cli_parse_insert(const cx_cli_cmd_t* _cmd, cx_err_t* _err, char** _outTableName, uint16_t* _outKey, char** _outValue, uint32_t* _outTimestamp)
+bool cli_parse_insert(const cx_cli_cmd_t* _cmd, cx_err_t* _err, char** _outTableName, uint16_t* _outKey, char** _outValue, uint64_t* _outTimestamp)
 {
     CX_CHECK(0 == strcmp("INSERT", _cmd->header), "invalid command!");
 
@@ -73,7 +73,7 @@ bool cli_parse_insert(const cx_cli_cmd_t* _cmd, cx_err_t* _err, char** _outTable
 
         if (_cmd->argsCount >= 4)
         {
-            cx_str_to_uint32(_cmd->args[3], _outTimestamp);
+            cx_str_to_uint64(_cmd->args[3], _outTimestamp);
         }
         
         return true;
@@ -204,8 +204,8 @@ static bool valid_value(const char* _value)
 
 static bool valid_timestamp(const char* _str)
 {
-    uint32_t ui32 = 0;
-    return cx_str_to_uint32(_str, &ui32);
+    uint64_t ui64 = 0;
+    return cx_str_to_uint64(_str, &ui64);
 }
 
 static bool valid_consistency(const char* _str)
