@@ -38,7 +38,7 @@ void cx_sort_quick(void* _data, uint32_t _size, uint32_t _num, cx_sort_comp_cb _
     free(temp);
 }
 
-uint32_t cx_sort_find(void* _data, uint32_t _size, uint32_t _num, const void* _key, bool _firstMatch, cx_sort_comp_cb _comp, void* _userData)
+int32_t cx_sort_find(void* _data, uint32_t _size, uint32_t _num, const void* _key, bool _firstMatch, cx_sort_comp_cb _comp, void* _userData)
 {
     // searches for an element that is greater than or equal to the _key parameter using binary search
     // in the given _data array of _num elements of _size bytes each which is assumed to be sorted.
@@ -75,6 +75,8 @@ uint32_t cx_sort_find(void* _data, uint32_t _size, uint32_t _num, const void* _k
         else
         {
             if (!_firstMatch) return mid;
+            if (found && right == mid) break;
+
             found = true;
             right = mid; // keep searching for the first occurrence
         }

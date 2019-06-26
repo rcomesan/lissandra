@@ -1,5 +1,5 @@
-#ifndef CX_AVAIL_LOCK_H_
-#define CX_AVAIL_LOCK_H_
+#ifndef CX_RESLOCK_H_
+#define CX_RESLOCK_H_
 
 #include "cx.h"
 
@@ -34,4 +34,4 @@ double cx_reslock_blocked_time(cx_reslock_t* _lock);
 
 uint16_t cx_reslock_counter(cx_reslock_t* _lock);
 
-#endif // CX_AVAIL_LOCK_H_
+#endif // CX_RESLOCK_H_

@@ -104,13 +104,13 @@ typedef struct table_t
 
 typedef struct lfs_ctx_t
 {
-    cfg_t               cfg;                                        // lfs node configuration data.
-    bool                isRunning;                                  // true if the server is running. false if it's shutting down.
-    cx_net_ctx_sv_t*    sv;                                         // server context for serving API requests coming from MEM nodes.
-    payload_t           buff1;                                      // temporary pre-allocated buffer for building packets.
-    payload_t           buff2;                                      // temporary pre-allocated buffer for building packets.
-    uint16_t            timerDump;                                  // dump operation timer handle.
-    char*               shutdownReason;                             // reason that caused this MEM node to exit.
+    cfg_t               cfg;                    // lfs node configuration data.
+    bool                isRunning;              // true if the server is running. false if it's shutting down.
+    cx_net_ctx_sv_t*    sv;                     // server context for serving API requests coming from MEM nodes.
+    payload_t           buff1;                  // temporary pre-allocated buffer for building packets.
+    payload_t           buff2;                  // temporary pre-allocated buffer for building packets.
+    uint16_t            timerDump;              // dump operation timer handle.
+    char*               shutdownReason;         // reason that caused this MEM node to exit.
 } lfs_ctx_t;
 
 extern lfs_ctx_t        g_ctx;

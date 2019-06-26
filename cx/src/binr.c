@@ -4,9 +4,6 @@
 
 #include <string.h>
 
-//TODO this will only work on architectures of the same endianness 
-// check if endian-independent code is a requirement and make the byte swaps needed
-
 void cx_binr_int32(const char* _buffer, uint16_t _bufferSize, uint32_t* _inOutPos, int32_t* _outVal)
 {
     CX_CHECK((*_inOutPos) + sizeof(int32_t) <= _bufferSize, "out of buffer space!!")

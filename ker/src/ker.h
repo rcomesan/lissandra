@@ -39,7 +39,7 @@ typedef struct
     cfg_t               cfg;                        // mem node configuration data.
     bool                isRunning;                  // true if the server is running. false if it's shutting down.
     payload_t           buff1;                      // temporary pre-allocated buffer for building packets.
-    uint16_t            timerMetaRefresh;           // cx timer handle for running the journaling operation.
+    uint16_t            timerMetaRefresh;           // cx timer handle for running the metadata refresh operation.
     char*               shutdownReason;             // reason that caused this KER node to exit.
 } ker_ctx_t;
 

@@ -29,6 +29,8 @@
         (_arrPtr) = CX_MEM_ARR_REALLOC((_arrPtr), (_capacity)); \
     }
 
+#define CX_ARR_SIZE(_arr) (sizeof((_arr)) / sizeof(*(_arr)))
+
 typedef void(*cx_arr_free_cb_t)(void* _mem);
 
 uint32_t    cx_arr_size(void** _arr);
