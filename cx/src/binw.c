@@ -3,6 +3,20 @@
 
 #include <string.h>
 
+void cx_binw_int64(char* _buffer, uint16_t _bufferSize, uint32_t* _inOutPos, int64_t _val)
+{
+    CX_CHECK((*_inOutPos) + sizeof(int64_t) <= _bufferSize, "out of buffer space!!");
+    (*((int64_t*)&(_buffer[*_inOutPos]))) = _val;
+    (*_inOutPos) += sizeof(int64_t);
+}
+
+void cx_binw_uint64(char* _buffer, uint16_t _bufferSize, uint32_t* _inOutPos, uint64_t _val)
+{
+    CX_CHECK((*_inOutPos) + sizeof(uint64_t) <= _bufferSize, "out of buffer space!!");
+    (*((uint64_t*)&(_buffer[*_inOutPos]))) = _val;
+    (*_inOutPos) += sizeof(uint64_t);
+}
+
 void cx_binw_int32(char* _buffer, uint16_t _bufferSize, uint32_t* _inOutPos, int32_t _val)
 {
     CX_CHECK((*_inOutPos) + sizeof(int32_t) <= _bufferSize, "out of buffer space!!");

@@ -129,6 +129,38 @@ bool cx_str_starts_with(const char* _a, const char* _start, bool _caseInsensitiv
     }
 }
 
+bool cx_str_to_int64(const char* _src, int64_t* _out)
+{
+    char* end;
+
+    errno = 0;
+    int64_t i64 = strtoll(_src, &end, 10);
+
+    if (errno || end == _src || *end != '\0')
+    {
+        return false;
+    }
+
+    (*_out) = i64;
+    return true;
+}
+
+bool cx_str_to_uint64(const char* _src, uint64_t* _out)
+{
+    char* end;
+
+    errno = 0;
+    uint64_t ui64 = strtoull(_src, &end, 10);
+
+    if (errno || end == _src || *end != '\0')
+    {
+        return false;
+    }
+
+    (*_out) = ui64;
+    return true;
+}
+
 bool cx_str_to_int32(const char* _src, int32_t* _out)
 {
     char* end;
@@ -215,6 +247,16 @@ bool cx_str_to_uint8(const char* _src, uint8_t* _out)
         return true;
     }
     return false;
+}
+
+int32_t cx_str_from_int64(int64_t _value, char* _buffer, uint32_t _bufferSize)
+{
+    return snprintf(_buffer, _bufferSize, "%" PRId64, _value);
+}
+
+int32_t cx_str_from_uint64(uint64_t _value, char* _buffer, uint32_t _bufferSize)
+{
+    return snprintf(_buffer, _bufferSize, "%" PRIu64, _value);
 }
 
 int32_t cx_str_from_int32(int32_t _value, char* _buffer, uint32_t _bufferSize)

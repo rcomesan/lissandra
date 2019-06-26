@@ -40,6 +40,34 @@ static void _t_binrw_should_rw_str(const char* _value)
     free(bufferValue);
 }
 
+void t_binrw_should_rw_int64()
+{
+    uint32_t  origPos = binrwPos;
+    int64_t   value = INT64_MAX;
+    int64_t   bufferValue;
+
+    cx_binw_int64(binrwBuff, binrwSize, &binrwPos, value);
+    CU_ASSERT(binrwPos == origPos + sizeof(value));
+
+    cx_binr_int64(binrwBuff, binrwSize, &origPos, &bufferValue);
+    CU_ASSERT(binrwPos == origPos);
+    CU_ASSERT(value == bufferValue);
+}
+
+void t_binrw_should_rw_uint64()
+{
+    uint32_t  origPos = binrwPos;
+    uint64_t  value = UINT64_MAX;
+    uint64_t  bufferValue;
+
+    cx_binw_uint64(binrwBuff, binrwSize, &binrwPos, value);
+    CU_ASSERT(binrwPos == origPos + sizeof(value));
+
+    cx_binr_uint64(binrwBuff, binrwSize, &origPos, &bufferValue);
+    CU_ASSERT(binrwPos == origPos);
+    CU_ASSERT(value == bufferValue);
+}
+
 void t_binrw_should_rw_int32()
 {
     uint32_t  origPos = binrwPos;

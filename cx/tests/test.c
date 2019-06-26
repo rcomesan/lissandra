@@ -20,6 +20,8 @@ int main(int _argc, char** _argv)
 
     suite = CU_add_suite("binrw_test.c", t_binrw_init, t_binrw_cleanup);
     if (NULL == suite
+        || (NULL == CU_add_test(suite, "t_binrw_should_rw_int64()", t_binrw_should_rw_int64))
+        || (NULL == CU_add_test(suite, "t_binrw_should_rw_uint64()", t_binrw_should_rw_uint64))
         || (NULL == CU_add_test(suite, "t_binrw_should_rw_int32()", t_binrw_should_rw_int32))
         || (NULL == CU_add_test(suite, "t_binrw_should_rw_uint32()", t_binrw_should_rw_uint32))
         || (NULL == CU_add_test(suite, "t_binrw_should_rw_int32()", t_binrw_should_rw_int16))

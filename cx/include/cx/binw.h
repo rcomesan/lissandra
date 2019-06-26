@@ -4,6 +4,10 @@
 #include <stdint.h>
 #include <stdbool.h>
 
+void        cx_binw_int64(char* _buffer, uint16_t _bufferSize, uint32_t* _inOutPos, int64_t _val);
+
+void        cx_binw_uint64(char* _buffer, uint16_t _bufferSize, uint32_t* _inOutPos, uint64_t _val);
+
 void        cx_binw_int32(char* _buffer, uint16_t _bufferSize, uint32_t* _inOutPos, int32_t _val);
 
 void        cx_binw_uint32(char* _buffer, uint16_t _bufferSize, uint32_t* _inOutPos, uint32_t _val);
