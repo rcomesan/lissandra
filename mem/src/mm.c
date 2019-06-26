@@ -411,7 +411,7 @@ bool mm_page_write(segment_t* _table, table_record_t* _record, bool _isModificat
             table_record_t curRecord;
             _mm_page_to_record(page->handle, &curRecord);
             
-            if (_record->timestamp > curRecord.timestamp)
+            if (_record->timestamp >= curRecord.timestamp)
             {
                 // update the page with the given (most recent) value
                 _mm_record_to_page(_record, page->handle);
