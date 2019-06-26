@@ -58,7 +58,10 @@
     <ClCompile Include="src\str.c" />
     <ClCompile Include="src\timer.c" />
     <ClCompile Include="src\cdict.c" />
+    <ClCompile Include="tests\binrw_test.c" />
+    <ClCompile Include="tests\halloc_test.c" />
     <ClCompile Include="tests\list_test.c" />
+    <ClCompile Include="tests\sort_test.c" />
     <ClCompile Include="tests\test.c" />
   </ItemGroup>
   <ItemGroup>
@@ -83,6 +86,7 @@
     <ClInclude Include="include\cx\sort.h" />
     <ClInclude Include="include\cx\str.h" />
     <ClInclude Include="include\cx\timer.h" />
+    <ClInclude Include="tests\reslock_test.c" />
     <ClInclude Include="tests\test.h" />
   </ItemGroup>
   <ItemDefinitionGroup Condition="'$(Configuration)|$(Platform)'=='Tests|x86'">

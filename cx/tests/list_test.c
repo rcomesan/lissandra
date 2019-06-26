@@ -3,7 +3,7 @@
 
 static cx_list_t* list = NULL;
 static const uint32_t numElems = 5;
-static uint32_t counter = 0;
+static uint32_t listCounter = 0;
 
 int t_list_init()
 {
@@ -25,7 +25,7 @@ int t_list_cleanup()
 static void _t_list_node_destroyer(void* _data)
 {
     cx_list_node_t* node = (cx_list_node_t*)_data;
-    CU_ASSERT((uint32_t)node->data == ++counter);
+    CU_ASSERT((uint32_t)node->data == ++listCounter);
     free(node);
 }
 
@@ -33,8 +33,8 @@ static void _t_list_func_iter(cx_list_t* _list, cx_list_node_t* _node, uint32_t 
 {
     CU_ASSERT(_list == list);
     CU_ASSERT(_userData == (void*)0x999);
-    CU_ASSERT((uint32_t)_node->data == ++counter);
-    CU_ASSERT(_index == (counter - 1));
+    CU_ASSERT((uint32_t)_node->data == ++listCounter);
+    CU_ASSERT(_index == (listCounter - 1));
 }
 
 static void _t_list_should_push_single_item(bool _front)
@@ -172,16 +172,16 @@ void t_list_should_insert_in_between()
 
 void t_list_should_iterate_items()
 {
-    counter = 0;
+    listCounter = 0;
     cx_list_foreach(list, (cx_list_func_cb)_t_list_func_iter, (void*)0x999);
-    CU_ASSERT(numElems == counter);
+    CU_ASSERT(numElems == listCounter);
 }
 
 void t_list_should_remove_all_items()
 {
-    counter = 0;
+    listCounter = 0;
     cx_list_clear(list, (cx_destroyer_cb)_t_list_node_destroyer);
-    CU_ASSERT(numElems == counter);
+    CU_ASSERT(numElems == listCounter);
     CU_ASSERT(0 == cx_list_size(list));
 }
 

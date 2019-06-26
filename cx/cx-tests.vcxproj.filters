@@ -72,6 +72,15 @@
     <ClCompile Include="src\cdict.c">
       <Filter>src</Filter>
     </ClCompile>
+    <ClCompile Include="tests\halloc_test.c">
+      <Filter>tests</Filter>
+    </ClCompile>
+    <ClCompile Include="tests\binrw_test.c">
+      <Filter>tests</Filter>
+    </ClCompile>
+    <ClCompile Include="tests\sort_test.c">
+      <Filter>tests</Filter>
+    </ClCompile>
   </ItemGroup>
   <ItemGroup>
     <None Include="makefile" />
@@ -132,6 +141,9 @@
       <Filter>include\cx</Filter>
     </ClInclude>
     <ClInclude Include="tests\test.h">
+      <Filter>tests</Filter>
+    </ClInclude>
+    <ClInclude Include="tests\reslock_test.c">
       <Filter>tests</Filter>
     </ClInclude>
   </ItemGroup>
