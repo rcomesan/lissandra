@@ -9,6 +9,11 @@
 #include <string.h>
 #include <inttypes.h>
 
+#define MAX_TIMESTAMP_CHARS 20
+#define MAX_KEY_CHARS       5
+#define MAX_VALUE_CHARS     g_ctx.cfg.valueSize
+#define MAX_DELIM_CHARS     3
+
 /****************************************************************************************
  ***  PRIVATE DECLARATIONS
  ***************************************************************************************/
@@ -386,20 +391,23 @@ static void _memtable_record_destroyer(void* _data)
 
 static bool _memtable_save(memtable_t* _table, fs_file_t* _outFile, cx_err_t* _err)
 {
-    // serializes and stores the serialized representation of the given 
-    // memtable with the format [TIMESTAMP];[KEY];[VALUE] in the LFS.
-
+    // stores in the FS the serialized representation of the given memtable 
+    // with each record formated as [TIMESTAMP];[KEY];[VALUE] and a trailing 
+    // new line character (\n) as the delimiter between records.
+    
     // if this function returns true, _outFile is the resulting filesystem file 
     // with all the blocks allocated and written with the serialized memtable.
        
     if (_table->recordsCount <= 0) return false;
 
     CX_MEM_ZERO(*_outFile);
-
-    uint32_t tmpSize = g_ctx.cfg.valueSize + 40;
+   
+    // temporary buffer for storing a serialized table record 
+    uint32_t tmpSize = MAX_TIMESTAMP_CHARS + MAX_KEY_CHARS + MAX_VALUE_CHARS + MAX_DELIM_CHARS + 1;
     uint32_t tmpLen = 0;
     char*    tmp = malloc(tmpSize);
 
+    // buffer for storing a block of data
     uint32_t buffSize = fs_block_size();
     uint32_t buffPos = 0;
     char*    buff = malloc(buffSize);
@@ -408,28 +416,28 @@ static bool _memtable_save(memtable_t* _table, fs_file_t* _outFile, cx_err_t* _e
     uint32_t remainingBytes = 0;
 
     // allocate an initial block
-    if (1 == fs_block_alloc(1, &_outFile->blocks[_outFile->blocksCount]))
+    if (1 == fs_block_alloc(1, &_outFile->blocks[_outFile->blocksCount++]))
     {
-        _outFile->blocksCount++;
-
         for (uint32_t i = 0; i < _table->recordsCount; i++)
         {
             
-            tmpLen = snprintf(tmp, tmpSize, "%" PRIu64 ";%" PRIu16 ";%s;",
+            tmpLen = snprintf(tmp, tmpSize, "%" PRIu64 LFS_DELIM_VALUE 
+                                            "%" PRIu16 LFS_DELIM_VALUE 
+                                            "%s" LFS_DELIM_RECORD,
                 _table->records[i].timestamp,
                 _table->records[i].key,
                 _table->records[i].value);
             
             if (tmpLen >= tmpSize)
             {
-                // ensure the records always terminate with a semicolon, even if our temp 
+                // ensure the records always terminate LFS_DELIM_RECORD, even if our temp 
                 // buffer is not enough and the value is truncated. (it's not really our 
                 // fault, the value has a length greater than the allowed one - specified
                 // in the config file)
                 CX_CHECK(CX_ALW, "temp buffer for table '%s' is not enough! the length of the value is %d but the maximum allowed is %d",
                     _table->name, strlen(_table->records[i].value), g_ctx.cfg.valueSize);
                 tmpLen = tmpSize - 1;
-                tmp[tmpLen - 1] = ';'; // ensure trailing semicolon
+                tmp[tmpLen - 1] = LFS_DELIM_RECORD[0]; // ensure trailing LFS_DELIM_RECORD
             }
 
             // increment the total file size
@@ -506,25 +514,20 @@ failed:
 static bool _memtable_load(memtable_t* _table, char* _buff, uint32_t _buffSize, cx_err_t* _err)
 {
     CX_CHECK(MEMTABLE_TYPE_DISK == _table->type, "you can only parse buffers from memtables of type DISK!");
+      
+    uint8_t  dataStage = 0;
+    uint32_t dataMaxSize = cx_math_max(MAX_VALUE_CHARS, MAX_TIMESTAMP_CHARS) + 1;
+    uint32_t dataPos = 0;
+    char*    data = malloc(dataMaxSize);
     
-#define UINT32_MAX_CHARS 10
-
-    uint8_t  partCount = 0;
-
-    uint32_t tmpSize = cx_math_max(g_ctx.cfg.valueSize, UINT32_MAX_CHARS) + 1;
-    uint32_t tmpPos = 0;
-    char*    tmp = malloc(tmpSize);
-
     for (uint32_t i = 0; i < _buffSize; i++)
     {
-        if (';' == _buff[i])
+        if (LFS_DELIM_VALUE[0] == _buff[i])
         {
-            if (i <= 0) goto ignore_token;
+            dataStage++;
+            data[dataPos] = '\0';
 
-            partCount++;
-            tmp[tmpPos] = '\0';
-
-            if (1 == partCount)
+            if (1 == dataStage)
             {
                 // a new record just started.
                 // if our container is full, make some extra space.
@@ -540,31 +543,30 @@ static bool _memtable_load(memtable_t* _table, char* _buff, uint32_t _buffSize, 
                 }
 
                 // initialize and parse the timestamp.
-                cx_str_to_uint64(tmp, &_table->records[_table->recordsCount].timestamp);
+                cx_str_to_uint64(data, &_table->records[_table->recordsCount].timestamp);
                 _table->records[_table->recordsCount].value = NULL;
             }
-            else if (2 == partCount)
+            else if (2 == dataStage)
             {
                 // second part of the record (the key).
-                cx_str_to_uint16(tmp, &_table->records[_table->recordsCount].key);
-            }
-            else if (3 == partCount)
-            {
-                // third and last part of the record (the value).
-                _table->records[_table->recordsCount].value = cx_str_copy_d(tmp);
-                partCount = 0;
-                _table->recordsCount++;
+                cx_str_to_uint16(data, &_table->records[_table->recordsCount].key);
             }
 
-            tmpPos = 0;
+            dataPos = 0;
+        }
+        else if (LFS_DELIM_RECORD[0] == _buff[i])
+        {
+            // third and last part of the record (the value).
+            _table->records[_table->recordsCount].value = cx_str_copy_d(data);
+            _table->recordsCount++;
+            dataStage = 0;
         }
         else
         {
-            tmp[tmpPos++] = _buff[i];
+            data[dataPos++] = _buff[i];
         }
-    ignore_token:;
     }
 
-    free(tmp);
+    free(data);
     return (ERR_NONE == _err->code);
 }

@@ -52,6 +52,9 @@
 #define LFS_FILE_PROP_BLOCKS            "BLOCKS"
 #define LFS_FILE_PROP_SIZE              "SIZE"
 
+#define LFS_DELIM_VALUE                 ";"
+#define LFS_DELIM_RECORD                "\n"
+
 typedef enum LFS_TIMER
 {
     LFS_TIMER_DUMP = 0,
@@ -103,8 +106,8 @@ typedef struct fs_ctx_t
 typedef enum MEMTABLE_TYPE
 {
     MEMTABLE_TYPE_NONE = 0,
-    MEMTABLE_TYPE_MEM,
-    MEMTABLE_TYPE_DISK,
+    MEMTABLE_TYPE_MEM,                          // default memtable.
+    MEMTABLE_TYPE_DISK,                         // memtable loaded from disk (either from a dump or a partition).
 } MEMTABLE_TYPE;
 
 typedef struct memtable_t
