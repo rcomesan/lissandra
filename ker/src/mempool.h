@@ -13,10 +13,10 @@
 
 typedef struct mempool_hints_t
 {
-    E_QUERY             query;
+    QUERY_TYPE          query;
     const char*         tableName;
     uint16_t            key;
-    E_CONSISTENCY       consistency;
+    CONSISTENCY_TYPE    consistency;
 } mempool_hints_t;
 
 typedef struct mempool_metrics_t
@@ -50,7 +50,7 @@ typedef struct mem_node_t
 
 typedef struct criteria_t
 {
-    E_CONSISTENCY       type;                               // type identifier of this criteria (consistencies defined in CONSISTENCY_TYPE enum).
+    CONSISTENCY_TYPE    type;                               // type identifier of this criteria (consistencies defined in CONSISTENCY_TYPE enum).
     cx_list_t*          assignedNodes;                      // linked list containing all the assigned MEM nodes to this criteria.
     pthread_mutex_t     mtx;                                // mutex to protect assignedNodes linked-list when accessed from multiple threads.
     metrics_t           metrics[QUERY_COUNT];               // metrics for each of supported type of query (defined in QUERY_TYPE enum).
@@ -80,7 +80,7 @@ void        mempool_feed_tables(table_meta_t* _tables, uint32_t _tablesCount);
 
 void        mempool_add(uint16_t _memNumber, ipv4_t _ip, uint16_t _port);
 
-bool        mempool_assign(uint16_t _memNumber, E_CONSISTENCY _type, cx_err_t* _err);
+bool        mempool_assign(uint16_t _memNumber, CONSISTENCY_TYPE _type, cx_err_t* _err);
 
 uint16_t    mempool_get(mempool_hints_t* _hints, cx_err_t* _err);
 
@@ -92,7 +92,7 @@ int32_t     mempool_node_req(uint16_t _memNumber, uint8_t _header, const char* _
 
 void        mempool_node_wait(uint16_t _memNumber);
 
-void        mempool_metrics_report(uint16_t _memNumber, E_QUERY _type, double _timeElapsed);
+void        mempool_metrics_report(uint16_t _memNumber, QUERY_TYPE _type, double _timeElapsed);
 
 void        mempool_metrics_get(mempool_metrics_t* _outData);
 

@@ -17,7 +17,7 @@ static mempool_ctx_t*   m_mempoolCtx = NULL;
 
 static bool             _valid_mem_number(uint16_t _memNumber, cx_err_t* _err);
 
-static bool             _valid_consistency(E_CONSISTENCY _type, cx_err_t* _err);
+static bool             _valid_consistency(CONSISTENCY_TYPE _type, cx_err_t* _err);
 
 static void             _on_connected_to_mem(cx_net_ctx_cl_t* _ctx);
 
@@ -232,7 +232,7 @@ void mempool_add(uint16_t _memNumber, ipv4_t _ip, uint16_t _port)
     }
 }
 
-bool mempool_assign(uint16_t _memNumber, E_CONSISTENCY _type, cx_err_t* _err)
+bool mempool_assign(uint16_t _memNumber, CONSISTENCY_TYPE _type, cx_err_t* _err)
 {
     // this should be thread safe since it could be called from multiple worker threads 
     // at the same time (multiple ADD commands on different scripts could call this method)
@@ -301,11 +301,11 @@ bool mempool_assign(uint16_t _memNumber, E_CONSISTENCY _type, cx_err_t* _err)
 
 uint16_t mempool_get(mempool_hints_t* _hints, cx_err_t* _err)
 {
-    uint16_t        memNumber = INVALID_MEM_NUMBER;
-    mem_node_t*     memNode = NULL;
-    cx_list_node_t* listNode = NULL;
-    bool            consFound = true;
-    E_CONSISTENCY   cons;
+    uint16_t            memNumber = INVALID_MEM_NUMBER;
+    mem_node_t*         memNode = NULL;
+    cx_list_node_t*     listNode = NULL;
+    bool                consFound = true;
+    CONSISTENCY_TYPE    cons;
 
     if (QUERY_CREATE == _hints->query)
     {
@@ -322,7 +322,7 @@ uint16_t mempool_get(mempool_hints_t* _hints, cx_err_t* _err)
         pthread_mutex_lock(&m_mempoolCtx->tablesMap->mtx);
         if (cx_cdict_get(m_mempoolCtx->tablesMap, _hints->tableName, (void**)&meta))
         {
-            cons = (E_CONSISTENCY)meta->consistency;
+            cons = (CONSISTENCY_TYPE)meta->consistency;
         }
         else
         {
@@ -471,7 +471,7 @@ static bool _valid_mem_number(uint16_t _memNumber, cx_err_t* _err)
     return true;
 }
 
-static bool _valid_consistency(E_CONSISTENCY _type, cx_err_t* _err)
+static bool _valid_consistency(CONSISTENCY_TYPE _type, cx_err_t* _err)
 {
     if (!cx_math_in_range(_type, 0, CONSISTENCY_COUNT - 1))
     {

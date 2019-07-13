@@ -39,7 +39,7 @@ void worker_handle_create(task_t* _req, bool _scripted)
     CX_MEM_ZERO(hints);
     hints.query = QUERY_CREATE;
     hints.tableName = data->tableName;
-    hints.consistency = (E_CONSISTENCY)data->consistency;
+    hints.consistency = (CONSISTENCY_TYPE)data->consistency;
 
     payload_t payload;
     uint32_t payloadSize = mem_pack_req_create(payload, sizeof(payload),
@@ -276,6 +276,7 @@ static bool _worker_run_query_scripted(cx_cli_cmd_t* _cmd, task_t* _task)
     FILE*       output = ((data_run_t*)_task->data)->output;
     void*       originalData = _task->data;
     TASK_TYPE   originalType = _task->type;
+    QUERY_TYPE  query = common_parse_query(_cmd->header);
     bool        validCommand = false;
     char*       tableName = NULL;
     uint16_t    key = 0;
@@ -286,7 +287,7 @@ static bool _worker_run_query_scripted(cx_cli_cmd_t* _cmd, task_t* _task)
     uint32_t    compactionInterval = 0;
     uint16_t    memNumber = 0;
 
-    if (strcmp("CREATE", _cmd->header) == 0)
+    if (QUERY_CREATE == query)
     {
         if (cli_parse_create(_cmd, &_task->err, &tableName, &consistency, &numPartitions, &compactionInterval))
         {
@@ -305,7 +306,7 @@ static bool _worker_run_query_scripted(cx_cli_cmd_t* _cmd, task_t* _task)
             report_create(_task, output);
         }
     }
-    else if (strcmp("DROP", _cmd->header) == 0)
+    else if (QUERY_DROP == query)
     {
         if (cli_parse_drop(_cmd, &_task->err, &tableName))
         {
@@ -321,7 +322,7 @@ static bool _worker_run_query_scripted(cx_cli_cmd_t* _cmd, task_t* _task)
             report_drop(_task, output);
         }
     }
-    else if (strcmp("DESCRIBE", _cmd->header) == 0)
+    else if (QUERY_DESCRIBE == query)
     {
         if (cli_parse_describe(_cmd, &_task->err, &tableName))
         {
@@ -343,7 +344,7 @@ static bool _worker_run_query_scripted(cx_cli_cmd_t* _cmd, task_t* _task)
             report_describe(_task, output);
         }
     }
-    else if (strcmp("SELECT", _cmd->header) == 0)
+    else if (QUERY_SELECT == query)
     {
         if (cli_parse_select(_cmd, &_task->err, &tableName, &key))
         {
@@ -360,7 +361,7 @@ static bool _worker_run_query_scripted(cx_cli_cmd_t* _cmd, task_t* _task)
             report_select(_task, output);
         }
     }
-    else if (strcmp("INSERT", _cmd->header) == 0)
+    else if (QUERY_INSERT == query)
     {
         if (cli_parse_insert(_cmd, &_task->err, &tableName, &key, &value, &timestamp))
         {
@@ -379,7 +380,7 @@ static bool _worker_run_query_scripted(cx_cli_cmd_t* _cmd, task_t* _task)
             report_insert(_task, output);
         }
     }
-    else if (strcmp("JOURNAL", _cmd->header) == 0)
+    else if (QUERY_JOURNAL == query)
     {
         validCommand = true;
 
@@ -389,7 +390,7 @@ static bool _worker_run_query_scripted(cx_cli_cmd_t* _cmd, task_t* _task)
         worker_handle_journal(_task, true);
         report_journal(_task, output);
     }
-    else if (strcmp("ADD", _cmd->header) == 0)
+    else if(QUERY_ADDMEMORY == query)
     {
         if (cli_parse_add_memory(_cmd, &_task->err, &memNumber, &consistency))
         {
@@ -413,7 +414,7 @@ static bool _worker_run_query_scripted(cx_cli_cmd_t* _cmd, task_t* _task)
 
     if (validCommand)
     {
-        task_data_free(_task->type, _task->data);
+        common_task_data_free(_task->type, _task->data);
     }
 
     // restore original data

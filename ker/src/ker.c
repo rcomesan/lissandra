@@ -291,6 +291,7 @@ static void handle_cli_command(const cx_cli_cmd_t* _cmd)
     cx_err_t  err;
     CX_MEM_ZERO(err);
 
+    QUERY_TYPE  query = common_parse_query(_cmd->header);
     char*       tableName = NULL;
     uint16_t    key = 0;
     char*       value = NULL;
@@ -303,12 +304,12 @@ static void handle_cli_command(const cx_cli_cmd_t* _cmd)
     uint32_t    packetSize = 0;
     uint16_t    memNumber = 0;
 
-    if (strcmp("EXIT", _cmd->header) == 0)
+    if (QUERY_EXIT == query)
     {
         g_ctx.isRunning = false;
         g_ctx.shutdownReason = "cli-issued exit";
     }
-    else if (strcmp("LOGFILE", _cmd->header) == 0)
+    else if (QUERY_LOGFILE == query)
     {
         if (NULL != cx_logfile())
         {
@@ -320,7 +321,7 @@ static void handle_cli_command(const cx_cli_cmd_t* _cmd)
         }
         cx_cli_command_end();
     }
-    else if (strcmp("CREATE", _cmd->header) == 0)
+    else if (QUERY_CREATE == query)
     {
         if (cli_parse_create(_cmd, &err, &tableName, &consistency, &numPartitions, &compactionInterval))
         {
@@ -328,7 +329,7 @@ static void handle_cli_command(const cx_cli_cmd_t* _cmd)
             ker_handle_req_create(NULL, NULL, g_ctx.buff1, packetSize);
         }
     }
-    else if (strcmp("DROP", _cmd->header) == 0)
+    else if (QUERY_DROP == query)
     {
         if (cli_parse_drop(_cmd, &err, &tableName))
         {
@@ -336,7 +337,7 @@ static void handle_cli_command(const cx_cli_cmd_t* _cmd)
             ker_handle_req_drop(NULL, NULL, g_ctx.buff1, packetSize);
         }
     }
-    else if (strcmp("DESCRIBE", _cmd->header) == 0)
+    else if (QUERY_DESCRIBE == query)
     {
         if (cli_parse_describe(_cmd, &err, &tableName))
         {
@@ -344,7 +345,7 @@ static void handle_cli_command(const cx_cli_cmd_t* _cmd)
             ker_handle_req_describe(NULL, NULL, g_ctx.buff1, packetSize);
         }
     }
-    else if (strcmp("SELECT", _cmd->header) == 0)
+    else if (QUERY_SELECT == query)
     {
         if (cli_parse_select(_cmd, &err, &tableName, &key))
         {
@@ -352,7 +353,7 @@ static void handle_cli_command(const cx_cli_cmd_t* _cmd)
             ker_handle_req_select(NULL, NULL, g_ctx.buff1, packetSize);
         }
     }
-    else if (strcmp("INSERT", _cmd->header) == 0)
+    else if (QUERY_INSERT == query)
     {
         if (cli_parse_insert(_cmd, &err, &tableName, &key, &value, &timestamp))
         {
@@ -360,12 +361,12 @@ static void handle_cli_command(const cx_cli_cmd_t* _cmd)
             ker_handle_req_insert(NULL, NULL, g_ctx.buff1, packetSize);
         }
     }
-    else if (strcmp("JOURNAL", _cmd->header) == 0)
+    else if (QUERY_JOURNAL == query)
     {
         packetSize = ker_pack_req_journal(g_ctx.buff1, sizeof(g_ctx.buff1), 0);
         ker_handle_req_journal(NULL, NULL, g_ctx.buff1, packetSize);
     }
-    else if (strcmp("ADD", _cmd->header) == 0)
+    else if (QUERY_ADDMEMORY == query)
     {
         if (cli_parse_add_memory(_cmd, &err, &memNumber, &consistency))
         {
@@ -373,7 +374,7 @@ static void handle_cli_command(const cx_cli_cmd_t* _cmd)
             ker_handle_req_addmem(NULL, NULL, g_ctx.buff1, packetSize);
         }
     }
-    else if (strcmp("RUN", _cmd->header) == 0)
+    else if (QUERY_RUN == query)
     {
         if (cli_parse_run(_cmd, &err, &lqlScriptPath))
         {
@@ -613,5 +614,5 @@ static bool task_completed(task_t* _task)
 
 static bool task_free(task_t* _task)
 {
-    return task_data_free(_task->type, _task->data);
+    return common_task_data_free(_task->type, _task->data);
 }

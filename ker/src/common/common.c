@@ -2,7 +2,57 @@
 #include <cx/cx.h>
 #include <ker/defines.h>
 
-bool task_data_free(TASK_TYPE _type, void* _data)
+#include <string.h>
+
+QUERY_TYPE common_parse_query(const char* _queryHead)
+{
+    if (strcasecmp("EXIT", _queryHead) == 0)
+    {
+        return QUERY_EXIT;
+    }
+    else if (strcasecmp("LOGFILE", _queryHead) == 0)
+    {
+        return QUERY_LOGFILE;
+    }
+    else if (strcasecmp("CREATE", _queryHead) == 0)
+    {
+        return QUERY_CREATE;
+    }
+    else if (strcasecmp("DROP", _queryHead) == 0)
+    {
+        return QUERY_DROP;
+    }
+    else if (strcasecmp("DESCRIBE", _queryHead) == 0)
+    {
+        return QUERY_DESCRIBE;
+    }
+    else if (strcasecmp("SELECT", _queryHead) == 0)
+    {
+        return QUERY_SELECT;
+    }
+    else if (strcasecmp("INSERT", _queryHead) == 0)
+    {
+        return QUERY_INSERT;
+    }
+    else if (strcasecmp("JOURNAL", _queryHead) == 0)
+    {
+        return QUERY_JOURNAL;
+    }
+    else if (strcasecmp("RUN", _queryHead) == 0)
+    {
+        return QUERY_RUN;
+    }
+    else if (strcasecmp("ADD", _queryHead) == 0)
+    {
+        return QUERY_ADDMEMORY;
+    }
+    else
+    {
+        return QUERY_NONE;
+    }
+}
+
+bool common_task_data_free(TASK_TYPE _type, void* _data)
 {
     switch (_type)
     {
