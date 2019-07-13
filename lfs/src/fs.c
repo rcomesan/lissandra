@@ -47,7 +47,7 @@ static void         _fs_get_part_path(cx_path_t* _outFilePath, const char* _tabl
  ***  PUBLIC FUNCTIONS
  ***************************************************************************************/
 
-bool fs_init(cx_err_t* _err)
+bool fs_init(const char* _rootDir, uint32_t _blocksCount, uint32_t _blocksSize, cx_err_t* _err)
 {
     CX_CHECK(NULL == m_fsCtx, "fs is already initialized!");
 
@@ -56,7 +56,7 @@ bool fs_init(cx_err_t* _err)
 
     bool rootDirOk = false;
     cx_path_t rootDir;
-    cx_file_path(&rootDir, g_ctx.cfg.rootDir);
+    cx_file_path(&rootDir, _rootDir);
 
     if (cx_file_exists(&rootDir))
     {
@@ -78,7 +78,7 @@ bool fs_init(cx_err_t* _err)
     }
     else
     {
-        rootDirOk = _fs_bootstrap(&rootDir, g_ctx.cfg.blocksCount, g_ctx.cfg.blocksSize, _err);
+        rootDirOk = _fs_bootstrap(&rootDir, _blocksCount, _blocksSize, _err);
     }
 
     if (rootDirOk)

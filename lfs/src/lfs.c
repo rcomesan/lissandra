@@ -310,7 +310,7 @@ static bool lfs_init(cx_err_t* _err)
         return false;
     }
 
-    return fs_init(_err);
+    return fs_init(g_ctx.cfg.rootDir, g_ctx.cfg.blocksCount, g_ctx.cfg.blocksSize, _err);
 }
 
 static void lfs_destroy()

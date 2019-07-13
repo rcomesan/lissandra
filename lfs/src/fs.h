@@ -17,7 +17,7 @@ typedef void(*fs_func_cb)(const char* _tableName, table_t* _table, void* _userDa
  ***  PUBLIC FUNCTIONS
  ***************************************************************************************/
 
-bool                fs_init(cx_err_t* _err);
+bool                fs_init(const char* _rootDir, uint32_t _blocksCount, uint32_t _blocksSize, cx_err_t* _err);
 
 void                fs_destroy();
 
