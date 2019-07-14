@@ -415,6 +415,12 @@ static bool _worker_run_query_scripted(cx_cli_cmd_t* _cmd, task_t* _task)
     if (validCommand)
     {
         common_task_data_free(_task->type, _task->data);
+
+        if (QUERY_SELECT == query)
+        {
+            // do not stop execution if any of these queries fail
+            CX_ERR_CLEAR(&_task->err);
+        }
     }
 
     // restore original data
