@@ -183,31 +183,38 @@ bool memtable_make_dump(memtable_t* _table, cx_err_t* _err)
     if (_table->mtxInitialized) pthread_mutex_lock(&_table->mtx);
 
     table_t* table = NULL;
-    if (fs_table_exists(_table->name, &table))
-    {        
-        memtable_preprocess(_table);
-
-        fs_file_t dumpFile;
-        CX_MEM_ZERO(dumpFile);
-        if (_memtable_save(_table, &dumpFile, _err))
+    if (_table->recordsCount > 0)
+    {
+        if (fs_table_exists(_table->name, &table))
         {
-            uint16_t dumpNumber = fs_table_dump_number_next(_table->name);
-            if (fs_table_dump_set(_table->name, dumpNumber, false, &dumpFile, _err))
+            memtable_preprocess(_table);
+
+            fs_file_t dumpFile;
+            CX_MEM_ZERO(dumpFile);
+            if (_memtable_save(_table, &dumpFile, _err))
             {
-                // clear the memtable
-                for (uint32_t i = 0; i < _table->recordsCount; i++)
+                uint16_t dumpNumber = fs_table_dump_number_next(_table->name);
+                if (fs_table_dump_set(_table->name, dumpNumber, false, &dumpFile, _err))
                 {
-                    _memtable_record_destroyer((void*)&_table->records[i]);
+                    // clear the memtable
+                    for (uint32_t i = 0; i < _table->recordsCount; i++)
+                    {
+                        _memtable_record_destroyer((void*)&_table->records[i]);
+                    }
+                    _table->recordsCount = 0;
                 }
-                _table->recordsCount = 0;
             }
+        }
+        else
+        {
+            CX_ERR_SET(_err, 1, "Table '%s' does not exist.", _table->name);
         }
     }
     else
     {
-        CX_ERR_SET(_err, 1, "Table '%s' does not exist.", _table->name);
+        CX_ERR_SET(_err, ERR_DUMP_NOT_NEEDED, "Table '%s' has no memtable records to dump.", _table->name);
     }
-       
+
     if (_table->mtxInitialized) pthread_mutex_unlock(&_table->mtx);
     return (ERR_NONE == _err->code);
 }
@@ -416,8 +423,10 @@ static bool _memtable_save(memtable_t* _table, fs_file_t* _outFile, cx_err_t* _e
     uint32_t remainingBytes = 0;
 
     // allocate an initial block
-    if (1 == fs_block_alloc(1, &_outFile->blocks[_outFile->blocksCount++]))
+    if (1 == fs_block_alloc(1, &_outFile->blocks[_outFile->blocksCount]))
     {
+        _outFile->blocksCount++;
+
         for (uint32_t i = 0; i < _table->recordsCount; i++)
         {
             
@@ -525,7 +534,6 @@ static bool _memtable_load(memtable_t* _table, char* _buff, uint32_t _buffSize, 
         if (LFS_DELIM_VALUE[0] == _buff[i])
         {
             dataStage++;
-            data[dataPos] = '\0';
 
             if (1 == dataStage)
             {
@@ -543,23 +551,28 @@ static bool _memtable_load(memtable_t* _table, char* _buff, uint32_t _buffSize, 
                 }
 
                 // initialize and parse the timestamp.
+                data[dataPos] = '\0';
                 cx_str_to_uint64(data, &_table->records[_table->recordsCount].timestamp);
                 _table->records[_table->recordsCount].value = NULL;
             }
             else if (2 == dataStage)
             {
                 // second part of the record (the key).
+                data[dataPos] = '\0';
                 cx_str_to_uint16(data, &_table->records[_table->recordsCount].key);
             }
 
-            dataPos = 0;
+            dataPos = 0; // reset record data position
         }
         else if (LFS_DELIM_RECORD[0] == _buff[i])
         {
             // third and last part of the record (the value).
+            data[dataPos] = '\0';
             _table->records[_table->recordsCount].value = cx_str_copy_d(data);
+
             _table->recordsCount++;
-            dataStage = 0;
+            dataStage = 0;      // reset record data stage
+            dataPos = 0;        // reset record data position
         }
         else
         {

@@ -67,10 +67,6 @@ static void         api_response_insert(const task_t* _task);
 static bool         on_connection_mem(cx_net_ctx_sv_t* _ctx, const ipv4_t _ipv4);
 static void         on_disconnection_mem(cx_net_ctx_sv_t* _ctx, cx_net_client_t* _client);
 
-static void         table_unblock(table_t* _table);
-static void         table_free(table_t* _table);
-static void         table_create_task_dump(const char* _tableName, table_t* _table, void* _userData);
-
 /****************************************************************************************
  ***  PUBLIC FUNCTIONS
  ***************************************************************************************/
@@ -498,45 +494,6 @@ static void on_disconnection_mem(cx_net_ctx_sv_t* _ctx, cx_net_client_t* _client
     // MEM node just disconnected.
 }
 
-static void table_unblock(table_t* _table)
-{
-    // make the resource (our table) available again
-    cx_reslock_unblock(&_table->reslock);
-    
-    task_t* task = NULL;
-    while (!queue_is_empty(_table->blockedQueue))
-    {
-        task = queue_pop(_table->blockedQueue);
-        task->state = TASK_STATE_NEW;
-    }
-}
-
-static void table_free(table_t* _table)
-{
-    data_free_t* data = CX_MEM_STRUCT_ALLOC(data);
-    data->resourceType = RESOURCE_TYPE_TABLE;
-    data->resourcePtr = _table;
-
-    task_t* task = taskman_create(TASK_ORIGIN_INTERNAL, TASK_MT_FREE, data, NULL);
-    if (NULL != task)
-    {
-        task->state = TASK_STATE_NEW;
-    }
-}
-
-static void table_create_task_dump(const char* _tableName, table_t* _table, void* _userData)
-{
-    task_t* task = taskman_create(TASK_ORIGIN_INTERNAL_PRIORITY, TASK_WT_DUMP, NULL, NULL);
-    if (NULL != task)
-    {
-        data_dump_t* data = CX_MEM_STRUCT_ALLOC(data);
-        cx_str_copy(data->tableName, sizeof(data->tableName), _table->meta.name);
-        
-        task->data = data;
-        task->state = TASK_STATE_NEW;
-    }
-}
-
 static bool task_run_wk(task_t* _task)
 {
     _task->state = TASK_STATE_RUNNING;
@@ -593,65 +550,13 @@ static bool task_run_mt(task_t* _task)
     case TASK_MT_COMPACT:
     {
         data_compact_t* data = _task->data;
-        
-        if (fs_table_avail_guard_begin(data->tableName, NULL, &table))
-        {
-            if (!table->compacting)
-            {
-                if (!cx_reslock_is_blocked(&table->reslock))
-                {
-                    // if the table is not blocked, block it now to start denying tasks
-                    cx_reslock_block(&table->reslock);
-                }
-
-                if (1 == cx_reslock_counter(&table->reslock))
-                {
-                    // at this point, our table is blocked (so new operations on it are being blocked and delayed)
-                    // and also there's just only 1 pending operation on it (that's us) we can safely start compacting it now.
-                    table->compacting = true;
-
-                    task = taskman_create(TASK_ORIGIN_INTERNAL_PRIORITY, TASK_WT_COMPACT, NULL, NULL);
-                    if (NULL != task)
-                    {
-                        data_compact_t* data = CX_MEM_STRUCT_ALLOC(data);
-                        cx_str_copy(data->tableName, sizeof(data->tableName), table->meta.name);
-
-                        task->data = data;
-                        task->table = table;
-                        task->state = TASK_STATE_NEW;
-                        success = true;
-                    }
-                    else
-                    {
-                        // task creation failed. unblock this table and skip this task.
-                        table->compacting = false;
-                        table_unblock(table);
-                    }
-                }
-            }
-            else
-            {
-                // we can safely ignore this one
-                // we don't really want multiple compactions to be performed at the same time
-                CX_INFO("Ignoring compaction for table '%s' (another thread is already compacting it).", table->meta.name);
-                success = true;
-            }
-
-            fs_table_avail_guard_end(table);
-        }
-        else
-        {
-            // table no longer exists, (table might have been deleted and therefore no longer in use).
-            success = true;
-        }
+        success = fs_table_compact_tryenqueue(data->tableName);
         break;
     }
 
     case TASK_MT_DUMP:
     {
-        fs_tables_foreach((fs_func_cb)table_create_task_dump, NULL);        
-
-        success = true;
+        success = fs_table_dump_tryenqueue();
         break;
     }
 
@@ -723,12 +628,12 @@ static bool task_completed(task_t* _task)
             CX_CHECK(INVALID_HANDLE != table->timerHandle, "we ran out of timer handles for table '%s'!", table->meta.name);
 
             // unblock the table making it fully available!
-            table_unblock(table);
+            fs_table_unblock(table);
         }
         else
         {
             // the creation failed, we need to free this table slot now.
-            table_free(table);
+            fs_table_free(table);
         }
 
         if (TASK_ORIGIN_API == _task->origin)
@@ -743,7 +648,7 @@ static bool task_completed(task_t* _task)
         if (ERR_NONE == _task->err.code)
         {
             // drop succeeded, free this table in a thread-safe way (this is the main-thread).
-            table_free(table);
+            fs_table_free(table);
         }
 
         if (TASK_ORIGIN_API == _task->origin)
@@ -788,7 +693,7 @@ static bool task_completed(task_t* _task)
             {
                 CX_INFO("table '%s' dumped successfully.", table->meta.name);
             }
-            else
+            else if (ERR_DUMP_NOT_NEEDED != _task->err.code)
             {
                 CX_INFO("table '%s' dump failed. %s", table->meta.name, _task->err.desc);
             }
@@ -802,7 +707,7 @@ static bool task_completed(task_t* _task)
         if (NULL != table)
         {
             table->compacting = false;
-            table_unblock(table);
+            fs_table_unblock(table);
             blockedTime = cx_reslock_blocked_time(&table->reslock);
         }
         else
@@ -814,7 +719,7 @@ static bool task_completed(task_t* _task)
         {
             CX_INFO("table '%s' compacted successfully. (%.3f sec blocked)", table->meta.name, blockedTime);
         }
-        else
+        else if (ERR_COMPACT_NOT_NEEDED != _task->err.code)
         {
             CX_INFO("table '%s' compaction failed. %s", table->meta.name, _task->err.desc);
         }

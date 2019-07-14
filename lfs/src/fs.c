@@ -7,6 +7,7 @@
 #include <cx/str.h>
 #include <cx/math.h>
 #include <cx/timer.h>
+#include <ker/taskman.h>
 
 #include <commons/config.h>
 
@@ -42,6 +43,8 @@ static bool         _fs_file_load(fs_file_t* _file, cx_err_t* _err);
 static void         _fs_get_dump_path(cx_path_t* _outFilePath, const char* _tableName, uint16_t _dumpNumber, bool _isDuringCompaction);
 
 static void         _fs_get_part_path(cx_path_t* _outFilePath, const char* _tableName, uint16_t _partNumber, bool _isDuringCompaction);
+
+static void         _fs_get_block_path(cx_path_t* _outFilePath, uint32_t _blockNumber);
 
 /****************************************************************************************
  ***  PUBLIC FUNCTIONS
@@ -133,6 +136,7 @@ table_meta_t* fs_describe(uint16_t* _outTablesCount, cx_err_t* _err)
 
     CX_ERR_CLEAR(_err);
 
+    pthread_mutex_lock(&m_fsCtx->tablesMap->mtx);
     cx_cdict_iter_begin(m_fsCtx->tablesMap);
     (*_outTablesCount) = (uint16_t)cx_cdict_size(m_fsCtx->tablesMap);
     if (0 < (*_outTablesCount))
@@ -141,15 +145,11 @@ table_meta_t* fs_describe(uint16_t* _outTablesCount, cx_err_t* _err)
 
         while (cx_cdict_iter_next(m_fsCtx->tablesMap, &key, (void**)&table))
         {
-            //if (fs_table_avail_guard_begin(key, NULL, &table))
-            //{
-                //TODO FIXME!! 
-                memcpy(&(tables[i++]), &(table->meta), sizeof(tables[0]));
-            //    fs_table_avail_guard_end(table);
-            //}
+            memcpy(&(tables[i++]), &(table->meta), sizeof(tables[0]));
         }
     }
     cx_cdict_iter_end(m_fsCtx->tablesMap);
+    pthread_mutex_unlock(&m_fsCtx->tablesMap->mtx);
 
     if ((*_outTablesCount) != i)
     {
@@ -489,6 +489,118 @@ uint16_t fs_table_dump_number_next(const char* _tableName)
     return 0;
 }
 
+bool fs_table_dump_tryenqueue()
+{
+    char* tableName = NULL;
+    table_t* table = NULL;
+
+    pthread_mutex_lock(&m_fsCtx->tablesMap->mtx);
+    cx_cdict_iter_begin(m_fsCtx->tablesMap);
+    while (cx_cdict_iter_next(m_fsCtx->tablesMap, &tableName, (void**)&table))
+    {
+        task_t* task = taskman_create(TASK_ORIGIN_INTERNAL_PRIORITY, TASK_WT_DUMP, NULL, NULL);
+        if (NULL != task)
+        {
+            data_dump_t* data = CX_MEM_STRUCT_ALLOC(data);
+            cx_str_copy(data->tableName, sizeof(data->tableName), tableName);
+
+            task->data = data;
+            task->state = TASK_STATE_NEW;
+        }
+    }
+    cx_cdict_iter_end(m_fsCtx->tablesMap);
+    pthread_mutex_unlock(&m_fsCtx->tablesMap->mtx);
+
+    return true;
+}
+
+bool fs_table_compact_tryenqueue(const char* _tableName)
+{
+    bool      success = false;
+    table_t*  table = NULL;
+    task_t*   task = NULL;
+
+    pthread_mutex_lock(&m_fsCtx->tablesMap->mtx);
+    if (fs_table_exists(_tableName, &table))
+    {
+        if (!table->compacting)
+        {
+            if (!cx_reslock_is_blocked(&table->reslock))
+            {
+                // if the table is not blocked, block it now to start denying tasks
+                cx_reslock_block(&table->reslock);
+            }
+
+            if (0 == cx_reslock_counter(&table->reslock))
+            {
+                // at this point, our memory is blocked (so new operations on it are being blocked and delayed)
+                // and also there're zero pending operations on it, so we can safely start compacting it now.
+                table->compacting = true;
+
+                task = taskman_create(TASK_ORIGIN_INTERNAL_PRIORITY, TASK_WT_COMPACT, NULL, NULL);
+                if (NULL != task)
+                {
+                    data_compact_t* data = CX_MEM_STRUCT_ALLOC(data);
+                    cx_str_copy(data->tableName, sizeof(data->tableName), table->meta.name);
+
+                    task->data = data;
+                    task->table = table;
+                    task->state = TASK_STATE_NEW;
+                    success = true;
+                }
+                else
+                {
+                    // task creation failed. unblock this table and skip this task.
+                    table->compacting = false;
+                    fs_table_unblock(table);
+                }
+            }
+        }
+        else
+        {
+            // we can safely ignore this one
+            // we don't really want multiple compactions to be performed at the same time
+            CX_INFO("Ignoring compaction for table '%s' (another thread is already compacting it).", table->meta.name);
+            success = true;
+        }
+    }
+    else
+    {
+        // table no longer exists, (table might have been deleted and therefore no longer in use).
+        success = true;
+    }
+    pthread_mutex_unlock(&m_fsCtx->tablesMap->mtx);
+
+    return success;
+}
+
+void fs_table_unblock(table_t* _table)
+{
+    // unblock the tabke and make it available again
+    cx_reslock_unblock(&_table->reslock);
+
+    task_t* task = NULL;
+    // re-schedule pending tasks in blocked queue
+    while (!queue_is_empty(_table->blockedQueue))
+    {
+        task = queue_pop(_table->blockedQueue);
+        task->state = TASK_STATE_NEW;
+    }
+}
+
+void fs_table_free(table_t* _table)
+{
+    data_free_t* data = CX_MEM_STRUCT_ALLOC(data);
+    data->resourceType = RESOURCE_TYPE_TABLE;
+    data->resourcePtr = _table;
+
+    task_t* task = taskman_create(TASK_ORIGIN_INTERNAL, TASK_MT_FREE, data, NULL);
+    if (NULL != task)
+    {
+        task->state = TASK_STATE_NEW;
+    }
+}
+
 cx_file_explorer_t* fs_table_explorer(const char* _tableName, cx_err_t* _err)
 {
     cx_path_t path;
@@ -498,23 +610,6 @@ cx_file_explorer_t* fs_table_explorer(const char* _tableName, cx_err_t* _err)
 
     CX_WARN(NULL != explorer, "table directory can't be explored: %s", _err->desc);
     return explorer;
-}
-
-void fs_tables_foreach(fs_func_cb _func, void* _userData)
-{
-    char* tableName = NULL;
-    table_t* table = NULL;
-
-    cx_cdict_iter_begin(m_fsCtx->tablesMap);
-    while (cx_cdict_iter_next(m_fsCtx->tablesMap, &tableName, (void**)&table))
-    {
-        if (fs_table_avail_guard_begin(tableName, NULL, &table))
-        {
-            _func(tableName, table, _userData);
-            fs_table_avail_guard_end(table);
-        }
-    }
-    cx_cdict_iter_end(m_fsCtx->tablesMap);
 }
 
 uint32_t fs_block_alloc(uint32_t _blocksCount, uint32_t* _outBlocksArr)
@@ -569,6 +664,9 @@ uint32_t fs_block_alloc(uint32_t _blocksCount, uint32_t* _outBlocksArr)
                             fseek(bitmap, i * sizeof(uint32_t), SEEK_SET);
                             fwrite(&segments[i], sizeof(uint32_t), 1, bitmap);
 
+                            // initiate it empty
+                            fs_block_write(_outBlocksArr[allocatedBlocks - 1], NULL, 0, NULL);
+
                             goto block_found;
                         }
                     }
@@ -593,6 +691,8 @@ void fs_block_free(uint32_t* _blocksArr, uint32_t _blocksCount)
 
     pthread_mutex_lock(&m_fsCtx->mtxBlocks);
 
+    cx_path_t blockFilePath;
+
     cx_path_t bitmapFilePath;
     cx_file_path(&bitmapFilePath, "%s/%s/%s", m_fsCtx->rootDir, LFS_DIR_METADATA, LFS_FILE_BITMAP);
 
@@ -611,6 +711,10 @@ void fs_block_free(uint32_t* _blocksArr, uint32_t _blocksCount)
             segments[segmentIndex] &= ~((uint32_t)1 << bit);
             fseek(bitmap, segmentIndex * sizeof(uint32_t), SEEK_SET);
             fwrite(&segments[segmentIndex], sizeof(uint32_t), 1, bitmap);
+
+            // delete the file in the ufs
+            _fs_get_block_path(&blockFilePath, _blocksArr[i]);
+            cx_file_remove(&blockFilePath, NULL);
         }
         fflush(bitmap);
         fclose(bitmap);
@@ -623,7 +727,7 @@ void fs_block_free(uint32_t* _blocksArr, uint32_t _blocksCount)
 int32_t fs_block_read(uint32_t _blockNumber, char* _buffer, cx_err_t* _err)
 {
     cx_path_t blockFilePath;
-    cx_file_path(&blockFilePath, "%s/%s/%s%d.%s", m_fsCtx->rootDir, LFS_DIR_BLOCKS, LFS_BLOCK_PREFIX, _blockNumber, LFS_BLOCK_EXTENSION);
+    _fs_get_block_path(&blockFilePath, _blockNumber);
 
     return cx_file_read(&blockFilePath, _buffer, m_fsCtx->meta.blocksSize, _err);
 }
@@ -634,9 +738,16 @@ bool fs_block_write(uint32_t _blockNumber, char* _buffer, uint32_t _bufferSize, 
         m_fsCtx->meta.blocksSize);
 
     cx_path_t blockFilePath;
-    cx_file_path(&blockFilePath, "%s/%s/%s%d.%s", m_fsCtx->rootDir, LFS_DIR_BLOCKS, LFS_BLOCK_PREFIX, _blockNumber, LFS_BLOCK_EXTENSION);
+    _fs_get_block_path(&blockFilePath, _blockNumber);
 
-    return cx_file_write(&blockFilePath, _buffer, _bufferSize, _err);
+    if (NULL == _buffer || 0 == _bufferSize)
+    {
+        return cx_file_touch(&blockFilePath, _err);
+    }
+    else
+    {
+        return cx_file_write(&blockFilePath, _buffer, _bufferSize, _err);
+    }
 }
 
 uint32_t fs_block_size()
@@ -1142,4 +1253,10 @@ static void _fs_get_part_path(cx_path_t* _outFilePath, const char* _tableName, u
     cx_file_path(_outFilePath, "%s/%s/%s/%s%d.%s", m_fsCtx->rootDir, LFS_DIR_TABLES,
         _tableName, LFS_PART_PREFIX, _partNumber,
         _isDuringCompaction ? LFS_PART_EXTENSION_COMPACTION : LFS_PART_EXTENSION);
+}
+
+static void _fs_get_block_path(cx_path_t* _outFilePath, uint32_t _blockNumber)
+{
+    cx_file_path(_outFilePath, "%s/%s/%s%d.%s", m_fsCtx->rootDir, LFS_DIR_BLOCKS,
+        LFS_BLOCK_PREFIX, _blockNumber, LFS_BLOCK_EXTENSION);
 }

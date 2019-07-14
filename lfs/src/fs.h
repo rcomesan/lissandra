@@ -11,8 +11,6 @@
 
 #include <pthread.h>
 
-typedef void(*fs_func_cb)(const char* _tableName, table_t* _table, void* _userData);
-
 /****************************************************************************************
  ***  PUBLIC FUNCTIONS
  ***************************************************************************************/
@@ -55,9 +53,15 @@ bool                fs_table_dump_delete(const char* _tableName, uint16_t _dumpN
 
 uint16_t            fs_table_dump_number_next(const char* _tableName);
 
-cx_file_explorer_t* fs_table_explorer(const char* _tableName, cx_err_t* _err);
+bool                fs_table_dump_tryenqueue();
 
-void                fs_tables_foreach(fs_func_cb _func, void* _userData);
+bool                fs_table_compact_tryenqueue(const char* _tableName);
+
+void                fs_table_unblock(table_t* _table);
+
+void                fs_table_free(table_t* _table);
+
+cx_file_explorer_t* fs_table_explorer(const char* _tableName, cx_err_t* _err);
 
 uint32_t            fs_block_alloc(uint32_t _blocksCount, uint32_t* _outBlocksArr);
 
