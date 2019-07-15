@@ -16,7 +16,7 @@ LIB_CX_RELEASE := libcx.so
 LIB_CX_DEBUG := libcxd.so
 
 # Gcc
-DELAYS_ENABLED := 
+DELAYS_ENABLED := -DDELAYS_ENABLED
 CC := gcc
 CFLAGS ?=                                 \
 	-I../cx/include/                      \

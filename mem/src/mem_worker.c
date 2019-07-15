@@ -179,7 +179,7 @@ static bool _worker_request_lfs(uint8_t _header, const char* _payload, uint32_t 
     pthread_mutex_unlock(&_task->responseMtx);
 
 #ifdef DELAYS_ENABLED
-    sleep(g_ctx.cfg.delayLfs);
+    cx_time_sleep(g_ctx.cfg.delayLfs);
 #endif
 
     do

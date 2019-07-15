@@ -64,4 +64,6 @@ uint64_t        cx_time_epoch_ms();
 
 void            cx_time_stamp(cx_timestamp_t* _outTimestamp);
 
+void            cx_time_sleep(uint32_t _milliseconds);
+
 #endif // CX_TIMER_H_

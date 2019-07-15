@@ -4,6 +4,7 @@
 
 #include <cx/mem.h>
 #include <cx/str.h>
+#include <cx/timer.h>
 
 #include <pthread.h>
 #include <errno.h>
@@ -380,7 +381,7 @@ bool mm_page_read(segment_t* _table, uint16_t _key, table_record_t* _outRecord, 
         CX_ERR_SET(_err, ERR_GENERIC, "Key %d does not exist in table '%s'.", _key, _table->tableName);
 
 #ifdef DELAYS_ENABLED
-    sleep(g_ctx.cfg.delayMem);
+    cx_time_sleep(g_ctx.cfg.delayMem);
 #endif
 
     return success;
@@ -453,7 +454,7 @@ bool mm_page_write(segment_t* _table, table_record_t* _record, bool _isModificat
     pthread_mutex_unlock(&_table->pages->mtx);
 
 #ifdef DELAYS_ENABLED
-    sleep(g_ctx.cfg.delayMem);
+    cx_time_sleep(g_ctx.cfg.delayMem);
 #endif
 
     return success;

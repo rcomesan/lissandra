@@ -46,7 +46,7 @@
     <RemoteProjectDir>$(RemoteRootDir)/$(ProjectName)</RemoteProjectDir>
     <LocalRemoteCopySources>true</LocalRemoteCopySources>
     <RemoteBuildOutputs>$(RemoteRootDir)/$(ProjectName)/build/$(Configuration.toLower())/$(ProjectName).out</RemoteBuildOutputs>
-    <NMakePreprocessorDefinitions>KER;DELAYS_ENABLED;DEBUG;PROJECT_NAME="$(ProjectName)"</NMakePreprocessorDefinitions>
+    <NMakePreprocessorDefinitions>KER;DEBUG;PROJECT_NAME="$(ProjectName)";DELAYS_ENABLED</NMakePreprocessorDefinitions>
     <NMakeForcedIncludes>
     </NMakeForcedIncludes>
   </PropertyGroup>
@@ -62,7 +62,7 @@
     <RemoteBuildOutputs>$(RemoteRootDir)/$(ProjectName)/build/$(Configuration.toLower())/$(ProjectName).out</RemoteBuildOutputs>
     <NMakeForcedIncludes>
     </NMakeForcedIncludes>
-    <NMakePreprocessorDefinitions>KER;DELAYS_ENABLED;PROJECT_NAME="$(ProjectName)"</NMakePreprocessorDefinitions>
+    <NMakePreprocessorDefinitions>KER;PROJECT_NAME="$(ProjectName)";DELAYS_ENABLED</NMakePreprocessorDefinitions>
   </PropertyGroup>
   <ItemGroup>
     <ClCompile Include="src\common\cli_parser.c" />

@@ -46,7 +46,7 @@
     <RemoteProjectDir>$(RemoteRootDir)/$(ProjectName)</RemoteProjectDir>
     <LocalRemoteCopySources>true</LocalRemoteCopySources>
     <RemoteBuildOutputs>$(RemoteRootDir)/$(ProjectName)/build/$(Configuration.toLower())/$(ProjectName).out</RemoteBuildOutputs>
-    <NMakePreprocessorDefinitions>MEM;DEBUG;PROJECT_NAME="$(ProjectName)"</NMakePreprocessorDefinitions>
+    <NMakePreprocessorDefinitions>MEM;DEBUG;PROJECT_NAME="$(ProjectName)";DELAYS_ENABLED</NMakePreprocessorDefinitions>
     <NMakeForcedIncludes>
     </NMakeForcedIncludes>
   </PropertyGroup>
@@ -62,7 +62,7 @@
     <RemoteBuildOutputs>$(RemoteRootDir)/$(ProjectName)/build/$(Configuration.toLower())/$(ProjectName).out</RemoteBuildOutputs>
     <NMakeForcedIncludes>
     </NMakeForcedIncludes>
-    <NMakePreprocessorDefinitions>MEM;PROJECT_NAME="$(ProjectName)"</NMakePreprocessorDefinitions>
+    <NMakePreprocessorDefinitions>MEM;PROJECT_NAME="$(ProjectName)";DELAYS_ENABLED</NMakePreprocessorDefinitions>
   </PropertyGroup>
   <ItemGroup>
     <ClCompile Include="src\common\mem_protocol.c" />

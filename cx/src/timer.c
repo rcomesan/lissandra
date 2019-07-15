@@ -297,6 +297,11 @@ void cx_time_stamp(cx_timestamp_t* _outTimestamp)
     strftime(*_outTimestamp, 15, "%Y%m%d%H%M%S", localtime(&now));
 }
 
+void cx_time_sleep(uint32_t _milliseconds)
+{
+    usleep(_milliseconds * 1000);
+}
+
 /****************************************************************************************
  ***  PRIVATE FUNCTIONS
  ***************************************************************************************/
