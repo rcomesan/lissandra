@@ -32,6 +32,8 @@ void                cx_file_get_name(const cx_path_t* _path, bool _stripExtensio
 
 void                cx_file_get_path(const cx_path_t* _path, cx_path_t* _outPath);
 
+void                cx_file_set_extension(cx_path_t* _path, const char* _extension);
+
 bool                cx_file_touch(const cx_path_t* _filePath, cx_err_t* _err);
 
 bool                cx_file_mkdir(const cx_path_t* _folderPath, cx_err_t* _err);

@@ -123,6 +123,23 @@ void cx_file_get_path(const cx_path_t* _path, cx_path_t* _outPath)
     }
 }
 
+void cx_file_set_extension(cx_path_t* _path, const char* _extension)
+{
+    char* dot = strrchr(*_path, '.');
+
+    if (NULL == dot || (*_path) == dot)
+    {
+        // add it to the end
+        cx_str_cat(*_path, sizeof(*_path), ".");
+        cx_str_cat(*_path, sizeof(*_path), _extension);
+    }
+    else
+    {
+        dot[1] = '\0';
+        cx_str_cat(*_path, sizeof(*_path), _extension);
+    }
+}
+
 bool cx_file_touch(const cx_path_t* _filePath, cx_err_t* _err)
 {
     CX_CHECK(strlen(*_filePath) > 0, "invalid file path!");

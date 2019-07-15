@@ -59,6 +59,7 @@
     <ClCompile Include="src\timer.c" />
     <ClCompile Include="src\cdict.c" />
     <ClCompile Include="tests\binrw_test.c" />
+    <ClCompile Include="tests\file_test.c" />
     <ClCompile Include="tests\halloc_test.c" />
     <ClCompile Include="tests\list_test.c" />
     <ClCompile Include="tests\sort_test.c" />

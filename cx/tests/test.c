@@ -3,6 +3,7 @@
 #include "halloc_test.c"
 #include "reslock_test.c"
 #include "sort_test.c"
+#include "file_test.c"
 
 #include <CUnit/Basic.h>
 
@@ -33,6 +34,25 @@ int main(int _argc, char** _argv)
         || (NULL == CU_add_test(suite, "t_binrw_should_rw_bool()", t_binrw_should_rw_bool))
         || (NULL == CU_add_test(suite, "t_binrw_should_rw_str()", t_binrw_should_rw_str))
         || (NULL == CU_add_test(suite, "t_binrw_should_rw_str_when_empty()", t_binrw_should_rw_str_when_empty))
+        )
+    {
+        CU_cleanup_registry();
+        return CU_get_error();
+    }
+
+    // +=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=
+
+    suite = CU_add_suite("file.c", t_file_init, t_file_cleanup);
+    if (NULL == suite
+        || (NULL == CU_add_test(suite, "t_file_should_absolutize_paths()", t_file_should_absolutize_paths))
+        || (NULL == CU_add_test(suite, "t_file_should_accept_absolute_paths()", t_file_should_accept_absolute_paths))
+        || (NULL == CU_add_test(suite, "t_file_should_exist()", t_file_should_exist))
+        || (NULL == CU_add_test(suite, "t_file_should_not_exist()", t_file_should_not_exist))
+        || (NULL == CU_add_test(suite, "t_file_should_get_size()", t_file_should_get_size))
+        || (NULL == CU_add_test(suite, "t_file_should_get_name()", t_file_should_get_name))
+        || (NULL == CU_add_test(suite, "t_file_should_get_path()", t_file_should_get_path))
+        || (NULL == CU_add_test(suite, "t_file_should_change_extension()", t_file_should_change_extension))
+        || (NULL == CU_add_test(suite, "t_file_should_append_extension()", t_file_should_append_extension))
         )
     {
         CU_cleanup_registry();

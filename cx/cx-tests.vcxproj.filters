@@ -81,6 +81,9 @@
     <ClCompile Include="tests\sort_test.c">
       <Filter>tests</Filter>
     </ClCompile>
+    <ClCompile Include="tests\file_test.c">
+      <Filter>tests</Filter>
+    </ClCompile>
   </ItemGroup>
   <ItemGroup>
     <None Include="makefile" />
