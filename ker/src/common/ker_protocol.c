@@ -105,6 +105,7 @@ void ker_handle_req_run(const cx_net_common_t* _common, void* _userData, const c
         data_run_t* data = CX_MEM_STRUCT_ALLOC(data);
 
         cx_binr_str(_buffer, _bufferSize, &bufferPos, data->scriptFilePath, sizeof(data->scriptFilePath));
+        cx_file_get_name(&data->scriptFilePath, false, &data->scriptFileName);
         data->script = NULL;
 
         cx_binr_str(_buffer, _bufferSize, &bufferPos, data->outputFilePath, sizeof(data->outputFilePath));

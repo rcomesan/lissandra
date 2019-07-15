@@ -517,6 +517,9 @@ static bool task_reschedule(task_t* _task)
     if (ERR_QUANTUM_EXHAUSTED == _task->err.code)
     {
         // re-enqueue this task so that it gets executed in a round-robin fashion according to our quantum.
+        data_run_t* data = (data_run_t*)_task->data;
+
+        CX_INFO("[%s] quantum of %d exceeded.", data->scriptFileName, g_ctx.cfg.quantum);
         _task->state = TASK_STATE_NEW;
     }
     else
@@ -584,16 +587,13 @@ static bool task_completed(task_t* _task)
     {
         data_run_t* data = _task->data;
 
-        cx_path_t fileName;
-        cx_file_get_name(&data->scriptFilePath, false, &fileName);
-
         if (ERR_NONE == _task->err.code)
         {
-            CX_INFO("script '%s' completed successfully. (%s).", fileName, data->outputFilePath);
+            CX_INFO("script '%s' completed successfully. (%s).", data->scriptFileName, data->outputFilePath);
         }
         else
         {
-            CX_INFO("script '%s' failed at line number %d. %s", fileName, data->lineNumber - 1, _task->err.desc);
+            CX_INFO("script '%s' failed at line number %d. %s", data->scriptFileName, data->lineNumber - 1, _task->err.desc);
         }
         break;
     }

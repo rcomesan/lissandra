@@ -170,6 +170,7 @@ typedef struct data_free_t
 typedef struct data_run_t
 {
     cx_path_t       scriptFilePath;
+    cx_path_t       scriptFileName;
     cx_linesf_t*    script;
     cx_path_t       outputFilePath;
     FILE*           output;
