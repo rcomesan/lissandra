@@ -45,7 +45,14 @@ void cx_cdict_destroy(cx_cdict_t* _cdict, cx_destroyer_cb _cb)
         _cdict->mtxInitialized = false;
     }
 
-    dictionary_destroy_and_destroy_elements(_cdict->handle, _cb);
+    if (NULL != _cb)
+    {
+        dictionary_destroy_and_destroy_elements(_cdict->handle, _cb);
+    }
+    else
+    {
+        dictionary_destroy(_cdict->handle);
+    }
     
     _cdict->handle = NULL;
     free(_cdict);

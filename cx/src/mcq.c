@@ -38,14 +38,21 @@ void cx_mcq_destroy(cx_mcq_t* _mcq, cx_destroyer_cb _cb)
         pthread_mutex_destroy(&_mcq->mutex);
         _mcq->mutexInitialized = false;
     }
-        
+
     if (_mcq->condInitialized)
     {
         pthread_cond_destroy(&_mcq->cond);
         _mcq->condInitialized = false;
     }
 
-    queue_destroy_and_destroy_elements(_mcq->handle, _cb);
+    if (NULL != _cb)
+    {
+        queue_destroy_and_destroy_elements(_mcq->handle, _cb);
+    }
+    else
+    {
+        queue_destroy(_mcq->handle);
+    }
     _mcq->handle = NULL;
 
     free(_mcq);
