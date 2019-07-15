@@ -24,6 +24,8 @@ void                memtable_destroy(memtable_t* _table);
 
 void                memtable_add(memtable_t* _table, const table_record_t* _record, uint32_t _numRecords);
 
+void                memtable_clear(memtable_t* _table);
+
 void                memtable_preprocess(memtable_t* _table);
 
 bool                memtable_find(memtable_t* _table, uint16_t _key, table_record_t* _outRecord);

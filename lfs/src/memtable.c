@@ -44,8 +44,18 @@ bool memtable_init(const char* _tableName, bool _threadSafe, memtable_t* _outTab
 
     if (_threadSafe)
     {
-        _outTable->mtxInitialized = (0 == pthread_mutex_init(&_outTable->mtx, NULL));
-        CX_CHECK(_outTable->mtxInitialized, "mutex initialization failed!");
+        pthread_mutexattr_t attr;
+        _outTable->mtxInitialized = true
+            && (0 == pthread_mutexattr_init(&attr))
+            && (0 == pthread_mutexattr_settype(&attr, PTHREAD_MUTEX_RECURSIVE))
+            && (0 == pthread_mutex_init(&_outTable->mtx, &attr));
+        pthread_mutexattr_destroy(&attr);
+
+        if (!_outTable->mtxInitialized)
+        {
+            CX_ERR_SET(_err, ERR_GENERIC, "mutex initialization failed.");
+            return false;
+        }
     }
 
     return true;
@@ -154,6 +164,22 @@ void memtable_add(memtable_t* _table, const table_record_t* _record, uint32_t _n
     if (_table->mtxInitialized) pthread_mutex_unlock(&_table->mtx);
 }
 
+void memtable_clear(memtable_t* _table)
+{
+    CX_CHECK_NOT_NULL(_table);    
+
+    if (_table->mtxInitialized) pthread_mutex_lock(&_table->mtx);
+
+    // clear the memtable
+    for (uint32_t i = 0; i < _table->recordsCount; i++)
+    {
+        _memtable_record_destroyer((void*)&_table->records[i]);
+    }
+    _table->recordsCount = 0;
+
+    if (_table->mtxInitialized) pthread_mutex_unlock(&_table->mtx);
+}
+
 void memtable_preprocess(memtable_t* _table)
 {
     CX_CHECK_NOT_NULL(_table);
@@ -185,29 +211,17 @@ bool memtable_make_dump(memtable_t* _table, cx_err_t* _err)
     table_t* table = NULL;
     if (_table->recordsCount > 0)
     {
-        if (fs_table_exists(_table->name, &table))
-        {
-            memtable_preprocess(_table);
+        memtable_preprocess(_table);
 
-            fs_file_t dumpFile;
-            CX_MEM_ZERO(dumpFile);
-            if (_memtable_save(_table, &dumpFile, _err))
-            {
-                uint16_t dumpNumber = fs_table_dump_number_next(_table->name);
-                if (fs_table_dump_set(_table->name, dumpNumber, false, &dumpFile, _err))
-                {
-                    // clear the memtable
-                    for (uint32_t i = 0; i < _table->recordsCount; i++)
-                    {
-                        _memtable_record_destroyer((void*)&_table->records[i]);
-                    }
-                    _table->recordsCount = 0;
-                }
-            }
-        }
-        else
+        fs_file_t dumpFile;
+        CX_MEM_ZERO(dumpFile);
+        if (_memtable_save(_table, &dumpFile, _err))
         {
-            CX_ERR_SET(_err, 1, "Table '%s' does not exist.", _table->name);
+            uint16_t dumpNumber = fs_table_dump_number_next(_table->name);
+            if (fs_table_dump_set(_table->name, dumpNumber, false, &dumpFile, _err))
+            {
+                memtable_clear(_table);
+            }
         }
     }
     else
