@@ -12,8 +12,9 @@ typedef struct cx_reslock_t
     bool                blocked;            // true if the resource is blocked. when a resource is blocked, all the calls to cx_avail_guard_begin will fail.
     double              blockedStartTime;   // time counter value of when the table block started.
     double              blockedTime;        // lastest amount of time in blocked status.
-    pthread_mutex_t     mtx;                // mutex for making operations thread safe.
     uint16_t            counter;            // number of operations being performed on this resource (number of threads which depend on its availability).
+    pthread_mutex_t     mtx;                // mutex for making operations thread safe.
+    pthread_cond_t      cond;               // condition to signal threads to wake up when the reslock counter reaches zero.
 } cx_reslock_t;
 
 bool cx_reslock_init(cx_reslock_t* _lock, bool _startsBlocked);
@@ -33,5 +34,7 @@ void cx_reslock_unblock(cx_reslock_t* _lock);
 double cx_reslock_blocked_time(cx_reslock_t* _lock);
 
 uint16_t cx_reslock_counter(cx_reslock_t* _lock);
+
+void cx_reslock_wait_unused(cx_reslock_t* _lock);
 
 #endif // CX_RESLOCK_H_

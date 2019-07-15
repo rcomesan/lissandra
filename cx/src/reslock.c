@@ -5,19 +5,29 @@
 bool cx_reslock_init(cx_reslock_t* _lock, bool _startsBlocked)
 {
     CX_MEM_ZERO(*_lock);
-    if (0 == pthread_mutex_init(&_lock->mtx, NULL))
+
+    if (0 == pthread_mutex_init(&_lock->mtx, NULL)
+        && 0 == pthread_cond_init(&_lock->cond, NULL))
     {
         if (_startsBlocked)
+        {
             cx_reslock_block(_lock);
+        }
 
         return true;
     }
+
+    CX_CHECK(CX_ALW, "mtx/cond initialization failed!");
     return false;
 }
 
 void cx_reslock_destroy(cx_reslock_t* _lock)
 {
-    pthread_mutex_destroy(&_lock->mtx);
+    if (NULL != _lock)
+    {
+        pthread_mutex_destroy(&_lock->mtx);
+        pthread_cond_destroy(&_lock->cond);
+    }
 }
 
 bool cx_reslock_avail_guard_begin(cx_reslock_t* _lock)
@@ -45,6 +55,10 @@ void cx_reslock_avail_guard_end(cx_reslock_t* _lock)
     pthread_mutex_lock(&_lock->mtx);
     CX_CHECK(_lock->counter > 0, "avail_guard begin/end mismatch!")
     _lock->counter--;
+
+    if (0 == _lock->counter)
+        pthread_cond_broadcast(&_lock->cond);
+
     pthread_mutex_unlock(&_lock->mtx);
 }
 
@@ -87,4 +101,16 @@ uint16_t cx_reslock_counter(cx_reslock_t* _lock)
     counter = _lock->counter;
     pthread_mutex_unlock(&_lock->mtx);
     return counter;
+}
+
+void cx_reslock_wait_unused(cx_reslock_t* _lock)
+{
+    pthread_mutex_lock(&_lock->mtx);
+    
+    while (_lock->counter > 0)
+    {
+        pthread_cond_wait(&_lock->cond, &_lock->mtx);
+    }
+
+    pthread_mutex_unlock(&_lock->mtx);
 }
