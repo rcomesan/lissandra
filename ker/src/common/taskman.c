@@ -361,7 +361,6 @@ static void _taskman_free_task(task_t* _task)
     // free task user data
     m_taskmanCtx->taskFree(_task);
 
-    free(_task->data);
     _task->data = NULL;
     _task->table = NULL;
 

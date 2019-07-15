@@ -62,7 +62,6 @@ typedef enum ERR_CODE
     ERR_MEMORY_FULL,
     ERR_QUANTUM_EXHAUSTED,
     ERR_DUMP_NOT_NEEDED,
-    ERR_COMPACT_NOT_NEEDED,
 } ERR_CODE;
 
 
@@ -157,6 +156,9 @@ typedef struct data_dump_t
 typedef struct data_compact_t
 {
     table_name_t    tableName;
+    uint16_t        dumpsCount;
+    double          beginStageTime;
+    double          endStageTime;
 } data_compact_t;
 
 typedef struct data_free_t

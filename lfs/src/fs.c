@@ -209,6 +209,22 @@ bool fs_table_exists(const char* _tableName, table_t** _outTable)
     return false;
 }
 
+void fs_table_describe(const char* _tableName, table_meta_t* _outTableMeta, cx_err_t* _err)
+{
+    table_t* table = NULL;
+
+    pthread_mutex_lock(&m_fsCtx->tablesMap->mtx);
+    if (fs_table_exists(_tableName, &table))
+    {
+        memcpy(_outTableMeta, &(table->meta), sizeof(*_outTableMeta));
+    }
+    else
+    {
+        CX_ERR_SET(_err, ERR_GENERIC, "Table '%s' does not exist.", _tableName);
+    }
+    pthread_mutex_unlock(&m_fsCtx->tablesMap->mtx);
+}
+
 uint16_t fs_table_handle(const char* _tableName)
 {
     table_t* table;
@@ -525,35 +541,22 @@ bool fs_table_compact_tryenqueue(const char* _tableName)
     {
         if (!table->compacting)
         {
-            if (!cx_reslock_is_blocked(&table->reslock))
+            table->compacting = true;
+
+            task = taskman_create(TASK_ORIGIN_INTERNAL_PRIORITY, TASK_WT_COMPACT, NULL, NULL);
+            if (NULL != task)
             {
-                // if the table is not blocked, block it now to start denying tasks
-                cx_reslock_block(&table->reslock);
+                data_compact_t* data = CX_MEM_STRUCT_ALLOC(data);
+                
+                task->data = data;
+                task->table = table;
+                task->state = TASK_STATE_NEW;
+                success = true;
             }
-
-            if (0 == cx_reslock_counter(&table->reslock))
+            else
             {
-                // at this point, our memory is blocked (so new operations on it are being blocked and delayed)
-                // and also there're zero pending operations on it, so we can safely start compacting it now.
-                table->compacting = true;
-
-                task = taskman_create(TASK_ORIGIN_INTERNAL_PRIORITY, TASK_WT_COMPACT, NULL, NULL);
-                if (NULL != task)
-                {
-                    data_compact_t* data = CX_MEM_STRUCT_ALLOC(data);
-                    cx_str_copy(data->tableName, sizeof(data->tableName), table->meta.name);
-
-                    task->data = data;
-                    task->table = table;
-                    task->state = TASK_STATE_NEW;
-                    success = true;
-                }
-                else
-                {
-                    // task creation failed. unblock this table and skip this task.
-                    table->compacting = false;
-                    fs_table_unblock(table);
-                }
+                // task creation failed. skip this task.
+                table->compacting = false;
             }
         }
         else
@@ -574,9 +577,16 @@ bool fs_table_compact_tryenqueue(const char* _tableName)
     return success;
 }
 
+bool fs_table_block(table_t* _table)
+{
+    cx_reslock_block(&_table->reslock);
+    cx_reslock_wait_unused(&_table->reslock);
+    return true;
+}
+
 void fs_table_unblock(table_t* _table)
 {
-    // unblock the tabke and make it available again
+    // unblock the table and make it available again
     cx_reslock_unblock(&_table->reslock);
 
     task_t* task = NULL;
@@ -1097,6 +1107,12 @@ void fs_table_destroy(table_t* _table)
 
     if (NULL != _table)
     {
+        if (INVALID_HANDLE != _table->timerHandle)
+        {
+            cx_timer_remove(_table->timerHandle);
+            _table->timerHandle = INVALID_HANDLE;
+        }
+
         memtable_destroy(&_table->memtable);
         cx_reslock_destroy(&_table->reslock);
         queue_clean(_table->blockedQueue);
@@ -1105,12 +1121,6 @@ void fs_table_destroy(table_t* _table)
         {
             queue_destroy(_table->blockedQueue);
             _table->blockedQueue = NULL;
-        }
-
-        if (INVALID_HANDLE != _table->timerHandle)
-        {
-            cx_timer_remove(_table->timerHandle);
-            _table->timerHandle = INVALID_HANDLE;
         }
 
         free(_table);

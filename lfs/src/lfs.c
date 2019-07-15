@@ -568,9 +568,10 @@ static bool task_run_mt(task_t* _task)
         {
             table = (table_t*)data->resourcePtr;
 
-            if (0 == cx_reslock_counter(&table->reslock))
+            if (0 == cx_reslock_counter(&table->reslock) && !table->compacting)
             {
                 // at this point the table no longer exist (it's not part of the tablesMap dictionary)
+                // and also it's not during a compaction (important!)
                 // remove and re-schedule all the tasks in the blocked queue
                 // so that they finally complete with 'table does not exist' error.
                 task_t* task = NULL;
@@ -702,27 +703,26 @@ static bool task_completed(task_t* _task)
     }
 
     case TASK_WT_COMPACT:
-    {
-        double blockedTime = 0;
+    {      
+        CX_CHECK_NOT_NULL(table);
         if (NULL != table)
         {
             table->compacting = false;
-            fs_table_unblock(table);
-            blockedTime = cx_reslock_blocked_time(&table->reslock);
-        }
-        else
-        {
-            blockedTime = 0;
-        }
 
-        if (ERR_NONE == _task->err.code)
-        {
-            CX_INFO("table '%s' compacted successfully. (%.3f sec blocked)", table->meta.name, blockedTime);
+            data_compact_t* data = _task->data;
+
+            if (ERR_NONE == _task->err.code && data->dumpsCount > 0)
+            {
+                CX_INFO("table '%s' compacted %d files successfully in %.3f seconds (%.3f sec blocked)", 
+                    table->meta.name, data->dumpsCount, cx_time_counter() - _task->startTime,
+                    data->beginStageTime + data->endStageTime);
+            }
+            else if (ERR_NONE != _task->err.code)
+            {
+                CX_INFO("table '%s' compaction failed. %s", table->meta.name, _task->err.desc);
+            }
         }
-        else if (ERR_COMPACT_NOT_NEEDED != _task->err.code)
-        {
-            CX_INFO("table '%s' compaction failed. %s", table->meta.name, _task->err.desc);
-        }
+        
         break;
     }
 
@@ -760,83 +760,7 @@ static bool task_completed(task_t* _task)
 
 static bool task_free(task_t* _task)
 {
-    switch (_task->type)
-    {
-    case TASK_WT_CREATE:
-    {
-        data_create_t* data = (data_create_t*)_task->data;
-        break;
-    }
-
-    case TASK_WT_DROP:
-    {
-        data_drop_t* data = (data_drop_t*)_task->data;
-        break;
-    }
-
-    case TASK_WT_DESCRIBE:
-    {
-        data_describe_t* data = (data_describe_t*)_task->data;
-        free(data->tables);
-        data->tables = NULL;
-        data->tablesCount = 0;
-        break;
-    }
-
-    case TASK_WT_SELECT:
-    {
-        data_select_t* data = (data_select_t*)_task->data;
-        free(data->record.value);
-        data->record.value = NULL;
-        break;
-    }
-
-    case TASK_WT_INSERT:
-    {
-        data_insert_t* data = (data_insert_t*)_task->data;
-        free(data->record.value);
-        data->record.value = NULL;
-        break;
-    }
-
-    case TASK_WT_DUMP:
-    {
-        data_dump_t* data = (data_dump_t*)_task->data;
-        //noop
-        break;
-    }
-
-    case TASK_WT_COMPACT:
-    {
-        data_compact_t* data = (data_compact_t*)_task->data;
-        //noop
-        break;
-    }
-
-    case TASK_MT_COMPACT:
-    {
-        //noop
-        break;
-    }
-
-    case TASK_MT_DUMP:
-    {
-        //noop
-        break;
-    }
-
-    case TASK_MT_FREE:
-    {
-        //noop
-        break;
-    }
-
-    default:
-        CX_WARN(CX_ALW, "undefined <free> behaviour for request type #%d.", _task->type);
-        break;
-    }
-
-    return true;
+    return common_task_data_free(_task->type, _task->data);
 }
 
 static void api_response_create(const task_t* _task)

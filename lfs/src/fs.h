@@ -27,6 +27,8 @@ void                fs_table_destroy(table_t* _table);
 
 bool                fs_table_exists(const char* _tableName, table_t** _outTable);
 
+void                fs_table_describe(const char* _tableName, table_meta_t* _outTableMeta, cx_err_t* _err);
+
 uint16_t            fs_table_handle(const char* _tableName);
 
 bool                fs_table_avail_guard_begin(const char* _tableName, cx_err_t* _err, table_t** _outTable);
@@ -56,6 +58,8 @@ uint16_t            fs_table_dump_number_next(const char* _tableName);
 bool                fs_table_dump_tryenqueue();
 
 bool                fs_table_compact_tryenqueue(const char* _tableName);
+
+bool                fs_table_block(table_t* _table);
 
 void                fs_table_unblock(table_t* _table);
 

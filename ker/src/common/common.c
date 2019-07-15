@@ -58,12 +58,14 @@ bool common_task_data_free(TASK_TYPE _type, void* _data)
     {
     case TASK_WT_CREATE:
     {
+        data_create_t* data = (data_create_t*)_data;
         //noop
         break;
     }
 
     case TASK_WT_DROP:
     {
+        data_drop_t* data = (data_drop_t*)_data;
         //noop
         break;
     }
@@ -90,6 +92,20 @@ bool common_task_data_free(TASK_TYPE _type, void* _data)
         data_insert_t* data = (data_insert_t*)_data;
         free(data->record.value);
         data->record.value = NULL;
+        break;
+    }
+
+    case TASK_WT_DUMP:
+    {
+        data_dump_t* data = (data_dump_t*)_data;
+        //noop
+        break;
+    }
+
+    case TASK_WT_COMPACT:
+    {
+        data_compact_t* data = (data_compact_t*)_data;
+        //noop
         break;
     }
 
@@ -124,6 +140,24 @@ bool common_task_data_free(TASK_TYPE _type, void* _data)
         break;
     }
 
+    case TASK_MT_COMPACT:
+    {
+        //noop
+        break;
+    }
+
+    case TASK_MT_DUMP:
+    {
+        //noop
+        break;
+    }
+
+    case TASK_MT_JOURNAL:
+    {
+        //noop
+        break;
+    }
+
     case TASK_MT_FREE:
     {
         //noop
@@ -135,5 +169,6 @@ bool common_task_data_free(TASK_TYPE _type, void* _data)
         break;
     }
 
+    free(_data);
     return true;
 }

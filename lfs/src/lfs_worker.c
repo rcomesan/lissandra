@@ -52,20 +52,7 @@ void worker_handle_describe(task_t* _req)
 
     if (1 == data->tablesCount && NULL != data->tables)
     {
-        table_t* table = NULL;
-        //TODO FIXME.
-        //if (fs_table_avail_guard_begin(data->tables[0].name, &_req->err, &table))
-        //{
-        if (fs_table_exists(data->tables[0].name, &table))
-        {
-            memcpy(&data->tables[0], &(table->meta), sizeof(data->tables[0]));
-        }
-        else
-        {
-            CX_ERR_SET(&_req->err, ERR_GENERIC, "Table '%s' does not exist.", data->tables[0].name);
-        }
-        //    fs_table_avail_guard_end(table);
-        //}
+        fs_table_describe(data->tables[0].name, &data->tables[0], &_req->err);
     }
     else
     {
@@ -185,95 +172,127 @@ void worker_handle_dump(task_t* _req)
 
 void worker_handle_compact(task_t* _req)
 {
-    bool success = true;
-    data_compact_t* data = _req->data;
-    table_t* table = NULL;
+    bool                success = true;
+    table_t*            table = _req->table;
+    data_compact_t*     data = _req->data;
     cx_file_explorer_t* exp = NULL;
-    uint16_t*   dumpNumbers = NULL;
-    uint32_t    dumpCount = 0;
-    memtable_t  dumpsMem;
-    bool        dumpsMemInitialized = false;
-    fs_file_t   dumpFile;
-    memtable_t  tempMem;
+    uint16_t*           dumpNumbers = NULL;
+    memtable_t          dumpsMemt;
+    bool                dumpsMemtInitialized = false;
+    memtable_t          tempMemt;
+    fs_file_t           dumpFile;
 
-    // if this function is invoked we can safely assume the given table is fully blocked,
-    // and no other operation is being performed on it.
-
-    if (fs_table_exists(data->tableName, &table))
+    // note: pointer to the table being compacted by this task is guaranteed to be valid always since
+    // table deallocation (on drop request) only proceeds if compaction is not being performed.
+    
+    /////////////////////////////////////////////////////////////////////////////////////
+    // [STAGE #1] define the scope of our compaction renaming D#.tmp to D#.tmpc files 
+    if (success && fs_table_block(table))
     {
-        // define the scope of our compaction renaming .tmp files to .tmpc
-        exp = fs_table_explorer(data->tableName, &_req->err);
+        exp = fs_table_explorer(table->meta.name, &_req->err);
         if (NULL != exp)
         {
-            uint16_t   dumpNumberMax = fs_table_dump_number_next(data->tableName);
+            uint16_t   dumpNumberMax = fs_table_dump_number_next(table->meta.name) - 1;
             cx_path_t  dumpPath;
             dumpNumbers = CX_MEM_ARR_ALLOC(dumpNumbers, dumpNumberMax);
 
             while (cx_file_explorer_next_file(exp, &dumpPath))
             {
-                if (fs_is_dump(&dumpPath, &dumpNumbers[dumpCount], NULL))
-                    dumpCount++;
+                if (fs_is_dump(&dumpPath, &dumpNumbers[data->dumpsCount], NULL))
+                    data->dumpsCount++;
             }
 
-            for (uint32_t i = 0; i < dumpCount; i++)
+            for (uint32_t i = 0; i < data->dumpsCount; i++)
             {
-                if (fs_table_dump_get(data->tableName, dumpNumbers[i], false, &dumpFile, NULL))
+                if (fs_table_dump_get(table->meta.name, dumpNumbers[i], false, &dumpFile, NULL))
                 {
-                    cx_str_copy(dumpPath, sizeof(dumpPath), dumpFile.path);
-                    cx_str_copy(&dumpPath[strlen(dumpPath) - (sizeof(LFS_DUMP_EXTENSION) - 1)], sizeof(dumpPath), LFS_DUMP_EXTENSION_COMPACTION);
+                    cx_file_set_extension(&dumpFile.path, LFS_DUMP_EXTENSION_COMPACTION, &dumpPath);
+
                     if (!cx_file_move(&dumpFile.path, &dumpPath, &_req->err))
-                        goto failed;
+                    {
+                        success = false;
+                        break;
+                    }
                 }
             }
         }
 
-        // load .tmpc files into a temporary memtable, sort the entries and remove duplicates.
-        if (memtable_init(data->tableName, false, &dumpsMem, &_req->err))
-        {
-            dumpsMemInitialized = true;
+        fs_table_unblock(table);
+        data->beginStageTime = cx_reslock_blocked_time(&table->reslock);
+    }
 
-            for (uint32_t i = 0; i < dumpCount; i++)
+    /////////////////////////////////////////////////////////////////////////////////////
+    // [STAGE #2] perform the compaction merging P*.bin & D#.tmpc.
+    // this will create a new new set of P*.binc files ready to be used as the final 
+    // a replacement in the next stage.
+    if (success)
+    {
+        // load dumps .tmpc files into a tempMemt and merge the records into the dumpsMemt
+        if (memtable_init(table->meta.name, false, &dumpsMemt, &_req->err))
+        {
+            dumpsMemtInitialized = true;
+
+            for (uint32_t i = 0; i < data->dumpsCount; i++)
             {
-                if (memtable_init_from_dump(data->tableName, dumpNumbers[i], true, &tempMem, &_req->err))
+                if (memtable_init_from_dump(table->meta.name, dumpNumbers[i], true, &tempMemt, &_req->err))
                 {
-                    memtable_add(&dumpsMem, tempMem.records, tempMem.recordsCount);
-                    memtable_destroy(&tempMem);
+                    memtable_add(&dumpsMemt, tempMemt.records, tempMemt.recordsCount);
+                    memtable_clear(&tempMemt);
+                    memtable_destroy(&tempMemt);
+                }
+            }
+
+            // sort the entries recovered from dumps and remove duplicates.
+            memtable_preprocess(&dumpsMemt);
+
+            // make the new partitions
+            uint32_t dumpsEntries = 0;
+            uint32_t dumpsPos = 0;
+            for (uint16_t i = 0; i < table->meta.partitionsCount; i++)
+            {
+                // figure our how many records exist in our dumps memtable that fit in the current partition number.
+                dumpsEntries = 0;
+                while ((dumpsPos + dumpsEntries) < dumpsMemt.recordsCount 
+                    && i == (dumpsMemt.records[dumpsPos + dumpsEntries].key % table->meta.partitionsCount))
+                {
+                    dumpsEntries++;
                 }
 
-                if (!fs_table_dump_delete(data->tableName, dumpNumbers[i], true, NULL))
-                    goto failed;
+                if (dumpsEntries > 0)
+                {
+                    // initialize the new partition, add records, preprocess and save it to a new temporary .binc partition file.
+                    if (memtable_init_from_part(table->meta.name, i, false, &tempMemt, &_req->err))
+                    {
+                        memtable_add(&tempMemt, &dumpsMemt.records[dumpsPos], dumpsEntries);
+                        memtable_preprocess(&tempMemt);
+
+                        // save the new partition (make_part will serialize the memtable to a .binc temporary partition file).
+                        success = memtable_make_part(&tempMemt, i, &_req->err);
+                        memtable_destroy(&tempMemt);
+
+                        if (!success) break;
+                    }
+
+                    dumpsPos += dumpsEntries;
+                }
             }
-            memtable_preprocess(&dumpsMem);
         }
-
-        // make the new partitions
-        uint32_t dumpsEntries = 0;
-        uint32_t dumpsPos = 0;
-        for (uint16_t i = 0; i < table->meta.partitionsCount; i++)
+        else
         {
-            // figure our how many records exist in our dumps memtable that fit in the current partition number.
-            dumpsEntries = 0;
-            while ((dumpsPos + dumpsEntries) < dumpsMem.recordsCount && i == (dumpsMem.records[dumpsPos + dumpsEntries].key % table->meta.partitionsCount))
+            success = false;
+        }
+    }
+
+    /////////////////////////////////////////////////////////////////////////////////////
+    // [STAGE #3] rename P#.binc -> P#.bin replacing the old partitions with the new ones
+    if (success && fs_table_block(table))
+    {
+        // delete the dump files being compacted (those previously renamed to .tmpc)
+        for (uint32_t i = 0; i < data->dumpsCount; i++)
+        {
+            if (!fs_table_dump_delete(table->meta.name, dumpNumbers[i], true, &_req->err))
             {
-                dumpsEntries++;
-            }
-
-            if (dumpsEntries > 0)
-            {              
-                // initialize the new partition, add records, preprocess and save it to a new temporary .binc partition file.
-                if (memtable_init_from_part(data->tableName, i, false, &tempMem, &_req->err))
-                {
-                    memtable_add(&tempMem, &dumpsMem.records[dumpsPos], dumpsEntries);
-                    memtable_preprocess(&tempMem);
-
-                    // save the new one
-                    success = memtable_make_part(&tempMem, i, &_req->err);
-                    memtable_destroy(&tempMem);
-                    
-                    if (!success) goto failed;
-                }
-
-                dumpsPos += dumpsEntries;
+                CX_WARN(CX_ALW, "dumpc file deletion failed! %s", _req->err);
             }
         }
 
@@ -282,31 +301,29 @@ void worker_handle_compact(task_t* _req)
         cx_path_t tmpPath;
         for (uint16_t i = 0; i < table->meta.partitionsCount; i++)
         {
-            if (fs_table_part_get(data->tableName, i, false, &oldPartFile, &_req->err))
+            if (fs_table_part_get(table->meta.name, i, false, &oldPartFile, &_req->err))
             {
-                cx_str_copy(tmpPath, sizeof(tmpPath), oldPartFile.path);
-                cx_str_copy(&tmpPath[strlen(tmpPath) - (sizeof(LFS_PART_EXTENSION) - 1)], sizeof(tmpPath), LFS_PART_EXTENSION_COMPACTION);
+                cx_file_set_extension(&oldPartFile.path, LFS_PART_EXTENSION_COMPACTION, &tmpPath);
 
                 if (cx_file_exists(&tmpPath))
                 {
-                    if (!fs_file_delete(&oldPartFile, &_req->err))
-                        goto failed;
-
-                    if (!cx_file_move(&tmpPath, &oldPartFile.path, &_req->err))
-                        goto failed;
+                    if (!fs_file_delete(&oldPartFile, &_req->err)) break;
+                    if (!cx_file_move(&tmpPath, &oldPartFile.path, &_req->err)) break;
                 }
             }
-        }
-    }
-    else
-    {
-        CX_ERR_SET(&_req->err, 1, "Table '%s' does not exist.", data->tableName);
+        }    
+
+        fs_table_unblock(table);
+        data->endStageTime = cx_reslock_blocked_time(&table->reslock);
     }
 
-failed:
     if (NULL != exp) cx_file_explorer_destroy(exp);
     if (NULL != dumpNumbers) free(dumpNumbers);
-    if (dumpsMemInitialized) memtable_destroy(&dumpsMem);
+    if (dumpsMemtInitialized)
+    {
+        memtable_clear(&dumpsMemt);
+        memtable_destroy(&dumpsMemt);
+    }
 
     _worker_parse_result(_req, table);
 }

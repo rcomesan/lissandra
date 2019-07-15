@@ -839,69 +839,7 @@ static bool task_completed(task_t* _task)
 
 static bool task_free(task_t* _task)
 {
-    switch (_task->type)
-    {
-    case TASK_WT_CREATE:
-    {
-        data_create_t* data = (data_create_t*)_task->data;
-        break;
-    }
-
-    case TASK_WT_DROP:
-    {
-        data_drop_t* data = (data_drop_t*)_task->data;
-        break;
-    }
-
-    case TASK_WT_DESCRIBE:
-    {
-        data_describe_t* data = (data_describe_t*)_task->data;
-        free(data->tables);
-        data->tables = NULL;
-        data->tablesCount = 0;
-        break;
-    }
-
-    case TASK_WT_SELECT:
-    {
-        data_select_t* data = (data_select_t*)_task->data;
-        free(data->record.value);
-        data->record.value = NULL;
-        break;
-    }
-
-    case TASK_WT_INSERT:
-    {
-        data_insert_t* data = (data_insert_t*)_task->data;
-        free(data->record.value);
-        data->record.value = NULL;
-        break;
-    }
-
-    case TASK_WT_JOURNAL:
-    {
-        //noop
-        break;
-    }
-
-    case TASK_MT_JOURNAL:
-    {
-        //noop
-        break;
-    }
-
-    case TASK_MT_FREE:
-    {
-        //noop
-        break;
-    }
-
-    default:
-        CX_WARN(CX_ALW, "undefined <free> behaviour for request type #%d.", _task->type);
-        break;
-    }
-
-    return true;
+    return common_task_data_free(_task->type, _task->data);
 }
 
 static void on_connected_to_lfs(cx_net_ctx_cl_t* _ctx)
