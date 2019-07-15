@@ -123,20 +123,22 @@ void cx_file_get_path(const cx_path_t* _path, cx_path_t* _outPath)
     }
 }
 
-void cx_file_set_extension(cx_path_t* _path, const char* _extension)
+void cx_file_set_extension(const cx_path_t* _path, const char* _extension, cx_path_t* _outPath)
 {
-    char* dot = strrchr(*_path, '.');
+    cx_str_copy(*_outPath, sizeof(*_outPath), *_path);
 
-    if (NULL == dot || (*_path) == dot)
+    char* dot = strrchr(*_outPath, '.');
+
+    if (NULL == dot || (*_outPath) == dot)
     {
         // add it to the end
-        cx_str_cat(*_path, sizeof(*_path), ".");
-        cx_str_cat(*_path, sizeof(*_path), _extension);
+        cx_str_cat(*_outPath, sizeof(*_outPath), ".");
+        cx_str_cat(*_outPath, sizeof(*_outPath), _extension);
     }
     else
     {
         dot[1] = '\0';
-        cx_str_cat(*_path, sizeof(*_path), _extension);
+        cx_str_cat(*_outPath, sizeof(*_outPath), _extension);
     }
 }
 

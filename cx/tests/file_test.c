@@ -115,14 +115,16 @@ void t_file_should_change_extension()
 {
     cx_file_path(&tmpPath, "/%s", FILE_NAME);
 
-    cx_file_set_extension(&tmpPath, "html");
-    CU_ASSERT_STRING_EQUAL(tmpPath, "/" FILE_NAME_NO_EXTENSION ".html");
+    cx_path_t newPath;
+    cx_file_set_extension(&tmpPath, "html", &newPath);
+    CU_ASSERT_STRING_EQUAL(newPath, "/" FILE_NAME_NO_EXTENSION ".html");
 }
 
 void t_file_should_append_extension()
 {
     cx_file_path(&tmpPath, "/%s", FILE_NAME_NO_EXTENSION);
 
-    cx_file_set_extension(&tmpPath, "html");
-    CU_ASSERT_STRING_EQUAL(tmpPath, "/" FILE_NAME_NO_EXTENSION ".html");
+    cx_path_t newPath;
+    cx_file_set_extension(&tmpPath, "html", &newPath);
+    CU_ASSERT_STRING_EQUAL(newPath, "/" FILE_NAME_NO_EXTENSION ".html");
 }
