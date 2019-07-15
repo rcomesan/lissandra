@@ -177,7 +177,14 @@ uint32_t cx_sort_uniquify(void* _data, uint32_t _size, uint32_t _num, cx_sort_co
         if (0 != _comp(&(data[i * _size]), &(data[count * _size]), _userData))
         {
             count++;
-            memcpy(&(data[count * _size]), &(data[i * _size]), _size);
+            if (count == i)
+            {
+                memmove(&(data[count * _size]), &(data[i * _size]), _size);
+            }
+            else
+            {
+                memcpy(&(data[count * _size]), &(data[i * _size]), _size);
+            }
         }
         else if (NULL != _destroyer)
         {
