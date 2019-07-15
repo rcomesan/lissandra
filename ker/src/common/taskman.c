@@ -99,7 +99,7 @@ void taskman_stop()
     pthread_mutex_unlock(&m_taskmanCtx->mtx);
 
     // pause the pool
-    cx_pool_pause(m_taskmanCtx->pool);
+    cx_pool_pause_nb(m_taskmanCtx->pool);
 }
 
 void taskman_destroy()
@@ -281,7 +281,6 @@ void taskman_update()
 void taskman_foreach(taskman_func_cb _func, void* _userData)
 {
     CX_CHECK_NOT_NULL(m_taskmanCtx);
-    if (!m_taskmanCtx->isRunning) return;
 
     uint16_t max = cx_handle_count(m_taskmanCtx->halloc);
     uint16_t handle = INVALID_HANDLE;
