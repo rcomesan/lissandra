@@ -78,20 +78,20 @@ void cx_timer_destroy()
 {
     CX_INFO("terminating timer module...");
 
-    uint16_t max = cx_handle_count(m_timerCtx.timersHalloc);
-    uint16_t handle = INVALID_HANDLE;
-    cx_timer_instance_t* timer = NULL;
-
-    for (uint16_t i = 0; i < max; i++)
-    {
-        handle = cx_handle_at(m_timerCtx.timersHalloc, i);
-        timer = &(m_timerCtx.timers[handle]);
-
-        _cx_timer_free(timer);
-    }
-
     if (NULL != m_timerCtx.timersHalloc)
     {
+        uint16_t max = cx_handle_count(m_timerCtx.timersHalloc);
+        uint16_t handle = INVALID_HANDLE;
+        cx_timer_instance_t* timer = NULL;
+
+        for (uint16_t i = 0; i < max; i++)
+        {
+            handle = cx_handle_at(m_timerCtx.timersHalloc, i);
+            timer = &(m_timerCtx.timers[handle]);
+
+            _cx_timer_free(timer);
+        }
+
         cx_halloc_destroy(m_timerCtx.timersHalloc);
         m_timerCtx.timersHalloc = NULL;
     }
@@ -241,29 +241,6 @@ void cx_timer_poll_events()
     }
 }
 
-static bool _cx_timer_epoll_mod(int32_t _fd, bool _set)
-{
-    bool success = true;
-
-    if (_set)
-    {
-        epoll_event event;
-        CX_MEM_ZERO(event);
-        event.events = EPOLLIN;
-        event.data.fd = _fd;
-        success = (0 == epoll_ctl(m_timerCtx.epollDescriptor, EPOLL_CTL_ADD, _fd, &event));
-        CX_WARN(success, "timers epoll_ctl add failed. %s.", strerror(errno));
-    }
-    else
-    {
-        // unset
-        success = (0 == epoll_ctl(m_timerCtx.epollDescriptor, EPOLL_CTL_DEL, _fd, NULL));
-        CX_WARN(success, "timers epoll_ctl del failed. %s.", strerror(errno));
-    }
-
-    return success;
-}
-
 double cx_time_counter()
 {
     struct timeval now;
@@ -305,6 +282,29 @@ void cx_time_sleep(uint32_t _milliseconds)
 /****************************************************************************************
  ***  PRIVATE FUNCTIONS
  ***************************************************************************************/
+
+static bool _cx_timer_epoll_mod(int32_t _fd, bool _set)
+{
+    bool success = true;
+
+    if (_set)
+    {
+        epoll_event event;
+        CX_MEM_ZERO(event);
+        event.events = EPOLLIN;
+        event.data.fd = _fd;
+        success = (0 == epoll_ctl(m_timerCtx.epollDescriptor, EPOLL_CTL_ADD, _fd, &event));
+        CX_WARN(success, "timers epoll_ctl add failed. %s.", strerror(errno));
+    }
+    else
+    {
+        // unset
+        success = (0 == epoll_ctl(m_timerCtx.epollDescriptor, EPOLL_CTL_DEL, _fd, NULL));
+        CX_WARN(success, "timers epoll_ctl del failed. %s.", strerror(errno));
+    }
+
+    return success;
+}
 
 static void _cx_timer_free(cx_timer_instance_t* _timer)
 {

@@ -6,7 +6,7 @@
 #include <unistd.h>
 #include <sys/stat.h>
 
-#define     TEST_FOLDER_PATH                "/tmp/cx_tests-folder"
+#define     TEST_FOLDER_PATH                "/tmp/cx-tests-folder"
 #define     TEST_FILE_PATH                  "/tmp/cx-tests-file.txt"
 #define     TEST_FILE_CONTENT               "hello"
 #define     TEST_FILE_CONTENT_LEN           5

@@ -1,5 +1,5 @@
-#ifndef cx_file_H_
-#define cx_file_H_
+#ifndef CX_FILE_H_
+#define CX_FILE_H_
 
 #include "cx.h"
 
@@ -56,4 +56,4 @@ bool                cx_file_explorer_next_folder(cx_file_explorer_t* _explorer, 
 
 void                cx_file_explorer_destroy(cx_file_explorer_t* _explorer);
 
-#endif
+#endif // CX_FILE_H_
