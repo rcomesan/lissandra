@@ -4,6 +4,7 @@
 #include "reslock_test.c"
 #include "sort_test.c"
 #include "file_test.c"
+#include "fswatch_test.c"
 
 #include <CUnit/Basic.h>
 
@@ -42,7 +43,7 @@ int main(int _argc, char** _argv)
 
     // +=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=
 
-    suite = CU_add_suite("file.c", t_file_init, t_file_cleanup);
+    suite = CU_add_suite("file_test.c", t_file_init, t_file_cleanup);
     if (NULL == suite
         || (NULL == CU_add_test(suite, "t_file_should_absolutize_paths()", t_file_should_absolutize_paths))
         || (NULL == CU_add_test(suite, "t_file_should_accept_absolute_paths()", t_file_should_accept_absolute_paths))
@@ -53,6 +54,19 @@ int main(int _argc, char** _argv)
         || (NULL == CU_add_test(suite, "t_file_should_get_path()", t_file_should_get_path))
         || (NULL == CU_add_test(suite, "t_file_should_change_extension()", t_file_should_change_extension))
         || (NULL == CU_add_test(suite, "t_file_should_append_extension()", t_file_should_append_extension))
+        )
+    {
+        CU_cleanup_registry();
+        return CU_get_error();
+    }
+
+    // +=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=
+
+    suite = CU_add_suite("fswatch_test.c", t_fswatch_init, t_fswatch_cleanup);
+    if (NULL == suite
+        || (NULL == CU_add_test(suite, "t_fswatch_should_detect_changes_in_file()", t_fswatch_should_detect_changes_in_file))
+        || (NULL == CU_add_test(suite, "t_fswatch_should_detect_changes_in_folder()", t_fswatch_should_detect_changes_in_folder))
+        || (NULL == CU_add_test(suite, "t_fswatch_should_remove_entries()", t_fswatch_should_remove_entries))
         )
     {
         CU_cleanup_registry();

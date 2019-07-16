@@ -84,6 +84,12 @@
     <ClCompile Include="tests\file_test.c">
       <Filter>tests</Filter>
     </ClCompile>
+    <ClCompile Include="tests\fswatch_test.c">
+      <Filter>tests</Filter>
+    </ClCompile>
+    <ClCompile Include="src\fswatch.c">
+      <Filter>src</Filter>
+    </ClCompile>
   </ItemGroup>
   <ItemGroup>
     <None Include="makefile" />
@@ -148,6 +154,9 @@
     </ClInclude>
     <ClInclude Include="tests\reslock_test.c">
       <Filter>tests</Filter>
+    </ClInclude>
+    <ClInclude Include="include\cx\fswatch.h">
+      <Filter>include\cx</Filter>
     </ClInclude>
   </ItemGroup>
 </Project>
