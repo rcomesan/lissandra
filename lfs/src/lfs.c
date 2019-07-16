@@ -18,6 +18,7 @@
 #include <cx/cdict.h>
 #include <cx/sort.h>
 #include <cx/math.h>
+#include <cx/fswatch.h>
 
 #include <ker/common_protocol.h>
 #include <lfs/lfs_protocol.h>
@@ -40,8 +41,7 @@ lfs_ctx_t           g_ctx;                                  // global LFS contex
  ***  PRIVATE DECLARATIONS
  ***************************************************************************************/
 
-static bool         cfg_init(const char* _cfgFilePath, cx_err_t* _err);
-static void         cfg_destroy();
+static bool         cfg_load(const char* _cfgFilePath, cx_err_t* _err);
 
 static bool         lfs_init(cx_err_t* _err);
 static void         lfs_destroy();
@@ -51,6 +51,7 @@ static void         net_destroy();
 
 static void         handle_cli_command(const cx_cli_cmd_t* _cmd);
 static bool         handle_timer_tick(uint64_t _expirations, uint32_t _id, void* _userData);
+static void         handle_fswatch_event(const char* _path, uint32_t _mask, void* _userData);
 
 static bool         task_run_mt(task_t* _task);
 static bool         task_run_wk(task_t* _task);
@@ -86,7 +87,8 @@ int main(int _argc, char** _argv)
     g_ctx.isRunning = true
         && cx_init(PROJECT_NAME, OUTPUT_LOG_ENABLED, NULL, &err)
         && cx_timer_init(MAX_TABLES + LFS_TIMER_COUNT, handle_timer_tick, &err)
-        && cfg_init((_argc > 1) ? _argv[1] : "res/lfs.cfg", &err)
+        && cx_fswatch_init(1, (cx_fswatch_handler_cb)handle_fswatch_event, &err)
+        && cfg_load((_argc > 1) ? _argv[1] : "res/lfs.cfg", &err)
         && taskman_init(g_ctx.cfg.workers, task_run_mt, task_run_wk, task_completed, task_free, task_reschedule, &err)
         && lfs_init(&err)
         && net_init(&err)
@@ -114,6 +116,9 @@ int main(int _argc, char** _argv)
             // poll timer events
             cx_timer_poll_events();
 
+            // poll fswatch events
+            cx_fswatch_poll_events();
+
             // update tasks
             taskman_update();
 
@@ -133,8 +138,8 @@ int main(int _argc, char** _argv)
     net_destroy();          // destroys the timers & server context serving MEM nodes.
     taskman_destroy();      // safely destroys the pool and the blocked queues.
     lfs_destroy();          // destroys filesystem.
-    cfg_destroy();          // destroys config.
     cx_timer_destroy();     // destroys timers.
+    cx_fswatch_destroy();   // destroys fs watcher.
 
     if (ERR_NONE == err.code)
     {
@@ -153,149 +158,78 @@ int main(int _argc, char** _argv)
  ***  PRIVATE FUNCTIONS
  ***************************************************************************************/
 
-static bool cfg_init(const char* _cfgFilePath, cx_err_t* _err)
+static bool cfg_load(const char* _cfgFilePath, cx_err_t* _err)
 {
-    char* temp = NULL;
     char* key = "";
+    bool isReloading = false;
 
-    cx_path_t cfgPath;
-    cx_file_path(&cfgPath, "%s", _cfgFilePath);
-
-    g_ctx.cfg.handle = config_create(cfgPath);
-
-    if (NULL != g_ctx.cfg.handle)
+    if (!g_ctx.cfgInitialized)
     {
-        CX_INFO("config file: %s", cfgPath);
-
-        key = LFS_CFG_PASSWORD;
-        if (config_has_property(g_ctx.cfg.handle, key))
-        {
-            temp = config_get_string_value(g_ctx.cfg.handle, key);
-
-            uint32_t len = strlen(temp);
-            CX_WARN(len >= MIN_PASSWD_LEN, "'%s' must have a minimum length of %d characters!", key, MIN_PASSWD_LEN);
-            CX_WARN(len <= MAX_PASSWD_LEN, "'%s' must have a maximum length of %s characters!", key, MAX_PASSWD_LEN)
-            if (!cx_math_in_range(len, MIN_PASSWD_LEN, MAX_PASSWD_LEN)) goto key_missing;
-
-            cx_str_copy(g_ctx.cfg.password, sizeof(g_ctx.cfg.password), temp);
-        }
-        else
-        {
-            goto key_missing;
-        }
-
-        key = LFS_CFG_LISTENING_IP;
-        if (config_has_property(g_ctx.cfg.handle, key))
-        {
-            temp = config_get_string_value(g_ctx.cfg.handle, key);
-            cx_str_copy(g_ctx.cfg.listeningIp, sizeof(g_ctx.cfg.listeningIp), temp);
-        }
-        else
-        {
-            goto key_missing;
-        }
-
-        key = LFS_CFG_LISTENING_PORT;
-        if (config_has_property(g_ctx.cfg.handle, key))
-        {
-            g_ctx.cfg.listeningPort = (uint16_t)config_get_int_value(g_ctx.cfg.handle, key);
-        }
-        else
-        {
-            goto key_missing;
-        }
-         
-        key = LFS_CFG_WORKERS;
-        if (config_has_property(g_ctx.cfg.handle, key))
-        {
-            g_ctx.cfg.workers = (uint16_t)config_get_int_value(g_ctx.cfg.handle, key);
-        }
-        else
-        {
-            goto key_missing;
-        }
-         
-        key = LFS_CFG_ROOT_DIR;
-        if (config_has_property(g_ctx.cfg.handle, key))
-        {
-            temp = config_get_string_value(g_ctx.cfg.handle, key);
-            cx_str_copy(g_ctx.cfg.rootDir, sizeof(g_ctx.cfg.rootDir), temp);
-        }
-        else
-        {
-            goto key_missing;
-        }
-
-        key = LFS_CFG_BLOCKS_COUNT;
-        if (config_has_property(g_ctx.cfg.handle, key))
-        {
-            g_ctx.cfg.blocksCount = (uint32_t)config_get_int_value(g_ctx.cfg.handle, key);
-        }
-        else
-        {
-            goto key_missing;
-        }
-
-        key = LFS_CFG_BLOCKS_SIZE;
-        if (config_has_property(g_ctx.cfg.handle, key))
-        {
-            g_ctx.cfg.blocksSize = (uint32_t)config_get_int_value(g_ctx.cfg.handle, key);
-        }
-        else
-        {
-            goto key_missing;
-        }
-
-        key = LFS_CFG_DELAY;
-        if (config_has_property(g_ctx.cfg.handle, key))
-        {
-            g_ctx.cfg.delay = (uint32_t)config_get_int_value(g_ctx.cfg.handle, key);
-        }
-        else
-        {
-            goto key_missing;
-        }
-         
-        key = LFS_CFG_VALUE_SIZE;
-        if (config_has_property(g_ctx.cfg.handle, key))
-        {
-            g_ctx.cfg.valueSize = (uint16_t)config_get_int_value(g_ctx.cfg.handle, key);
-        }
-        else
-        {
-            goto key_missing;
-        }
-
-        key = LFS_CFG_INT_DUMP;
-        if (config_has_property(g_ctx.cfg.handle, key))
-        {
-            g_ctx.cfg.dumpInterval = (uint32_t)config_get_int_value(g_ctx.cfg.handle, key);
-        }
-        else
-        {
-            goto key_missing;
-        }
-
-         return true;
-
-     key_missing:
-         CX_ERR_SET(_err, ERR_CFG_MISSINGKEY, "key '%s' is missing in the configuration file.", key);
+        g_ctx.cfgInitialized = true;
+        cx_file_path(&g_ctx.cfgFilePath, "%s", _cfgFilePath);
     }
     else
     {
-        CX_ERR_SET(_err, ERR_CFG_NOTFOUND, "configuration file '%s' is missing or not readable.", cfgPath);
+        isReloading = true;
     }
+
+    t_config* cfg = config_create(g_ctx.cfgFilePath);
+    if (NULL != cfg)
+    {
+        ////////////////////////////////////////////////////////////////////////////////////////
+        // NON-RELOADABLE PROPERTIES
+        if (!isReloading)
+        {
+            CX_INFO("config file: %s", g_ctx.cfgFilePath);
+
+            key = LFS_CFG_PASSWORD;
+            if (!cfg_get_password(cfg, key, &g_ctx.cfg.password)) goto key_missing;
+
+            key = LFS_CFG_LISTENING_IP;
+            if (!cfg_get_string(cfg, key, g_ctx.cfg.listeningIp, sizeof(g_ctx.cfg.listeningIp))) goto key_missing;
+
+            key = LFS_CFG_LISTENING_PORT;
+            if (!cfg_get_uint16(cfg, key, &g_ctx.cfg.listeningPort)) goto key_missing;
+
+            key = LFS_CFG_WORKERS;
+            if (!cfg_get_uint16(cfg, key, &g_ctx.cfg.workers)) goto key_missing;
+
+            key = LFS_CFG_ROOT_DIR;
+            if (!cfg_get_string(cfg, key, g_ctx.cfg.rootDir, sizeof(g_ctx.cfg.rootDir))) goto key_missing;
+
+            key = LFS_CFG_BLOCKS_COUNT;
+            if (!cfg_get_uint32(cfg, key, &g_ctx.cfg.blocksCount)) goto key_missing;
+
+            key = LFS_CFG_BLOCKS_SIZE;
+            if (!cfg_get_uint32(cfg, key, &g_ctx.cfg.blocksSize)) goto key_missing;
+
+            key = LFS_CFG_VALUE_SIZE;
+            if (!cfg_get_uint16(cfg, key, &g_ctx.cfg.valueSize)) goto key_missing;
+        }
+
+        ////////////////////////////////////////////////////////////////////////////////////////
+        // RELOADABLE PROPERTIES
+        key = LFS_CFG_DELAY;
+        if (!cfg_get_uint32(cfg, key, &g_ctx.cfg.delay)) goto key_missing;
+
+        key = LFS_CFG_INT_DUMP;
+        if (!cfg_get_uint32(cfg, key, &g_ctx.cfg.dumpInterval)) goto key_missing;
+
+        config_destroy(cfg);
+        return true;
+
+    key_missing:
+        CX_ERR_SET(_err, ERR_CFG_MISSINGKEY, "key '%s' is missing in the configuration file.", key);
+    }
+    else
+    {
+        CX_ERR_SET(_err, ERR_CFG_NOTFOUND, "configuration file '%s' is missing or not readable.", g_ctx.cfgFilePath);
+    }
+
+    if (NULL != cfg)
+        config_destroy(cfg);
 
     return false;
-}
-
-static void cfg_destroy()
-{
-    if (NULL != g_ctx.cfg.handle)
-    {
-        config_destroy(g_ctx.cfg.handle);
-        g_ctx.cfg.handle = NULL;
-    }
 }
 
 static bool lfs_init(cx_err_t* _err)
@@ -304,6 +238,13 @@ static bool lfs_init(cx_err_t* _err)
     if (INVALID_HANDLE == g_ctx.timerDump)
     {
         CX_ERR_SET(_err, ERR_INIT_TIMER, "dump timer creation failed.");
+        return false;
+    }
+
+    g_ctx.cfgFswatchHandle = cx_fswatch_add(g_ctx.cfgFilePath, IN_MODIFY, NULL);
+    if (INVALID_HANDLE == g_ctx.cfgFswatchHandle)
+    {
+        CX_ERR_SET(_err, ERR_INIT_FSWATCH, "cfg fswatch creation failed.");
         return false;
     }
 
@@ -318,6 +259,12 @@ static void lfs_destroy()
     {
         cx_timer_remove(g_ctx.timerDump);
         g_ctx.timerDump = INVALID_HANDLE;
+    }
+
+    if (INVALID_HANDLE != g_ctx.cfgFswatchHandle)
+    {
+        cx_fswatch_remove(g_ctx.cfgFswatchHandle);
+        g_ctx.cfgFswatchHandle = INVALID_HANDLE;
     }
 }
 
@@ -482,6 +429,22 @@ static bool handle_timer_tick(uint64_t _expirations, uint32_t _type, void* _user
     }
 
     return !stopTimer;
+}
+
+static void handle_fswatch_event(const char* _path, uint32_t _mask, void* _userData)
+{
+    cx_err_t err;
+    CX_ERR_CLEAR(&err);
+
+    if (cfg_load(NULL, &err))
+    {
+        cx_timer_modify(g_ctx.timerDump, g_ctx.cfg.dumpInterval);
+        CX_INFO("configuration file successfully reloaded.");
+    }
+    else
+    {
+        CX_INFO("configuration file reload failed. %s", err.desc);
+    }
 }
 
 static bool on_connection_mem(cx_net_ctx_sv_t* _ctx, const ipv4_t _ipv4)

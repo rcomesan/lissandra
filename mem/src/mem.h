@@ -38,7 +38,6 @@ typedef enum MEM_TIMER
 
 typedef struct cfg_t
 {
-    t_config*           handle;                     // pointer to so-commons-lib config adt.
     password_t          password;                   // password for authenticating KER nodes.
     uint16_t            memNumber;                  // memory node identifier.
     uint16_t            workers;                    // number of worker threads to spawn to process requests.
@@ -92,6 +91,9 @@ typedef struct mm_ctx_t
 typedef struct mem_ctx_t
 {
     cfg_t               cfg;                        // mem node configuration data.
+    bool                cfgInitialized;             // true if the config was initialized (file path generated + full load).
+    cx_path_t           cfgFilePath;                // configuration file path.
+    uint16_t            cfgFswatchHandle;           // cx fswatch handle for reloading the config file.
     bool                isRunning;                  // true if the server is running. false if it's shutting down.
     cx_net_ctx_sv_t*    sv;                         // server context for serving API requests coming from KER nodes.
     cx_net_ctx_cl_t*    lfs;                        // client context for connecting to the LFS node.

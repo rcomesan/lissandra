@@ -1,8 +1,12 @@
 #include <ker/common.h>
-#include <cx/cx.h>
 #include <ker/defines.h>
 
+#include <cx/cx.h>
+#include <cx/str.h>
+#include <cx/math.h>
+
 #include <string.h>
+
 
 QUERY_TYPE common_parse_query(const char* _queryHead)
 {
@@ -171,4 +175,65 @@ bool common_task_data_free(TASK_TYPE _type, void* _data)
 
     free(_data);
     return true;
+}
+
+bool cfg_get_uint8(t_config* _cfg, char* _key, uint8_t* _out)
+{
+    if (config_has_property(_cfg, _key))
+    {
+        *_out = (uint8_t)config_get_int_value(_cfg, _key);
+        return true;
+    }
+    return false;
+}
+
+bool cfg_get_uint16(t_config* _cfg, char* _key, uint16_t* _out)
+{
+    if (config_has_property(_cfg, _key))
+    {
+        *_out = (uint16_t)config_get_int_value(_cfg, _key);
+        return true;
+    }
+    return false;
+}
+
+bool cfg_get_uint32(t_config* _cfg, char* _key, uint32_t* _out)
+{
+    if (config_has_property(_cfg, _key))
+    {
+        *_out = (uint32_t)config_get_int_value(_cfg, _key);
+        return true;
+    }
+    return false;
+}
+
+bool cfg_get_password(t_config* _cfg, char* _key, password_t* _out)
+{
+    if (config_has_property(_cfg, _key))
+    {
+        char* temp = config_get_string_value(_cfg, _key);
+
+        uint32_t len = strlen(temp);
+        CX_WARN(len >= MIN_PASSWD_LEN, "'%s' must have a minimum length of %d characters!", _key, MIN_PASSWD_LEN);
+        CX_WARN(len <= MAX_PASSWD_LEN, "'%s' must have a maximum length of %s characters!", _key, MAX_PASSWD_LEN)
+        
+        if (cx_math_in_range(len, MIN_PASSWD_LEN, MAX_PASSWD_LEN))
+        {
+            cx_str_copy(*_out, sizeof(*_out), temp);
+            return true;
+        }
+    }
+    return false;
+}
+
+bool cfg_get_string(t_config* _cfg, char* _key, char* _out, uint32_t _size)
+{
+    if (config_has_property(_cfg, _key))
+    {
+        char* temp = config_get_string_value(_cfg, _key);
+        cx_str_copy(_out, _size, temp);
+
+        return true;
+    }
+    return false;
 }

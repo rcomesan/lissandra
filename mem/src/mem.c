@@ -19,6 +19,7 @@
 #include <cx/str.h>
 #include <cx/math.h>
 #include <cx/timer.h>
+#include <cx/fswatch.h>
 
 #include <stdio.h>
 #include <string.h>
@@ -36,8 +37,7 @@ mem_ctx_t           g_ctx;
  ***  PRIVATE DECLARATIONS
  ***************************************************************************************/
 
-static bool         cfg_init(const char* _cfgFilePath, cx_err_t* _err);
-static void         cfg_destroy();
+static bool         cfg_load(const char* _cfgFilePath, cx_err_t* _err);
 
 static bool         mem_init(cx_err_t* _err);
 static void         mem_destroy();
@@ -47,6 +47,7 @@ static void         net_destroy();
 
 static void         handle_cli_command(const cx_cli_cmd_t* _cmd);
 static bool         handle_timer_tick(uint64_t _expirations, uint32_t _id, void* _userData);
+static void         handle_fswatch_event(const char* _path, uint32_t _mask, void* _userData);
 
 static bool         task_run_mt(task_t* _task);
 static bool         task_run_wk(task_t* _task);
@@ -85,7 +86,8 @@ int main(int _argc, char** _argv)
     g_ctx.isRunning = true
         && cx_init(PROJECT_NAME, OUTPUT_LOG_ENABLED, NULL, &err)
         && cx_timer_init(MEM_TIMER_COUNT, handle_timer_tick, &err)
-        && cfg_init((_argc > 1) ? _argv[1] : "res/mem.cfg", &err)
+        && cx_fswatch_init(1, (cx_fswatch_handler_cb)handle_fswatch_event, &err)
+        && cfg_load((_argc > 1) ? _argv[1] : "res/mem.cfg", &err)
         && taskman_init(g_ctx.cfg.workers, task_run_mt, task_run_wk, task_completed, task_free, task_reschedule, &err)
         && net_init(&err)
         && mem_init(&err)
@@ -114,6 +116,9 @@ int main(int _argc, char** _argv)
             // poll timer events
             cx_timer_poll_events();
 
+            // poll fswatch events
+            cx_fswatch_poll_events();
+
             // update tasks
             taskman_update();
 
@@ -133,8 +138,8 @@ int main(int _argc, char** _argv)
     net_destroy();          // destroys all the communication contexts waking up & aborting all the tasks waiting on remote responses.
     taskman_destroy();      // safely destroys the pool and the blocked queues.
     mem_destroy();          // destroys memory manager.
-    cfg_destroy();          // destroys config.
     cx_timer_destroy();     // destroys timers.
+    cx_fswatch_destroy();   // destroys fs watcher.
 
     if (0 == err.code)
     {
@@ -153,210 +158,117 @@ int main(int _argc, char** _argv)
  ***  PRIVATE FUNCTIONS
  ***************************************************************************************/
 
-static bool cfg_init(const char* _cfgFilePath, cx_err_t* _err)
+static bool cfg_load(const char* _cfgFilePath, cx_err_t* _err)
 {
-    char* temp = NULL;
     char* key = "";
+    bool isReloading = false;
 
-    cx_path_t cfgPath;
-    cx_file_path(&cfgPath, "%s", _cfgFilePath);
-
-    g_ctx.cfg.handle = config_create(cfgPath);
-
-    if (NULL != g_ctx.cfg.handle)
+    if (!g_ctx.cfgInitialized)
     {
-        CX_INFO("config file: %s", cfgPath);
+        g_ctx.cfgInitialized = true;
+        cx_file_path(&g_ctx.cfgFilePath, "%s", _cfgFilePath);
+    }
+    else
+    {
+        isReloading = true;
+    }
 
-        key = MEM_CFG_PASSWORD;
-        if (config_has_property(g_ctx.cfg.handle, key))
+    t_config* cfg = config_create(g_ctx.cfgFilePath);
+    if (NULL != cfg)
+    {
+        ////////////////////////////////////////////////////////////////////////////////////////
+        // NON-RELOADABLE PROPERTIES
+        if (!isReloading)
         {
-            temp = config_get_string_value(g_ctx.cfg.handle, key);
+            CX_INFO("config file: %s", g_ctx.cfgFilePath);
 
-            uint32_t len = strlen(temp);
-            CX_WARN(len >= MIN_PASSWD_LEN, "'%s' must have a minimum length of %d characters!", key, MIN_PASSWD_LEN);
-            CX_WARN(len <= MAX_PASSWD_LEN, "'%s' must have a maximum length of %s characters!", key, MAX_PASSWD_LEN)
-                if (!cx_math_in_range(len, MIN_PASSWD_LEN, MAX_PASSWD_LEN)) goto key_missing;
+            key = MEM_CFG_PASSWORD;
+            if (!cfg_get_password(cfg, key, &g_ctx.cfg.password)) goto key_missing;
 
-            cx_str_copy(g_ctx.cfg.password, sizeof(g_ctx.cfg.password), temp);
-        }
-        else
-        {
-            goto key_missing;
-        }
+            key = MEM_CFG_MEM_NUMBER;
+            if (!cfg_get_uint16(cfg, key, &g_ctx.cfg.memNumber)) goto key_missing;
 
-        key = MEM_CFG_MEM_NUMBER;
-        if (config_has_property(g_ctx.cfg.handle, key))
-        {
-            g_ctx.cfg.memNumber = (uint16_t)config_get_int_value(g_ctx.cfg.handle, key);
-        }
-        else
-        {
-            goto key_missing;
-        }
+            key = MEM_CFG_WORKERS;
+            if (!cfg_get_uint16(cfg, key, &g_ctx.cfg.workers)) goto key_missing;
 
-        key = MEM_CFG_WORKERS;
-        if (config_has_property(g_ctx.cfg.handle, key))
-        {
-            g_ctx.cfg.workers = (uint16_t)config_get_int_value(g_ctx.cfg.handle, key);
-        }
-        else
-        {
-            goto key_missing;
-        }
+            key = MEM_CFG_LISTENING_IP;
+            if (!cfg_get_string(cfg, key, g_ctx.cfg.listeningIp, sizeof(g_ctx.cfg.listeningIp))) goto key_missing;
 
-        key = MEM_CFG_LISTENING_IP;
-        if (config_has_property(g_ctx.cfg.handle, key))
-        {
-            temp = config_get_string_value(g_ctx.cfg.handle, key);
-            cx_str_copy(g_ctx.cfg.listeningIp, sizeof(g_ctx.cfg.listeningIp), temp);
-        }
-        else
-        {
-            goto key_missing;
-        }
+            key = MEM_CFG_LISTENING_PORT;
+            if (!cfg_get_uint16(cfg, key, &g_ctx.cfg.listeningPort)) goto key_missing;
 
-        key = MEM_CFG_LISTENING_PORT;
-        if (config_has_property(g_ctx.cfg.handle, key))
-        {
-            g_ctx.cfg.listeningPort = (uint16_t)config_get_int_value(g_ctx.cfg.handle, key);
-        }
-        else
-        {
-            goto key_missing;
-        }
+            key = MEM_CFG_LFS_IP;
+            if (!cfg_get_string(cfg, key, g_ctx.cfg.lfsIp, sizeof(g_ctx.cfg.lfsIp))) goto key_missing;
 
-        key = MEM_CFG_LFS_IP;
-        if (config_has_property(g_ctx.cfg.handle, key))
-        {
-            temp = config_get_string_value(g_ctx.cfg.handle, key);
-            cx_str_copy(g_ctx.cfg.lfsIp, sizeof(g_ctx.cfg.lfsIp), temp);
-        }
-        else
-        {
-            goto key_missing;
-        }
+            key = MEM_CFG_LFS_PORT;
+            if (!cfg_get_uint16(cfg, key, &g_ctx.cfg.lfsPort)) goto key_missing;
 
-        key = MEM_CFG_LFS_PORT;
-        if (config_has_property(g_ctx.cfg.handle, key))
-        {
-            g_ctx.cfg.lfsPort = (uint16_t)config_get_int_value(g_ctx.cfg.handle, key);
-        }
-        else
-        {
-            goto key_missing;
-        }
+            key = MEM_CFG_LFS_PASSWORD;
+            if (!cfg_get_password(cfg, key, &g_ctx.cfg.lfsPassword)) goto key_missing;
 
-        key = MEM_CFG_LFS_PASSWORD;
-        if (config_has_property(g_ctx.cfg.handle, key))
-        {
-            temp = config_get_string_value(g_ctx.cfg.handle, key);
-
-            uint32_t len = strlen(temp);
-            CX_WARN(len >= MIN_PASSWD_LEN, "'%s' must have a minimum length of %d characters!", key, MIN_PASSWD_LEN);
-            CX_WARN(len <= MAX_PASSWD_LEN, "'%s' must have a maximum length of %s characters!", key, MAX_PASSWD_LEN)
-                if (!cx_math_in_range(len, MIN_PASSWD_LEN, MAX_PASSWD_LEN)) goto key_missing;
-
-            cx_str_copy(g_ctx.cfg.lfsPassword, sizeof(g_ctx.cfg.lfsPassword), temp);
-        }
-        else
-        {
-            goto key_missing;
-        }
-
-        key = MEM_CFG_SEEDS_IP;
-        if (config_has_property(g_ctx.cfg.handle, key))
-        {
-            char** ips = config_get_array_value(g_ctx.cfg.handle, key);
-
-            uint32_t i = 0;
-            bool finished = (NULL == ips[i]);
-            while (!finished && g_ctx.cfg.seedsCount < MAX_MEM_SEEDS)
+            key = MEM_CFG_SEEDS_IP;
+            if (config_has_property(cfg, key))
             {
-                cx_str_copy(g_ctx.cfg.seedsIps[g_ctx.cfg.seedsCount++], sizeof(ipv4_t), ips[i]);
-                free(ips[i++]);
-                finished = (NULL == ips[i]);
+                char** ips = config_get_array_value(cfg, key);
+
+                uint32_t i = 0;
+                bool finished = (NULL == ips[i]);
+                while (!finished && g_ctx.cfg.seedsCount < MAX_MEM_SEEDS)
+                {
+                    cx_str_copy(g_ctx.cfg.seedsIps[g_ctx.cfg.seedsCount++], sizeof(ipv4_t), ips[i]);
+                    free(ips[i++]);
+                    finished = (NULL == ips[i]);
+                }
+                free(ips);
+                CX_CHECK(finished, "some seeds ip addresses were not read! static buffer of %d elements is not enough!", MAX_MEM_SEEDS);
             }
-            free(ips);
-            CX_CHECK(finished, "some seeds ip addresses were not read! static buffer of %d elements is not enough!", MAX_MEM_SEEDS);
-        }
-        else
-        {
-            goto key_missing;
-        }
-
-        key = MEM_CFG_SEEDS_PORT;
-        if (config_has_property(g_ctx.cfg.handle, key))
-        {
-            char** ports = config_get_array_value(g_ctx.cfg.handle, key);
-
-            uint32_t i = 0, j = 0;
-            bool finished = (NULL == ports[i]);
-            while (!finished && j < g_ctx.cfg.seedsCount)
+            else
             {
-                cx_str_to_uint16(ports[i], &(g_ctx.cfg.seedsPorts[j++]));
-                free(ports[i++]);
-                finished = (NULL == ports[i]);
+                goto key_missing;
             }
-            free(ports);
-            CX_WARN(j == g_ctx.cfg.seedsCount, "seedsIp and seedsPort arrays do not match! (number of seeds loaded: %d)", j)
-            g_ctx.cfg.seedsCount = j;
-        }
-        else
-        {
-            goto key_missing;
+
+            key = MEM_CFG_SEEDS_PORT;
+            if (config_has_property(cfg, key))
+            {
+                char** ports = config_get_array_value(cfg, key);
+
+                uint32_t i = 0, j = 0;
+                bool finished = (NULL == ports[i]);
+                while (!finished && j < g_ctx.cfg.seedsCount)
+                {
+                    cx_str_to_uint16(ports[i], &(g_ctx.cfg.seedsPorts[j++]));
+                    free(ports[i++]);
+                    finished = (NULL == ports[i]);
+                }
+                free(ports);
+                CX_WARN(j == g_ctx.cfg.seedsCount, "seedsIp and seedsPort arrays do not match! (number of seeds loaded: %d)", j)
+                    g_ctx.cfg.seedsCount = j;
+            }
+            else
+            {
+                goto key_missing;
+            }
+
+            key = MEM_CFG_MEM_SIZE;
+            if (!cfg_get_uint32(cfg, key, &g_ctx.cfg.memSize)) goto key_missing;
+
         }
 
+        ////////////////////////////////////////////////////////////////////////////////////////
+        // RELOADABLE PROPERTIES
         key = MEM_CFG_DELAY_MEM;
-        if (config_has_property(g_ctx.cfg.handle, key))
-        {
-            g_ctx.cfg.delayMem = (uint32_t)config_get_int_value(g_ctx.cfg.handle, key);
-        }
-        else
-        {
-            goto key_missing;
-        }
+        if (!cfg_get_uint32(cfg, key, &g_ctx.cfg.delayMem)) goto key_missing;
 
         key = MEM_CFG_DELAY_LFS;
-        if (config_has_property(g_ctx.cfg.handle, key))
-        {
-            g_ctx.cfg.delayLfs = (uint32_t)config_get_int_value(g_ctx.cfg.handle, key);
-        }
-        else
-        {
-            goto key_missing;
-        }
-
-        key = MEM_CFG_MEM_SIZE;
-        if (config_has_property(g_ctx.cfg.handle, key))
-        {
-            g_ctx.cfg.memSize = (uint32_t)config_get_int_value(g_ctx.cfg.handle, key);
-        }
-        else
-        {
-            goto key_missing;
-        }
+        if (!cfg_get_uint32(cfg, key, &g_ctx.cfg.delayLfs)) goto key_missing;
 
         key = MEM_CFG_INT_JOURNALING;
-        if (config_has_property(g_ctx.cfg.handle, key))
-        {
-            g_ctx.cfg.intervalJournaling = (uint32_t)config_get_int_value(g_ctx.cfg.handle, key);
-        }
-        else
-        {
-            goto key_missing;
-        }
+        if (!cfg_get_uint32(cfg, key, &g_ctx.cfg.intervalJournaling)) goto key_missing;
 
         key = MEM_CFG_INT_GOSSIPING;
-        if (config_has_property(g_ctx.cfg.handle, key))
-        {
-            g_ctx.cfg.intervalGossiping = (uint32_t)config_get_int_value(g_ctx.cfg.handle, key);
-        }
-        else
-        {
-            goto key_missing;
-        }
+        if (!cfg_get_uint32(cfg, key, &g_ctx.cfg.intervalGossiping)) goto key_missing;
 
-
+        config_destroy(cfg);
         return true;
 
     key_missing:
@@ -364,19 +276,13 @@ static bool cfg_init(const char* _cfgFilePath, cx_err_t* _err)
     }
     else
     {
-        CX_ERR_SET(_err, ERR_CFG_NOTFOUND, "configuration file '%s' is missing or not readable.", cfgPath);
+        CX_ERR_SET(_err, ERR_CFG_NOTFOUND, "configuration file '%s' is missing or not readable.", g_ctx.cfgFilePath);
     }
+
+    if (NULL != cfg)
+        config_destroy(cfg);
 
     return false;
-}
-
-static void cfg_destroy()
-{
-    if (NULL != g_ctx.cfg.handle)
-    {
-        config_destroy(g_ctx.cfg.handle);
-        g_ctx.cfg.handle = NULL;
-    }
 }
 
 static bool mem_init(cx_err_t* _err)
@@ -392,6 +298,13 @@ static bool mem_init(cx_err_t* _err)
     if (INVALID_HANDLE == g_ctx.timerGossip)
     {
         CX_ERR_SET(_err, ERR_INIT_TIMER, "gossip timer creation failed.");
+        return false;
+    }
+
+    g_ctx.cfgFswatchHandle = cx_fswatch_add(g_ctx.cfgFilePath, IN_MODIFY, NULL);
+    if (INVALID_HANDLE == g_ctx.cfgFswatchHandle)
+    {
+        CX_ERR_SET(_err, ERR_INIT_FSWATCH, "cfg fswatch creation failed.");
         return false;
     }
 
@@ -412,6 +325,12 @@ static void mem_destroy()
     {
         cx_timer_remove(g_ctx.timerGossip);
         g_ctx.timerGossip = INVALID_HANDLE;
+    }
+
+    if (INVALID_HANDLE != g_ctx.cfgFswatchHandle)
+    {
+        cx_fswatch_remove(g_ctx.cfgFswatchHandle);
+        g_ctx.cfgFswatchHandle = INVALID_HANDLE;
     }
 }
 
@@ -622,6 +541,23 @@ static bool handle_timer_tick(uint64_t _expirations, uint32_t _type, void* _user
     }
 
     return !stopTimer;
+}
+
+static void handle_fswatch_event(const char* _path, uint32_t _mask, void* _userData)
+{
+    cx_err_t err;
+    CX_ERR_CLEAR(&err);
+
+    if (cfg_load(NULL, &err))
+    {
+        cx_timer_modify(g_ctx.timerGossip, g_ctx.cfg.intervalGossiping);
+        cx_timer_modify(g_ctx.timerJournal, g_ctx.cfg.intervalJournaling);
+        CX_INFO("configuration file successfully reloaded.");
+    }
+    else
+    {
+        CX_INFO("configuration file reload failed. %s", err.desc);
+    }
 }
 
 static bool task_run_wk(task_t* _task)

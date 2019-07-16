@@ -23,7 +23,6 @@ typedef enum KER_TIMER
 
 typedef struct
 {
-    t_config*           handle;                     // pointer to so-commons-lib config adt.
     uint16_t            workers;                    // number of worker threads to spawn to process requests.
     uint8_t             quantum;                    // maximum amount of lines of LQL scripts to run sequentially without returning control back to scheduler.
     uint16_t            memNumber;                  // this shouldn't be required (WIP)
@@ -37,6 +36,9 @@ typedef struct
 typedef struct
 {
     cfg_t               cfg;                        // mem node configuration data.
+    bool                cfgInitialized;             // true if the config was initialized (file path generated + full load).
+    cx_path_t           cfgFilePath;                // configuration file path.
+    uint16_t            cfgFswatchHandle;           // cx fswatch handle for reloading the config file.
     bool                isRunning;                  // true if the server is running. false if it's shutting down.
     payload_t           buff1;                      // temporary pre-allocated buffer for building packets.
     uint16_t            timerMetaRefresh;           // cx timer handle for running the metadata refresh operation.
