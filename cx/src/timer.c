@@ -199,8 +199,10 @@ void cx_timer_modify(uint16_t _timerHandle, uint32_t _newInterval)
     
     struct itimerspec ts;
     CX_MEM_ZERO(ts);
-    ts.it_interval.tv_sec = _newInterval / 1000;
-    ts.it_interval.tv_nsec = (_newInterval % 1000) * 1000000;
+    ts.it_value.tv_sec = _newInterval / 1000;
+    ts.it_value.tv_nsec = (_newInterval % 1000) * 1000000;
+    ts.it_interval.tv_sec = ts.it_value.tv_sec;
+    ts.it_interval.tv_nsec = ts.it_value.tv_nsec;
 
     bool success = (0 == timerfd_settime(timer->fd, 0, &ts, NULL));
     CX_UNUSED(success);
