@@ -30,7 +30,7 @@ static void             _on_connected_to_mem(cx_net_ctx_cl_t* _ctx);
 
 static void             _on_disconnected_from_mem(cx_net_ctx_cl_t* _ctx);
 
-static void             _node_key(const ipv4_t _ip, uint16_t _port, node_key_t* _outKey);
+static void             _node_key(const ipv4_t _ip, uint16_t _port, host_t* _outKey);
 
 /****************************************************************************************
  ***  PUBLIC FUNCTIONS
@@ -73,7 +73,7 @@ void gossip_destroy()
 
 void gossip_add(const ipv4_t _ip, uint16_t _port, uint16_t _memNumber)
 {
-    node_key_t key;
+    host_t key;
     _node_key(_ip, _port, &key);
 
 #if defined(MEM)
@@ -106,12 +106,10 @@ void gossip_run()
     cx_cdict_iter_begin(m_gossipCtx->nodes);
     while (cx_cdict_iter_next(m_gossipCtx->nodes, &key, (void**)&node))
     {
-
 #ifdef KER
-        if (MEM_NUMBER_UNKNOWN != node->number && node->available)
-        {
+        // add it to the pool
+        if (MEM_NUMBER_UNKNOWN != node->number)
             mempool_add(node->number, node->ip, node->port);
-        }
 #endif
 
         if (GOSSIP_STAGE_NONE == node->stage && NULL == node->conn)
@@ -163,15 +161,13 @@ void gossip_poll_events()
     {
         if (NULL != node->conn)
         {
-            if (GOSSIP_STAGE_HANDSHAKING != node->stage
-                && (!(CX_NET_STATE_CONNECTED & node->conn->c.state) || !node->available))
+            cx_net_poll_events(node->conn, 0);
+
+            if (GOSSIP_STAGE_FAILED == node->stage)
             {
                 cx_net_destroy(node->conn);
                 node->conn = NULL;
-            }
-            else
-            {
-                cx_net_poll_events(node->conn, 0);
+                node->stage = GOSSIP_STAGE_NONE;
             }
         }
 
@@ -282,22 +278,28 @@ static void _on_disconnected_from_mem(cx_net_ctx_cl_t* _ctx)
 
     if (GOSSIP_STAGE_DONE == node->stage)
     {
-        // gossip exchange succeeded, we're now disconnected from the node
+        // gossip exchange succeeded, we're now disconnected from the node //TODO
+        node->stage = GOSSIP_STAGE_NONE;
         node->available = true;
         node->lastGossipTime = cx_time_counter();
+
+#ifdef KER
+        // add it to the pool
+        if (MEM_NUMBER_UNKNOWN != node->number)
+            mempool_add(node->number, node->ip, node->port);
+#endif
     }
     else
     {
         // node went donw/connection failed/handshake failed/disconnected
         // we will flag it as not available so that the mempool doesn't consume it, 
         // but we will keep trying to reconnect to it in following gossip processes
+        node->stage = GOSSIP_STAGE_FAILED;
         node->available = false;
     }
-
-    node->stage = GOSSIP_STAGE_NONE;
 }
 
-static void _node_key(const ipv4_t _ip, uint16_t _port, node_key_t* _outKey)
+static void _node_key(const ipv4_t _ip, uint16_t _port, host_t* _outKey)
 {
     cx_str_format(*_outKey, sizeof(*_outKey), "%s:%" PRIu16, _ip, _port);
 }

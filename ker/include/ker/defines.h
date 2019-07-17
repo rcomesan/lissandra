@@ -83,14 +83,16 @@ typedef enum QUERY_TYPE
     QUERY_JOURNAL,
     QUERY_ADDMEMORY,
     QUERY_RUN,
+    QUERY_METRICS,
     QUERY_LOGFILE,
     QUERY_EXIT,
+    QUERY_MEMPOOL,
     QUERY_COUNT
 } QUERY_TYPE;
 
 static const char *QUERY_NAME[] = {
     "NONE", "CREATE", "DROP", "DESCRIBE", "SELECT", "INSERT",
-    "JOURNAL", "ADD MEMORY", "RUN", "LOGFILE", "EXIT",
+    "JOURNAL", "ADD", "RUN", "METRICS", "LOGFILE", "EXIT", "MEMPOOL"
 };
 
 typedef enum CONSISTENCY_TYPE
@@ -104,6 +106,10 @@ typedef enum CONSISTENCY_TYPE
 
 static const char *CONSISTENCY_NAME[] = {
     "INDISTINCT", "STRONG", "STRONG-HASHED", "EVENTUAL"
+};
+
+static const char *CONSISTENCY_NAME_SHORT[] = {
+    "IC", "SC", "SHC", "EC"
 };
 
 typedef struct table_meta_t

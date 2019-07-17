@@ -13,6 +13,7 @@ typedef enum GOSSIP_STAGE
     GOSSIP_STAGE_ACKNOWLEDGED,
     GOSSIP_STAGE_REQUESTING,
     GOSSIP_STAGE_DONE,
+    GOSSIP_STAGE_FAILED,
 } GOSSIP_STAGE;
 
 typedef struct gossip_node_t
@@ -33,8 +34,6 @@ typedef struct gossip_ctx_t
 } gossip_ctx_t;
 
 typedef bool(*gossip_func_cb)(gossip_node_t* _memNode, void* _userData);
-
-typedef char node_key_t[sizeof(ipv4_t) + 1 + 5];
 
 #define MEM_NUMBER_UNKNOWN 0
 
