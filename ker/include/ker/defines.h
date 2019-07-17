@@ -25,6 +25,10 @@
 #define MIN_PASSWD_LEN 12
 #define MAX_PASSWD_LEN 32
 
+#define NODE_KER ((void*)0x1)
+#define NODE_MEM ((void*)0x2)
+#define NODE_LFS ((void*)0x3)
+
 typedef char payload_t[MAX_PACKET_LEN - MIN_PACKET_LEN];
 typedef char table_name_t[TABLE_NAME_LEN_MAX + 1];
 typedef char password_t[MAX_PASSWD_LEN + 1];
@@ -116,6 +120,12 @@ typedef struct table_record_t
     uint64_t        timestamp;
     char*           value;
 } table_record_t;
+
+typedef struct seed_t
+{
+    ipv4_t          ip;                             // node ip address.
+    uint16_t        port;                           // node tcp port.
+} seed_t;
 
 typedef struct data_create_t
 {

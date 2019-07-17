@@ -54,6 +54,9 @@
     <ClCompile Include="src\common\common.c">
       <Filter>src\common</Filter>
     </ClCompile>
+    <ClCompile Include="src\common\gossip.c">
+      <Filter>src\common</Filter>
+    </ClCompile>
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="include\ker\ker_protocol.h">
@@ -84,6 +87,9 @@
       <Filter>include\ker</Filter>
     </ClInclude>
     <ClInclude Include="include\ker\common.h">
+      <Filter>include\ker</Filter>
+    </ClInclude>
+    <ClInclude Include="include\ker\gossip.h">
       <Filter>include\ker</Filter>
     </ClInclude>
   </ItemGroup>

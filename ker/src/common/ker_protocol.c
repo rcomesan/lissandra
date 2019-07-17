@@ -15,20 +15,37 @@
 
 #include "../ker.h"
 #include "../mempool.h"
+#include "ker/gossip.h"
+#include "mem/mem_protocol.h"
 
 void ker_handle_ack(cx_net_common_t* _common, void* _userData, const char* _buffer, uint16_t _bufferSize)
 {
     cx_net_ctx_cl_t* cl = (cx_net_ctx_cl_t*)_common;
     uint32_t pos = 0;
+    bool isGossip = false;
 
-    mem_node_t* memNode = (mem_node_t*)cl->userData;
+    cx_binr_bool(_buffer, _bufferSize, &pos, &isGossip);
 
-    cx_net_validate(cl, INVALID_HANDLE);
-    memNode->handshaking = false;
-    memNode->available = true;
+    if (isGossip) // KER <-> MEM gossip connection succeeded
+    {
+        gossip_node_t* node = (gossip_node_t*)cl->userData;
 
-    // by default, assign this memory to CONSISTENCY_NONE criterion.
-    mempool_assign(memNode->number, CONSISTENCY_NONE, NULL);
+        cx_binr_uint16(_buffer, _bufferSize, &pos, &node->number);
+
+        cx_net_validate(cl, INVALID_HANDLE);
+        node->stage = GOSSIP_STAGE_ACKNOWLEDGED;
+    }
+    else // normal KER <-> MEM connection succeeded
+    {
+        mem_node_t* node = (mem_node_t*)cl->userData;
+
+        cx_net_validate(cl, INVALID_HANDLE);
+        node->handshaking = false;
+        node->available = true;
+
+        // by default, assign this memory to CONSISTENCY_NONE criterion.
+        mempool_assign(node->number, CONSISTENCY_NONE, NULL);
+    }
 }
 
 void ker_handle_req_create(const cx_net_common_t* _common, void* _userData, const char* _buffer, uint16_t _bufferSize)
@@ -170,15 +187,32 @@ void ker_handle_res_insert(const cx_net_common_t* _common, void* _userData, cons
     RES_END;
 }
 
+void ker_handle_res_gossip(const cx_net_common_t* _common, void* _userData, const char* _buffer, uint16_t _bufferSize)
+{
+    // gossip table arrived from MEM node server
+    cx_net_ctx_cl_t* cl = (cx_net_ctx_cl_t*)_common;
+    gossip_node_t* node = (gossip_node_t*)cl->userData;
+
+    gossip_import((payload_t*)_buffer, _bufferSize);
+
+    node->stage = GOSSIP_STAGE_DONE;
+    cx_net_disconnect(cl, INVALID_HANDLE, "gossip process completed");
+}
+
 #endif // KER
 
 /****************************************************************************************
  ***  MESSAGE PACKERS
  ***************************************************************************************/
 
-uint32_t ker_pack_ack(char* _buffer, uint16_t _size)
+uint32_t ker_pack_ack(char* _buffer, uint16_t _size, bool _isGossip, uint16_t _memNumber)
 {
     uint32_t pos = 0;
+    cx_binw_bool(_buffer, _size, &pos, _isGossip);
+    if (_isGossip)
+    {
+        cx_binw_uint16(_buffer, _size, &pos, _memNumber);
+    }
     return pos;
 }
 

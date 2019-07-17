@@ -18,6 +18,7 @@ typedef enum
     KERP_RES_DESCRIBE,
     KERP_RES_SELECT,
     KERP_RES_INSERT,
+    KERP_RES_GOSSIP,
 } KER_PACKET_HEADERS;
 
 /****************************************************************************************
@@ -56,13 +57,15 @@ void ker_handle_res_select(const cx_net_common_t* _common, void* _userData, cons
 
 void ker_handle_res_insert(const cx_net_common_t* _common, void* _userData, const char* _buffer, uint16_t _bufferSize);
 
+void ker_handle_res_gossip(const cx_net_common_t* _common, void* _userData, const char* _buffer, uint16_t _bufferSize);
+
 #endif // KER
 
 /****************************************************************************************
  ***  MESSAGE PACKERS
  ***************************************************************************************/
 
-uint32_t ker_pack_ack(char* _buffer, uint16_t _size);
+uint32_t ker_pack_ack(char* _buffer, uint16_t _size, bool _isGossip, uint16_t _memNumber);
 
 uint32_t ker_pack_req_create(char* _buffer, uint16_t _size, uint16_t _remoteId, const char* _tableName, uint8_t _consistency, uint16_t _numPartitions, uint32_t _compactionInterval);
 

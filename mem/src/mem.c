@@ -11,6 +11,7 @@
 #include <lfs/lfs_protocol.h>
 #include <ker/ker_protocol.h>
 #include <ker/common.h>
+#include <ker/gossip.h>
 
 #include <cx/cx.h>
 #include <cx/mem.h>
@@ -119,6 +120,9 @@ int main(int _argc, char** _argv)
             // poll fswatch events
             cx_fswatch_poll_events();
 
+            // poll gossip events
+            gossip_poll_events();
+
             // update tasks
             taskman_update();
 
@@ -215,7 +219,7 @@ static bool cfg_load(const char* _cfgFilePath, cx_err_t* _err)
                 bool finished = (NULL == ips[i]);
                 while (!finished && g_ctx.cfg.seedsCount < MAX_MEM_SEEDS)
                 {
-                    cx_str_copy(g_ctx.cfg.seedsIps[g_ctx.cfg.seedsCount++], sizeof(ipv4_t), ips[i]);
+                    cx_str_copy(g_ctx.cfg.seeds[g_ctx.cfg.seedsCount++].ip, sizeof(ipv4_t), ips[i]);
                     free(ips[i++]);
                     finished = (NULL == ips[i]);
                 }
@@ -236,7 +240,7 @@ static bool cfg_load(const char* _cfgFilePath, cx_err_t* _err)
                 bool finished = (NULL == ports[i]);
                 while (!finished && j < g_ctx.cfg.seedsCount)
                 {
-                    cx_str_to_uint16(ports[i], &(g_ctx.cfg.seedsPorts[j++]));
+                    cx_str_to_uint16(ports[i], &(g_ctx.cfg.seeds[j++].port));
                     free(ports[i++]);
                     finished = (NULL == ports[i]);
                 }
@@ -287,6 +291,9 @@ static bool cfg_load(const char* _cfgFilePath, cx_err_t* _err)
 
 static bool mem_init(cx_err_t* _err)
 {
+    if (!gossip_init(g_ctx.cfg.seeds, g_ctx.cfg.seedsCount, _err))
+        return false;
+
     g_ctx.timerJournal = cx_timer_add(g_ctx.cfg.intervalJournaling, MEM_TIMER_JOURNAL, NULL);
     if (INVALID_HANDLE == g_ctx.timerJournal)
     {
@@ -332,6 +339,8 @@ static void mem_destroy()
         cx_fswatch_remove(g_ctx.cfgFswatchHandle);
         g_ctx.cfgFswatchHandle = INVALID_HANDLE;
     }
+
+    gossip_destroy();
 }
 
 static bool net_init(cx_err_t* _err)
@@ -384,7 +393,7 @@ static bool net_init(cx_err_t* _err)
     cx_str_copy(svCtxArgs.name, sizeof(svCtxArgs.name), "api");
     cx_str_copy(svCtxArgs.ip, sizeof(svCtxArgs.ip), g_ctx.cfg.listeningIp);
     svCtxArgs.port = g_ctx.cfg.listeningPort;
-    svCtxArgs.maxClients = 10;
+    svCtxArgs.maxClients = 200;
     svCtxArgs.onConnection = (cx_net_on_connection_cb)on_connection;
     svCtxArgs.onDisconnection = (cx_net_on_disconnection_cb)on_disconnection;
 
@@ -396,6 +405,7 @@ static bool net_init(cx_err_t* _err)
     svCtxArgs.msgHandlers[MEMP_REQ_DESCRIBE] = (cx_net_handler_cb)mem_handle_req_describe;
     svCtxArgs.msgHandlers[MEMP_REQ_SELECT] = (cx_net_handler_cb)mem_handle_req_select;
     svCtxArgs.msgHandlers[MEMP_REQ_INSERT] = (cx_net_handler_cb)mem_handle_req_insert;
+    svCtxArgs.msgHandlers[MEMP_REQ_GOSSIP] = (cx_net_handler_cb)mem_handle_req_gossip;
 
     // start server context
     g_ctx.sv = cx_net_listen(&svCtxArgs);
@@ -531,7 +541,7 @@ static bool handle_timer_tick(uint64_t _expirations, uint32_t _type, void* _user
 
     case MEM_TIMER_GOSSIP:
     {
-        //TODO
+        gossip_run();
         break;
     }
 

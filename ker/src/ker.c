@@ -6,6 +6,7 @@
 #include <ker/reporter.h>
 #include <ker/taskman.h>
 #include <ker/common.h>
+#include <ker/gossip.h>
 #include <ker/ker_protocol.h>
 #include <mem/mem_protocol.h>
 
@@ -91,13 +92,16 @@ int main(int _argc, char** _argv)
                 handle_cli_command(cmd);
 
             // poll socket events
-            mempool_update();
+            mempool_poll_events();
 
             // poll timer events
             cx_timer_poll_events();
 
             // poll fswatch events
             cx_fswatch_poll_events();
+
+            // poll gossip events
+            gossip_poll_events();
 
             // update tasks
             taskman_update();
@@ -165,14 +169,11 @@ static bool cfg_load(const char* _cfgFilePath, cx_err_t* _err)
             key = KER_CFG_WORKERS;
             if (!cfg_get_uint16(cfg, key, &g_ctx.cfg.workers)) goto key_missing;
 
-            key = KER_CFG_MEM_NUMBER;
-            if (!cfg_get_uint16(cfg, key, &g_ctx.cfg.memNumber)) goto key_missing;
-
             key = KER_CFG_MEM_IP;
-            if (!cfg_get_string(cfg, key, g_ctx.cfg.memIp, sizeof(g_ctx.cfg.memIp))) goto key_missing;
+            if (!cfg_get_string(cfg, key, g_ctx.cfg.seed.ip, sizeof(g_ctx.cfg.seed.ip))) goto key_missing;
 
             key = KER_CFG_MEM_PORT;
-            if (!cfg_get_uint16(cfg, key, &g_ctx.cfg.memPort)) goto key_missing;
+            if (!cfg_get_uint16(cfg, key, &g_ctx.cfg.seed.port)) goto key_missing;
 
             key = KER_CFG_MEM_PASSWORD;
             if (!cfg_get_password(cfg, key, &g_ctx.cfg.memPassword)) goto key_missing;
@@ -183,11 +184,14 @@ static bool cfg_load(const char* _cfgFilePath, cx_err_t* _err)
         key = KER_CFG_DELAY_RUN;
         if (!cfg_get_uint32(cfg, key, &g_ctx.cfg.delayRun)) goto key_missing;
 
+        key = KER_CFG_QUANTUM;
+        if (!cfg_get_uint8(cfg, key, &g_ctx.cfg.quantum)) goto key_missing;
+
         key = KER_CFG_INT_METAREFRESH;
         if (!cfg_get_uint32(cfg, key, &g_ctx.cfg.intervalMetaRefresh)) goto key_missing;
 
-        key = KER_CFG_QUANTUM;
-        if (!cfg_get_uint8(cfg, key, &g_ctx.cfg.quantum)) goto key_missing;
+        key = KER_CFG_INT_GOSSIPING;
+        if (!cfg_get_uint32(cfg, key, &g_ctx.cfg.intervalGossiping)) goto key_missing;
 
         config_destroy(cfg);
         return true;
@@ -215,6 +219,13 @@ static bool ker_init(cx_err_t* _err)
         return false;
     }
 
+    g_ctx.timerGossip = cx_timer_add(g_ctx.cfg.intervalGossiping, KER_TIMER_GOSSIP, NULL);
+    if (INVALID_HANDLE == g_ctx.timerGossip)
+    {
+        CX_ERR_SET(_err, ERR_INIT_TIMER, "gossip timer creation failed.");
+        return false;
+    }
+
     g_ctx.cfgFswatchHandle = cx_fswatch_add(g_ctx.cfgFilePath, IN_MODIFY, NULL);
     if (INVALID_HANDLE == g_ctx.cfgFswatchHandle)
     {
@@ -222,23 +233,23 @@ static bool ker_init(cx_err_t* _err)
         return false;
     }
 
-    if (mempool_init(_err))
-    {
-        mempool_add(g_ctx.cfg.memNumber, g_ctx.cfg.memIp, g_ctx.cfg.memPort);
-        return true;
-    }
-
-    return false;
+    return true
+        && mempool_init(_err)
+        && gossip_init(&g_ctx.cfg.seed, 1, _err);
 }
 
 static void ker_destroy()
 {
-    mempool_destroy();
-
     if (INVALID_HANDLE != g_ctx.timerMetaRefresh)
     {
         cx_timer_remove(g_ctx.timerMetaRefresh);
         g_ctx.timerMetaRefresh = INVALID_HANDLE;
+    }
+
+    if (INVALID_HANDLE != g_ctx.timerGossip)
+    {
+        cx_timer_remove(g_ctx.timerGossip);
+        g_ctx.timerGossip = INVALID_HANDLE;
     }
 
     if (INVALID_HANDLE != g_ctx.cfgFswatchHandle)
@@ -246,6 +257,9 @@ static void ker_destroy()
         cx_fswatch_remove(g_ctx.cfgFswatchHandle);
         g_ctx.cfgFswatchHandle = INVALID_HANDLE;
     }
+
+    gossip_destroy();
+    mempool_destroy();
 }
 
 static void handle_cli_command(const cx_cli_cmd_t* _cmd)
@@ -372,9 +386,6 @@ static bool handle_timer_tick(uint64_t _expirations, uint32_t _type, void* _user
     {
         cx_err_t err;
 
-        // for now, we'll just keep adding our known MEM node over and over
-        mempool_add(g_ctx.cfg.memNumber, g_ctx.cfg.memIp, g_ctx.cfg.memPort);
-
         task_t* task = taskman_create(TASK_ORIGIN_INTERNAL_PRIORITY, TASK_WT_DESCRIBE, NULL, NULL);
         if (NULL != task)
         {
@@ -383,6 +394,12 @@ static bool handle_timer_tick(uint64_t _expirations, uint32_t _type, void* _user
             task->state = TASK_STATE_NEW;
         }
         CX_WARN(NULL != task, "metadata refresh timer failed (taskman_create returned null)");
+        break;
+    }
+
+    case KER_TIMER_GOSSIP:
+    {
+        gossip_run();
         break;
     }
 
@@ -402,6 +419,7 @@ static void handle_fswatch_event(const char* _path, uint32_t _mask, void* _userD
     if (cfg_load(NULL, &err))
     {
         cx_timer_modify(g_ctx.timerMetaRefresh, g_ctx.cfg.intervalMetaRefresh);
+        cx_timer_modify(g_ctx.timerGossip, g_ctx.cfg.intervalGossiping);
         CX_INFO("configuration file successfully reloaded.");
     }
     else

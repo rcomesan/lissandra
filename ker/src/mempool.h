@@ -74,7 +74,7 @@ void        mempool_disconnect();
 
 void        mempool_destroy();
 
-void        mempool_update();
+void        mempool_poll_events();
 
 void        mempool_feed_tables(table_meta_t* _tables, uint32_t _tablesCount);
 

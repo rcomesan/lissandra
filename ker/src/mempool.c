@@ -134,9 +134,10 @@ void mempool_destroy()
     }
 
     free(m_mempoolCtx);
+    m_mempoolCtx = NULL;
 }
 
-void mempool_update()
+void mempool_poll_events()
 {
     mem_node_t* memNode = NULL;
 
@@ -247,6 +248,9 @@ bool mempool_assign(uint16_t _memNumber, CONSISTENCY_TYPE _type, cx_err_t* _err)
     pthread_mutex_lock(&memNode->listNodeMtx);
     if (memNode->known)
     {
+        //TODO si el nodo esta desconectado tiro un ADD para reconectarlo?
+        //     o directamente rechazo el pedido?
+
         if (NULL == memNode->listNode[_type])
         {
             pthread_mutex_lock(&criteria->mtx);
@@ -487,7 +491,7 @@ static void _on_connected_to_mem(cx_net_ctx_cl_t* _ctx)
 
     payload_t payload;
     uint32_t payloadSize = mem_pack_auth(payload, sizeof(payload), 
-        g_ctx.cfg.memPassword, 0);
+        g_ctx.cfg.memPassword, false, UINT16_MAX, UINT16_MAX);
 
     cx_net_send(_ctx, MEMP_AUTH, payload, payloadSize, INVALID_HANDLE);
 }

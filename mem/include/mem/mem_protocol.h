@@ -19,11 +19,13 @@ typedef enum
     MEMP_REQ_DESCRIBE,
     MEMP_REQ_SELECT,
     MEMP_REQ_INSERT,
+    MEMP_REQ_GOSSIP,
     MEMP_RES_CREATE,
     MEMP_RES_DROP,
     MEMP_RES_DESCRIBE,
     MEMP_RES_SELECT,
     MEMP_RES_INSERT,
+    MEMP_RES_GOSSIP,
 } MEM_PACKET_HEADERS;
 
 /****************************************************************************************
@@ -50,6 +52,8 @@ void mem_handle_req_select(const cx_net_common_t* _common, void* _userData, cons
 
 void mem_handle_req_insert(const cx_net_common_t* _common, void* _userData, const char* _buffer, uint16_t _bufferSize);
 
+void mem_handle_req_gossip(const cx_net_common_t* _common, void* _userData, const char* _buffer, uint16_t _bufferSize);
+
 void mem_handle_res_create(const cx_net_common_t* _common, void* _userData, const char* _buffer, uint16_t _bufferSize);
 
 void mem_handle_res_drop(const cx_net_common_t* _common, void* _userData, const char* _buffer, uint16_t _bufferSize);
@@ -60,15 +64,17 @@ void mem_handle_res_select(const cx_net_common_t* _common, void* _userData, cons
 
 void mem_handle_res_insert(const cx_net_common_t* _common, void* _userData, const char* _buffer, uint16_t _bufferSize);
 
+void mem_handle_res_gossip(const cx_net_common_t* _common, void* _userData, const char* _buffer, uint16_t _bufferSize);
+
 #endif // MEM
 
 /****************************************************************************************
  ***  MESSAGE PACKERS
  ***************************************************************************************/
 
-uint32_t mem_pack_auth(char* _buffer, uint16_t _size, password_t _passwd, uint16_t _memNumber);
+uint32_t mem_pack_auth(char* _buffer, uint16_t _size, password_t _passwd, bool _isGossip, uint16_t _memNumber, uint16_t _memPortNumber);
 
-uint32_t mem_pack_ack(char* _buffer, uint16_t _size, uint16_t _valueSize);
+uint32_t mem_pack_ack(char* _buffer, uint16_t _size, bool _isGossip, uint16_t _memNumber, uint16_t _valueSize);
 
 uint32_t mem_pack_journal(char* _buffer, uint16_t _size);
 

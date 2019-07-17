@@ -46,9 +46,8 @@ typedef struct cfg_t
     ipv4_t              lfsIp;                      // ip address on which the LFS server will listen on.
     uint16_t            lfsPort;                    // tcp port on which the LFS server will listen on.
     password_t          lfsPassword;                // password to authenticate with the LFS server.
+    seed_t              seeds[MAX_MEM_SEEDS];       // memory nodes already known (seeds).
     uint8_t             seedsCount;                 // number memory nodes already known.
-    ipv4_t              seedsIps[MAX_MEM_SEEDS];    // ip addresses of memory nodes already known.
-    uint16_t            seedsPorts[MAX_MEM_SEEDS];  // ports of memory nodes already known.
     uint32_t            delayMem;                   // memory access delay in milliseconds.
     uint32_t            delayLfs;                   // filesystem access delay in milliseconds.
     uint32_t            memSize;                    // size in bytes of the main memory.

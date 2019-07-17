@@ -31,8 +31,10 @@ void lfs_handle_auth(cx_net_common_t* _common, void* _userData, const char* _buf
     if (0 == strncmp(g_ctx.cfg.password, passwd, MAX_PASSWD_LEN))
     {
         cx_net_validate(_common, client->handle);
+        client->userData = NODE_MEM;
+
         payload_t payload;
-        uint32_t payloadSize = mem_pack_ack(payload, sizeof(payload), g_ctx.cfg.valueSize);
+        uint32_t payloadSize = mem_pack_ack(payload, sizeof(payload), false, 0, g_ctx.cfg.valueSize);
         cx_net_send(sv, MEMP_ACK, payload, payloadSize, client->handle);
     }
     else

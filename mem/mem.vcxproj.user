@@ -3,6 +3,7 @@
   <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Debug|x86'">
     <RemoteDebuggerWorkingDirectory>$(RemoteRootDir)/$(ProjectName)/build/$(Configuration.toLower())</RemoteDebuggerWorkingDirectory>
     <DebuggerFlavor>LinuxDebugger</DebuggerFlavor>
+    <RemoteDebuggerCommandArguments>/home/utnso/lissandra/res/cfg/test-04/mem-1.cfg</RemoteDebuggerCommandArguments>
   </PropertyGroup>
   <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Release|x86'">
     <RemoteDebuggerWorkingDirectory>$(RemoteRootDir)/$(ProjectName)/build/$(Configuration.toLower())</RemoteDebuggerWorkingDirectory>

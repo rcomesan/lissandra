@@ -15,6 +15,7 @@
 #ifdef MEM
 
 #include "../mem.h"
+#include <ker/gossip.h>
 
 void mem_handle_auth(cx_net_common_t* _common, void* _userData, const char* _buffer, uint16_t _bufferSize)
 {
@@ -31,17 +32,34 @@ void mem_handle_auth(cx_net_common_t* _common, void* _userData, const char* _buf
     {
         cx_net_validate(_common, client->handle);
 
-        bool isMemory = false;
-        cx_binr_bool(_buffer, _bufferSize, &pos, &isMemory);
+        bool isGossip = false;
+        cx_binr_bool(_buffer, _bufferSize, &pos, &isGossip);
 
-        if (isMemory)
+        if (isGossip) // authentication request to perform gossiping
         {
-            uint16_t memNumber = 0;
+            uint16_t memNumber = 0, portNumber = 0;
             cx_binr_uint16(_buffer, _bufferSize, &pos, &memNumber);
+            cx_binr_uint16(_buffer, _bufferSize, &pos, &portNumber);
+
+            if (memNumber == UINT16_MAX) // authentication request coming from KER
+            {
+                client->userData = NODE_KER;
+                payloadSize = ker_pack_ack(payload, sizeof(payload), true, g_ctx.cfg.memNumber);
+                cx_net_send(sv, KERP_ACK, payload, payloadSize, client->handle);
+            }
+            else // authentication request coming from another MEM node
+            {
+                gossip_add(client->ip, portNumber, memNumber);
+
+                client->userData = NODE_MEM;
+                payloadSize = mem_pack_ack(payload, sizeof(payload), true, g_ctx.cfg.memNumber, 0);
+                cx_net_send(sv, MEMP_ACK, payload, payloadSize, client->handle);
+            }
         }
-        else
+        else // normal KER authentication request
         {
-            payloadSize = ker_pack_ack(payload, sizeof(payload));
+            client->userData = NODE_KER;
+            payloadSize = ker_pack_ack(payload, sizeof(payload), false, g_ctx.cfg.memNumber);
             cx_net_send(sv, KERP_ACK, payload, payloadSize, client->handle);
         }
     }
@@ -56,11 +74,27 @@ void mem_handle_ack(cx_net_common_t* _common, void* _userData, const char* _buff
     cx_net_ctx_cl_t* cl = (cx_net_ctx_cl_t*)_common;
     uint32_t pos = 0;
 
-    cx_binr_uint16(_buffer, _bufferSize, &pos, &g_ctx.cfg.valueSize);
+    bool isGossip = false;
+    cx_binr_bool(_buffer, _bufferSize, &pos, &isGossip);
 
-    cx_net_validate(cl, INVALID_HANDLE);
-    g_ctx.lfsAvail = true;
-    g_ctx.lfsHandshaking = false;
+    if (isGossip) // MEM <-> MEM gossip connection succeeded
+    {
+        // at this point we (MEM client context) are successfully connected to another remote MEM node server
+        gossip_node_t* node = (gossip_node_t*)cl->userData;
+
+        cx_binr_uint16(_buffer, _bufferSize, &pos, &node->number);
+       
+        cx_net_validate(cl, INVALID_HANDLE);
+        node->stage = GOSSIP_STAGE_ACKNOWLEDGED;
+    }
+    else // MEM <-> LFS connection (ACK coming from LFS node to MEM)
+    {
+        cx_binr_uint16(_buffer, _bufferSize, &pos, &g_ctx.cfg.valueSize);
+
+        cx_net_validate(cl, INVALID_HANDLE);
+        g_ctx.lfsAvail = true;
+        g_ctx.lfsHandshaking = false;
+    }
 }
 
 void mem_handle_journal(const cx_net_common_t* _common, void* _userData, const char* _buffer, uint16_t _bufferSize)
@@ -70,7 +104,6 @@ void mem_handle_journal(const cx_net_common_t* _common, void* _userData, const c
         : TASK_ORIGIN_API;
 
     task_t* task = taskman_create(origin, TASK_MT_JOURNAL, NULL, (cx_net_client_t*)_common);
-
     if (NULL != task)
     {
         task->state = TASK_STATE_NEW;
@@ -120,6 +153,24 @@ void mem_handle_req_insert(const cx_net_common_t* _common, void* _userData, cons
         task->data = common_unpack_req_insert(_buffer, _bufferSize, &bufferPos, NULL);
     }
     REQ_END;
+}
+
+void mem_handle_req_gossip(const cx_net_common_t* _common, void* _userData, const char* _buffer, uint16_t _bufferSize)
+{
+    // KER or MEM node clients requesting our gossip table 
+
+    cx_net_ctx_sv_t* svCtx = (cx_net_ctx_sv_t*)_common;
+    cx_net_client_t* client = (cx_net_client_t*)_userData;
+
+    payload_t payload;
+    uint32_t  payloadSize = 0;
+
+    uint8_t   header = client->userData == NODE_KER
+        ? KERP_RES_GOSSIP
+        : MEMP_RES_GOSSIP;
+
+    gossip_export(&payload, &payloadSize);
+    cx_net_send(svCtx, header, payload, payloadSize, client->handle);
 }
 
 void mem_handle_res_create(const cx_net_common_t* _common, void* _userData, const char* _buffer, uint16_t _bufferSize)
@@ -172,11 +223,19 @@ void mem_handle_res_insert(const cx_net_common_t* _common, void* _userData, cons
     cx_err_t err;
 
     common_unpack_res_insert(_buffer, _bufferSize, &bufferPos, &remoteId, &err);
+    CX_WARN(ERR_NONE == err.code, "memory journal: %s", err.desc);
+}
 
-    if (ERR_NONE != err.code)
-    {
-        CX_INFO("memory journal: %s", err.desc);
-    }
+void mem_handle_res_gossip(const cx_net_common_t* _common, void* _userData, const char* _buffer, uint16_t _bufferSize)
+{
+    // gossip table arrived from MEM node server
+    cx_net_ctx_cl_t* cl = (cx_net_ctx_cl_t*)_common;
+    gossip_node_t* node = (gossip_node_t*)cl->userData;
+
+    gossip_import((payload_t*)_buffer, _bufferSize);
+
+    node->stage = GOSSIP_STAGE_DONE;   
+    cx_net_disconnect(cl, INVALID_HANDLE, "gossip process completed");
 }
 
 #endif // MEM
@@ -185,27 +244,35 @@ void mem_handle_res_insert(const cx_net_common_t* _common, void* _userData, cons
  ***  MESSAGE PACKERS
  ***************************************************************************************/
 
-uint32_t mem_pack_auth(char* _buffer, uint16_t _size, password_t _passwd, uint16_t _memNumber)
+uint32_t mem_pack_auth(char* _buffer, uint16_t _size, password_t _passwd, bool _isGossip, uint16_t _memNumber, uint16_t _memPortNumber)
 {
     uint32_t pos = 0;
 
     cx_binw_str(_buffer, _size, &pos, _passwd);
 
-    bool isMemory = _memNumber > 0;
-    cx_binw_bool(_buffer, _size, &pos, isMemory);
+    cx_binw_bool(_buffer, _size, &pos, _isGossip);
 
-    if (isMemory)
+    if (_isGossip)
     {
         cx_binw_uint16(_buffer, _size, &pos, _memNumber);
+        cx_binw_uint16(_buffer, _size, &pos, _memPortNumber);
     }
 
     return pos;
 }
 
-uint32_t mem_pack_ack(char* _buffer, uint16_t _size, uint16_t _valueSize)
+uint32_t mem_pack_ack(char* _buffer, uint16_t _size, bool _isGossip, uint16_t _memNumber, uint16_t _valueSize)
 {
     uint32_t pos = 0;
-    cx_binw_uint16(_buffer, _size, &pos, _valueSize);
+    cx_binw_bool(_buffer, _size, &pos, _isGossip);
+    if (_isGossip)
+    {
+        cx_binw_uint16(_buffer, _size, &pos, _memNumber);
+    }
+    else
+    {
+        cx_binw_uint16(_buffer, _size, &pos, _valueSize);
+    }
     return pos;
 }
 

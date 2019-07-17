@@ -262,7 +262,7 @@ bool memtable_make_part(memtable_t* _table, uint16_t _partNumber, cx_err_t* _err
 
 bool memtable_find(memtable_t* _table, uint16_t _key, table_record_t* _outRecord)
 {
-    if (_table->mtxInitialized) pthread_mutex_lock(&_table->mtx); //TODO checkme. this isn't really needed.
+    if (_table->mtxInitialized) pthread_mutex_lock(&_table->mtx);
 
     int32_t pos = -1;
     bool found = false;
