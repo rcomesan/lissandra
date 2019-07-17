@@ -87,6 +87,7 @@ struct cx_net_common_t
     epoll_event*                epollEvents;        // pre-allocated buffer for retrieving epoll events when calling epoll_wait.
     pthread_mutex_t             mtx;                // mutex for syncing cx_net_send.
     bool                        mtxInitialized;     // true if mtx is initialized.
+    bool                        logging;            // true if this context will do logging.
 };
 
 struct cx_net_ctx_sv_t
@@ -132,6 +133,7 @@ struct cx_net_args_t
     cx_net_handler_cb           msgHandlers[256];   // callback containing a message handler for each message header supported.
     double                      validationTimeout;  // maximum amount of time in seconds to wait before validation process times-out.
     void*                       userData;           // user data.
+    bool                        logsEnabled;        // true if this net context will output logs.
 
                                                     // cx_net_ctx_cl_t arguments.
     bool                        connectBlocking;    // [ctx_cl] true if the client connect must be done synchronously.

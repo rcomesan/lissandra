@@ -272,6 +272,7 @@ static bool net_init(cx_err_t* _err)
 {
     cx_net_args_t svCtxArgs;
     CX_MEM_ZERO(svCtxArgs);
+    svCtxArgs.logsEnabled = true;
     cx_str_copy(svCtxArgs.name, sizeof(svCtxArgs.name), "api");
     cx_str_copy(svCtxArgs.ip, sizeof(svCtxArgs.ip), g_ctx.cfg.listeningIp);
     svCtxArgs.port = g_ctx.cfg.listeningPort;

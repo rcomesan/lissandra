@@ -347,6 +347,7 @@ static bool net_init(cx_err_t* _err)
 {
     cx_net_args_t lfsCtxArgs;
     CX_MEM_ZERO(lfsCtxArgs);
+    lfsCtxArgs.logsEnabled = true;
     cx_str_copy(lfsCtxArgs.name, sizeof(lfsCtxArgs.name), "lfs");
     cx_str_copy(lfsCtxArgs.ip, sizeof(lfsCtxArgs.ip), g_ctx.cfg.lfsIp);
     lfsCtxArgs.port = g_ctx.cfg.lfsPort;
@@ -390,6 +391,7 @@ static bool net_init(cx_err_t* _err)
 
     cx_net_args_t svCtxArgs;
     CX_MEM_ZERO(svCtxArgs);
+    svCtxArgs.logsEnabled = true;
     cx_str_copy(svCtxArgs.name, sizeof(svCtxArgs.name), "api");
     cx_str_copy(svCtxArgs.ip, sizeof(svCtxArgs.ip), g_ctx.cfg.listeningIp);
     svCtxArgs.port = g_ctx.cfg.listeningPort;
