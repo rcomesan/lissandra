@@ -58,10 +58,9 @@ typedef struct criteria_t
 
 typedef struct mempool_ctx_t
 {
-    mem_node_t          nodes[MAX_MEM_NODES + 1];           //
-    uint16_t            nodesCount;                         //
+    mem_node_t          nodes[MAX_MEM_NODES + 1];           // array containing all of the possible MEM nodes allowed. indexed by MEM number starting at index 1.
     criteria_t          criteria[CONSISTENCY_COUNT];        //
-    cx_cdict_t*         tablesMap;                          //
+    cx_cdict_t*         tablesMap;                          // 
 } mempool_ctx_t;
 
 /****************************************************************************************
@@ -95,5 +94,7 @@ void        mempool_node_wait(uint16_t _memNumber);
 void        mempool_metrics_report(uint16_t _memNumber, QUERY_TYPE _type, double _timeElapsed);
 
 void        mempool_metrics_get(mempool_metrics_t* _outData);
+
+void        mempool_print();
 
 #endif // KER_MEMPOOL_H_

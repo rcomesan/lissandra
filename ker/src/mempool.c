@@ -9,6 +9,8 @@
 #include <cx/math.h>
 #include <cx/str.h>
 
+#include <inttypes.h>
+
 static mempool_ctx_t*   m_mempoolCtx = NULL;
 
 /****************************************************************************************
@@ -460,6 +462,44 @@ void mempool_node_wait(uint16_t _memNumber)
     }
 }
 
+void mempool_print()
+{
+    mem_node_t* node = NULL;
+    host_t host;
+
+    printf("+-----+-----------------------+--------+-----+-----+-----+-----+\n");
+    printf("| #   | Address:Port          | Status | %-3s | %-3s | %-3s | %-3s |\n", 
+        CONSISTENCY_NAME_SHORT[CONSISTENCY_NONE],
+        CONSISTENCY_NAME_SHORT[CONSISTENCY_STRONG],
+        CONSISTENCY_NAME_SHORT[CONSISTENCY_STRONG_HASHED],
+        CONSISTENCY_NAME_SHORT[CONSISTENCY_EVENTUAL]);
+    printf("+-----+-----------------------+--------+-----+-----+-----+-----+\n");
+
+    for (uint32_t i = 1; i < CX_ARR_SIZE(m_mempoolCtx->nodes); i++)
+    {
+        node = &m_mempoolCtx->nodes[i];
+
+        if (node->known)
+        {
+            pthread_mutex_lock(&node->listNodeMtx);
+
+            cx_str_format(host, sizeof(host), "%s:%" PRIu16, node->ip, node->port);
+        
+            printf("| %-3d | %-21s | %-6s | %-3s | %-3s | %-3s | %-3s |\n",
+                i,
+                host,
+                node->available ? "Up" : "Down",
+                NULL != node->listNode[CONSISTENCY_NONE] ? "Yes" : "",
+                NULL != node->listNode[CONSISTENCY_STRONG] ? "Yes" : "",
+                NULL != node->listNode[CONSISTENCY_STRONG_HASHED] ? "Yes" : "",
+                NULL != node->listNode[CONSISTENCY_EVENTUAL] ? "Yes" : "");
+            
+            pthread_mutex_unlock(&node->listNodeMtx);
+        }
+    }
+    printf("+-----+-----------------------+--------+-----+-----+-----+-----+\n");
+    printf("\n");
+}
 
 /****************************************************************************************
  ***  PRIVATE FUNCTIONS

@@ -363,6 +363,11 @@ static void handle_cli_command(const cx_cli_cmd_t* _cmd)
             cx_cli_command_end();
         }
     }
+    else if (QUERY_MEMPOOL == query)
+    {
+        mempool_print();
+        cx_cli_command_end();
+    }
     else
     {
         CX_ERR_SET(&err, 1, "Unknown command '%s'.", _cmd->header);
