@@ -76,7 +76,11 @@ void gossip_add(const ipv4_t _ip, uint16_t _port, uint16_t _memNumber)
     node_key_t key;
     _node_key(_ip, _port, &key);
 
-    //TODO check that the given node isn't ourselves!
+#if defined(MEM)
+    // make sure we aren't adding ourselves to our gossip table!
+    if (0 == strcasecmp(g_ctx.cfg.listeningIp, _ip) && g_ctx.cfg.listeningPort == _port) 
+        return;
+#endif
 
     if (!cx_cdict_contains(m_gossipCtx->nodes, key))
     {
