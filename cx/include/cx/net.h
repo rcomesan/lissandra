@@ -20,7 +20,7 @@ typedef struct cx_net_args_t cx_net_args_t;
 typedef struct sockaddr_in sockaddr_in;
 typedef struct epoll_event epoll_event;
 
-typedef char ipv4_t[16];
+typedef char ipv4_t[3 * 4 + 3 + 1];
 
 typedef void(*cx_net_handler_cb)(const cx_net_common_t* _common, void* _userData, const char* _data, uint16_t _size);
 
@@ -61,6 +61,7 @@ typedef enum
 struct cx_net_client_t
 {
     uint16_t                    handle;             // handle/identifier for this client in our clients array.
+    void*                       userData;           // user data.
     bool                        validated;          // true if this client was validated. if a client is not validated before the timeout is exceeded the connection is terminated.
     double                      connectedTime;      // time counter value of when the connection was established.
     double                      lastPacketTime;     // time counter value of when the last packet arrived.
@@ -103,10 +104,10 @@ struct cx_net_ctx_sv_t
 struct cx_net_ctx_cl_t
 {
     cx_net_common_t             c;                  // client context common data.
+    void*                       userData;           // user data copied from cx_net_args_t.
     bool                        validated;          // true if this client was validated. if a client is not validated before the timeout is exceeded the connection is terminated.
     double                      connectedTime;      // time counter value of when the connection was established.
     double                      lastPacketTime;     // time counter value of when the last packet arrived.
-    void*                       userData;           // user data copied from cx_net_args_t.
     char                        in[CX_NET_BUFLEN];  // pre-allocated buffer for inbound data.
     uint32_t                    inPos;              // current position in the inbound buffer.
     char                        out[CX_NET_BUFLEN]; // pre-allocated buffer for outbound data.

@@ -482,8 +482,6 @@ void mm_reschedule_task(task_t* _task)
     }
     else if (ERR_TABLE_BLOCKED == _task->err.code)
     {
-        //TODO. figure out in which cases a task has to be rescheduled
-        // due to a table being in blocked state.
         // I believe this only happens when we're about to drop it..
         // but in that case we shouldn't be really interested in rescheduling it.
         CX_WARN(CX_ALW, "we shouldn't be getting rescheduling requests on blocked tables!");

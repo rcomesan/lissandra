@@ -1,5 +1,5 @@
-#ifndef CX_FSWATCH_H
-#define CX_FSWATCH_H
+#ifndef CX_FSWATCH_H_
+#define CX_FSWATCH_H_
 
 #include "cx.h"
 #include "halloc.h"
@@ -50,4 +50,4 @@ void            cx_fswatch_remove(uint16_t _fswatchHandle);
 
 void            cx_fswatch_poll_events();
 
-#endif // CX_FSWATCH_H
+#endif // CX_FSWATCH_H_
