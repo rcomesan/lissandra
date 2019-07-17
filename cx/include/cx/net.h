@@ -20,7 +20,8 @@ typedef struct cx_net_args_t cx_net_args_t;
 typedef struct sockaddr_in sockaddr_in;
 typedef struct epoll_event epoll_event;
 
-typedef char ipv4_t[3 * 4 + 3 + 1];
+typedef char ipv4_t[3 * 4 + 3 + 1];                 // buffer large enough to fit an ipv4 address eg: 255.255.255.255
+typedef char host_t[sizeof(ipv4_t) + 1 + 5];        // buffer large enough to fit an ipv4:port host eg: 255.255.255.255:65535
 
 typedef void(*cx_net_handler_cb)(const cx_net_common_t* _common, void* _userData, const char* _data, uint16_t _size);
 
