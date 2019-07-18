@@ -226,6 +226,13 @@ static bool ker_init(cx_err_t* _err)
         return false;
     }
 
+    g_ctx.timerMetrics = cx_timer_add(30 * 1000, KER_TIMER_METRICS, NULL);
+    if (INVALID_HANDLE == g_ctx.timerMetrics)
+    {
+        CX_ERR_SET(_err, ERR_INIT_TIMER, "metrics timer creation failed.");
+        return false;
+    }
+
     g_ctx.cfgFswatchHandle = cx_fswatch_add(g_ctx.cfgFilePath, IN_MODIFY, NULL);
     if (INVALID_HANDLE == g_ctx.cfgFswatchHandle)
     {
@@ -250,6 +257,12 @@ static void ker_destroy()
     {
         cx_timer_remove(g_ctx.timerGossip);
         g_ctx.timerGossip = INVALID_HANDLE;
+    }
+
+    if (INVALID_HANDLE != g_ctx.timerMetrics)
+    {
+        cx_timer_remove(g_ctx.timerMetrics);
+        g_ctx.timerMetrics = INVALID_HANDLE;
     }
 
     if (INVALID_HANDLE != g_ctx.cfgFswatchHandle)
@@ -363,9 +376,17 @@ static void handle_cli_command(const cx_cli_cmd_t* _cmd)
             cx_cli_command_end();
         }
     }
+    else if (QUERY_METRICS == query)
+    {
+        const mempool_metrics_t* metrics;
+        mempool_metrics_get(&metrics);
+        report_metrics(metrics, stdout);
+        cx_cli_command_end();
+    }
     else if (QUERY_MEMPOOL == query)
     {
         mempool_print();
+        report_end(0, stdout);
         cx_cli_command_end();
     }
     else
@@ -405,6 +426,18 @@ static bool handle_timer_tick(uint64_t _expirations, uint32_t _type, void* _user
     case KER_TIMER_GOSSIP:
     {
         gossip_run();
+        break;
+    }
+
+    case KER_TIMER_METRICS:
+    {
+        // re-sample metrics
+        mempool_metrics_update();
+
+        const mempool_metrics_t* metrics;
+        mempool_metrics_get(&metrics);
+        report_metrics(metrics, stdout);
+
         break;
     }
 

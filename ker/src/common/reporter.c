@@ -3,6 +3,7 @@
 #include <ker/reporter.h>
 
 #include <stdio.h>
+#include <inttypes.h>
 
 /****************************************************************************************
  ***  PUBLIC FUNCTIONS
@@ -36,7 +37,7 @@ void report_select(const task_t* _task, FILE* _stream)
     if (ERR_NONE == _task->err.code)
     {
         data_select_t* data = _task->data;
-        fprintf(_stream, "%d: \"%s\".\n", data->record.key, data->record.value);
+        fprintf(_stream, "%" PRIu16 ": \"%s\".\n", data->record.key, data->record.value);
     }
     else
     {
@@ -51,7 +52,7 @@ void report_insert(const task_t* _task, FILE* _stream)
     if (ERR_NONE == _task->err.code)
     {
         data_insert_t* data = _task->data;
-        fprintf(_stream, "%d: \"%s\".\n", data->record.key, data->record.value);
+        fprintf(_stream, "%" PRIu16 ": \"%s\".\n", data->record.key, data->record.value);
     }
     else
     {
@@ -88,7 +89,7 @@ void report_describe(const task_t* _task, FILE* _stream)
 
         for (uint16_t i = 0; i < data->tablesCount; i++)
         {
-            fprintf(_stream, "| %-30s | %-13s | %-10d | %-13d |\n",
+            fprintf(_stream, "| %-30s | %-13s | %-10" PRIu16 " | %-13" PRIu32 " |\n",
                 data->tables[i].name,
                 CONSISTENCY_NAME[data->tables[i].consistency],
                 data->tables[i].partitionsCount,
@@ -130,7 +131,7 @@ void report_addmem(const task_t* _task, FILE* _stream)
     if (ERR_NONE == _task->err.code)
     {
         data_addmem_t* data = _task->data;
-        fprintf(_stream, "MEM node #%d successfully assigned to %s consistency.\n",
+        fprintf(_stream, "MEM node #%" PRIu16 " successfully assigned to %s consistency.\n",
             data->memNumber, CONSISTENCY_NAME[data->consistency]);
     }
     else
@@ -151,4 +152,41 @@ void report_run(const cx_path_t* _lqlFilePath, const cx_path_t* _logPath, FILE* 
 void report_add_memory(const task_t* _task, FILE* _stream)
 {
     fprintf(_stream, "report_add_memory\n");
+}
+
+void report_metrics(const mempool_metrics_t* _mtr, FILE* _stream)
+{
+    fprintf(_stream, "+---------------+--------+--------+-----------+-----------+\n");
+    fprintf(_stream, "| Consistency   | Reads  | Writes | R/Latency | W/Latency |\n");
+    fprintf(_stream, "+---------------+--------+--------+-----------+-----------+\n");
+    for (uint32_t i = 0; i < CONSISTENCY_COUNT; i++)
+    {
+        printf("| %-13s | %-6" PRIu32 " | %-6" PRIu32 " | %-9.3f | %-9.3f |\n",
+            CONSISTENCY_NAME[i],
+            _mtr->reads[i],
+            _mtr->writes[i],
+            _mtr->readLatency[i],
+            _mtr->writeLatency[i]);
+    }
+    fprintf(_stream, "+---------------+--------+--------+-----------+-----------+\n");
+
+    fprintf(_stream, "\n");
+
+    fprintf(_stream, "+-----+-------------+\n");
+    fprintf(_stream, "| #   | Memory Load |\n");
+    fprintf(_stream, "+-----+-------------+\n");
+    for (uint32_t i = 1; i < MAX_MEM_NODES; i++)
+    {
+        if (-1 != _mtr->memLoad[i])
+            printf("| %-3" PRIu32 " | %-11.3f |\n", i, _mtr->memLoad[i] * 100.0f);
+    }
+    fprintf(_stream, "+-----+-------------+\n");
+
+    report_end(0, _stream);
+}
+
+void report_end(float _duration, FILE* _stream)
+{
+    float duration = _duration;
+    REPORT_END;
 }

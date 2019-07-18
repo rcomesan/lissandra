@@ -224,6 +224,7 @@ static void _worker_parse_result(task_t* _req)
 static bool _worker_request_mem(mempool_hints_t* _hints, uint8_t _header, const char* _payload, uint32_t _payloadSize, task_t* _task)
 {
     int32_t result = 0;
+    double reqTime = 0;
     CX_ERR_CLEAR(&_task->err);
 
     pthread_mutex_lock(&_task->responseMtx);
@@ -239,7 +240,8 @@ static bool _worker_request_mem(mempool_hints_t* _hints, uint8_t _header, const 
             // criteria (err contains the actual reason of the failure)
             break;
         }
-
+        
+        reqTime = cx_time_counter();
         result = mempool_node_req(_task->responseMemNumber, _header, _payload, _payloadSize);
 
         if (CX_NET_SEND_BUFFER_FULL == result)
@@ -258,6 +260,9 @@ static bool _worker_request_mem(mempool_hints_t* _hints, uint8_t _header, const 
             }
         }
         pthread_mutex_unlock(&_task->responseMtx);
+
+        // report time elapsed for this query
+        mempool_metrics_hit(_task->responseMemNumber, _hints->query, _hints->consistency, cx_time_counter() - reqTime);
     }
     else
     {

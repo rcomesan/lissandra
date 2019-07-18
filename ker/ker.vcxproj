@@ -75,6 +75,7 @@
     <ClCompile Include="src\ker.c" />
     <ClCompile Include="src\ker_worker.c" />
     <ClCompile Include="src\mempool.c" />
+    <ClCompile Include="src\metric.c" />
   </ItemGroup>
   <ItemGroup>
     <None Include="makefile" />
@@ -98,6 +99,7 @@
     <ClInclude Include="src\ker.h" />
     <ClInclude Include="src\ker_worker.h" />
     <ClInclude Include="src\mempool.h" />
+    <ClInclude Include="src\metric.h" />
   </ItemGroup>
   <ItemDefinitionGroup Condition="'$(Configuration)|$(Platform)'=='Debug|x86'">
     <PreBuildEvent>

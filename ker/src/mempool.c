@@ -29,6 +29,8 @@ static bool             _task_req_abort(task_t* _task, void* _userData);
 
 static void             _request_mem_journal(cx_list_t* _list, cx_list_node_t* _node, uint32_t _index, void* _userData);
 
+static void             _metrics_reset();
+
 /****************************************************************************************
  ***  PUBLIC FUNCTIONS
  ***************************************************************************************/
@@ -44,6 +46,13 @@ bool mempool_init(cx_err_t* _err)
     if (NULL == m_mempoolCtx->tablesMap)
     {
         CX_ERR_SET(_err, ERR_INIT_CDICT, "tablesMap concurrent dictionary creation failed!");
+        return false;
+    }
+
+    m_mempoolCtx->mtLoad = metric_init();
+    if (NULL == m_mempoolCtx->mtLoad)
+    {
+        CX_ERR_SET(_err, ERR_INIT_METRIC, "mempool metric load creation failed!");
         return false;
     }
 
@@ -64,6 +73,15 @@ bool mempool_init(cx_err_t* _err)
             CX_ERR_SET(_err, ERR_INIT_MTX, "pool listNodes mtx creation failed!");
             return false;
         }
+
+        memNode->mtLoad = metric_init();
+        if (NULL == memNode->mtLoad)
+        {
+            CX_ERR_SET(_err, ERR_INIT_METRIC, "pool node metric load creation failed!");
+            return false;
+        }
+
+        m_mempoolCtx->metrics.memLoad[i] = -1;
     }
 
     for (uint32_t i = 0; i < CONSISTENCY_COUNT; i++)
@@ -82,6 +100,15 @@ bool mempool_init(cx_err_t* _err)
             CX_ERR_SET(_err, ERR_INIT_MTX, "assigned nodes mutex creation failed!");
             return false;
         }
+
+        criteria->mtReads = metric_init();
+        criteria->mtWrites = metric_init();
+        if (NULL == criteria->mtReads || NULL == criteria->mtWrites)
+        {
+            CX_ERR_SET(_err, ERR_INIT_METRIC, "criteria reads/writes metrics creation failed!");
+            return false;
+        }
+
     }
 
     return true;
@@ -114,12 +141,24 @@ void mempool_destroy()
         CX_CHECK(NULL == memNode->conn, "you must call mempool_disconnect() first!");
         pthread_rwlock_destroy(&memNode->rwl);        
         pthread_mutex_destroy(&memNode->listNodeMtx);
+
+        if (NULL != memNode->mtLoad)
+        {
+            metric_destroy(memNode->mtLoad);
+            memNode->mtLoad = NULL;
+        }
     }
 
     if (NULL != m_mempoolCtx->tablesMap)
     {
         cx_cdict_destroy(m_mempoolCtx->tablesMap, (cx_destroyer_cb)free);
         m_mempoolCtx->tablesMap = NULL;
+    }
+
+    if (NULL != m_mempoolCtx->mtLoad)
+    {
+        metric_destroy(m_mempoolCtx->mtLoad);
+        m_mempoolCtx->mtLoad = NULL;
     }
 
     for (uint32_t i = 0; i < CONSISTENCY_COUNT; i++)
@@ -133,6 +172,18 @@ void mempool_destroy()
         }
 
         pthread_mutex_destroy(&criteria->mtx);
+
+        if (NULL != criteria->mtReads)
+        {
+            metric_destroy(criteria->mtReads);
+            criteria->mtReads = NULL;
+        }
+
+        if (NULL != criteria->mtWrites)
+        {
+            metric_destroy(criteria->mtWrites);
+            criteria->mtWrites = NULL;
+        }
     }
 
     free(m_mempoolCtx);
@@ -311,7 +362,7 @@ uint16_t mempool_get(mempool_hints_t* _hints, cx_err_t* _err)
     mem_node_t*         memNode = NULL;
     cx_list_node_t*     listNode = NULL;
     bool                consFound = true;
-    CONSISTENCY_TYPE    cons;
+    CONSISTENCY_TYPE    cons = CONSISTENCY_NONE;
 
     if (QUERY_CREATE == _hints->query)
     {
@@ -343,44 +394,42 @@ uint16_t mempool_get(mempool_hints_t* _hints, cx_err_t* _err)
         consFound = false;
     }
 
-    if (consFound)
-    {
-        if (_valid_consistency(cons, _err))
+    if (consFound && _valid_consistency(cons, _err))
+{
+        criteria_t* criteria = &m_mempoolCtx->criteria[cons];
+
+        pthread_mutex_lock(&criteria->mtx);
+
+        if (cx_list_size(criteria->assignedNodes) > 0)
         {
-            criteria_t* criteria = &m_mempoolCtx->criteria[cons];
-
-            pthread_mutex_lock(&criteria->mtx);
-
-            if (cx_list_size(criteria->assignedNodes) > 0)
+            if (CONSISTENCY_STRONG == cons)
             {
-                if (CONSISTENCY_STRONG == cons)
-                {
-                    listNode = cx_list_peek_front(criteria->assignedNodes);
-                }
-                else if (CONSISTENCY_STRONG_HASHED == cons)
-                {
-                    uint32_t index = _hints->key % cx_list_size(criteria->assignedNodes);
-                    listNode = cx_list_get(criteria->assignedNodes, index);
-                }
-                else
-                {
-                    listNode = cx_list_pop_front(criteria->assignedNodes);
-                    cx_list_push_back(criteria->assignedNodes, listNode);
-                }
+                listNode = cx_list_peek_front(criteria->assignedNodes);
             }
-
-            if (NULL != listNode)
+            else if (CONSISTENCY_STRONG_HASHED == cons)
             {
-                memNode = (mem_node_t*)listNode->data;
-                memNumber = memNode->number;
+                uint32_t index = _hints->key % cx_list_size(criteria->assignedNodes);
+                listNode = cx_list_get(criteria->assignedNodes, index);
             }
-            pthread_mutex_unlock(&criteria->mtx);
-
-            if (NULL == memNode)
-                CX_ERR_SET(_err, ERR_GENERIC, "There're no MEM nodes satisfying criteria.")
+            else
+            {
+                listNode = cx_list_pop_front(criteria->assignedNodes);
+                cx_list_push_back(criteria->assignedNodes, listNode);
+            }
         }
+
+        if (NULL != listNode)
+        {
+            memNode = (mem_node_t*)listNode->data;
+            memNumber = memNode->number;
+        }
+        pthread_mutex_unlock(&criteria->mtx);
+
+        if (NULL == memNode)
+            CX_ERR_SET(_err, ERR_GENERIC, "There're no MEM nodes satisfying criteria.")
     }
 
+    _hints->consistency = cons;
     return memNumber;
 }
 
@@ -462,6 +511,79 @@ void mempool_node_wait(uint16_t _memNumber)
     }
 }
 
+void mempool_metrics_hit(uint16_t _memNumber, QUERY_TYPE _type, CONSISTENCY_TYPE _cons, double _timeElapsed)
+{
+    if (!_valid_mem_number(_memNumber, NULL) || !_valid_consistency(_cons, NULL))
+    {
+        CX_WARN(CX_ALW, "invalid mempool metric hit!");
+        return;
+    }
+
+    if (QUERY_SELECT == _type)
+    {
+        metric_hit(m_mempoolCtx->criteria[_cons].mtReads, _timeElapsed);
+    }
+    else if (QUERY_INSERT == _type)
+    {
+        metric_hit(m_mempoolCtx->criteria[_cons].mtWrites, _timeElapsed);
+    }
+
+    if (QUERY_SELECT == _type || QUERY_INSERT == _type)
+    {
+        metric_hit(m_mempoolCtx->nodes[_memNumber].mtLoad, _timeElapsed);
+        metric_hit(m_mempoolCtx->mtLoad, _timeElapsed);
+    }
+}
+
+void mempool_metrics_update()
+{
+    criteria_t* crit = NULL;
+    mem_node_t* node = NULL;
+    uint32_t    hits = 0;
+    double      timeElapsed = 0;
+    double      load = 0;
+
+    for (uint32_t i = 0; i < CONSISTENCY_COUNT; i++)
+    {
+        crit = &m_mempoolCtx->criteria[i];
+
+        metric_get(crit->mtReads, &hits, &timeElapsed);
+        m_mempoolCtx->metrics.reads[i] = hits;
+        m_mempoolCtx->metrics.readLatency[i] = hits > 0 ? timeElapsed / hits : 0;
+
+        metric_get(crit->mtWrites, &hits, &timeElapsed);
+        m_mempoolCtx->metrics.writes[i] = hits;
+        m_mempoolCtx->metrics.writeLatency[i] = hits > 0 ? timeElapsed / hits : 0;
+    }
+
+    uint32_t totalReadsWrites = 0;
+    metric_get(m_mempoolCtx->mtLoad, &totalReadsWrites, NULL);
+
+    for (uint32_t i = 1; i < MAX_MEM_NODES; i++)
+    {
+        node = &m_mempoolCtx->nodes[i];
+        load = -1;
+
+        if (node->known)
+        {
+            metric_get(node->mtLoad, &hits, &timeElapsed);
+
+            if (node->available || hits > 0)
+                load = totalReadsWrites > 0 ? ((double)hits) / totalReadsWrites : 0;
+        }
+
+        m_mempoolCtx->metrics.memLoad[i] = load;
+    }
+
+    // reset everything to start from scratch for the next sampling request
+    _metrics_reset();
+}
+
+void mempool_metrics_get(const mempool_metrics_t** _outMtr)
+{
+    (*_outMtr) = &m_mempoolCtx->metrics;
+}
+
 void mempool_print()
 {
     mem_node_t* node = NULL;
@@ -498,7 +620,6 @@ void mempool_print()
         }
     }
     printf("+-----+-----------------------+--------+-----+-----+-----+-----+\n");
-    printf("\n");
 }
 
 /****************************************************************************************
@@ -608,4 +729,26 @@ static void _request_mem_journal(cx_list_t* _list, cx_list_node_t* _node, uint32
 
     CX_WARN(result != CX_NET_SEND_BUFFER_FULL, 
         "MEM node #%d journal request failed (outbound buffer is full).", memNode->number)
+}
+
+static void _metrics_reset()
+{
+    criteria_t* crit = NULL;
+    mem_node_t* node = NULL;
+
+    for (uint32_t i = 0; i < CONSISTENCY_COUNT; i++)
+    {
+        crit = &m_mempoolCtx->criteria[i];
+
+        metric_reset(crit->mtReads);
+        metric_reset(crit->mtWrites);
+    }
+
+    for (uint32_t i = 1; i < MAX_MEM_NODES; i++)
+    {
+        node = &m_mempoolCtx->nodes[i];
+        metric_reset(node->mtLoad);
+    }
+
+    metric_reset(m_mempoolCtx->mtLoad);
 }

@@ -57,6 +57,9 @@
     <ClCompile Include="src\common\gossip.c">
       <Filter>src\common</Filter>
     </ClCompile>
+    <ClCompile Include="src\metric.c">
+      <Filter>src</Filter>
+    </ClCompile>
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="include\ker\ker_protocol.h">
@@ -91,6 +94,9 @@
     </ClInclude>
     <ClInclude Include="include\ker\gossip.h">
       <Filter>include\ker</Filter>
+    </ClInclude>
+    <ClInclude Include="src\metric.h">
+      <Filter>src</Filter>
     </ClInclude>
   </ItemGroup>
 </Project>
