@@ -118,7 +118,6 @@ void gossip_run()
 
             cx_net_args_t args;
             CX_MEM_ZERO(args);
-
             cx_str_format(args.name, sizeof(args.name), "gossip-%s", key);
             cx_str_copy(args.ip, sizeof(args.ip), node->ip);
             args.port = node->port;
@@ -163,7 +162,7 @@ void gossip_poll_events()
         {
             cx_net_poll_events(node->conn, 0);
 
-            if (GOSSIP_STAGE_FAILED == node->stage)
+            if (GOSSIP_STAGE_FAILED == node->stage || GOSSIP_STAGE_DONE == node->stage)
             {
                 cx_net_destroy(node->conn);
                 node->conn = NULL;
@@ -279,7 +278,6 @@ static void _on_disconnected_from_mem(cx_net_ctx_cl_t* _ctx)
     if (GOSSIP_STAGE_DONE == node->stage)
     {
         // gossip exchange succeeded, we're now disconnected from the node
-        node->stage = GOSSIP_STAGE_NONE;
         node->available = true;
         node->lastGossipTime = cx_time_counter();
 
