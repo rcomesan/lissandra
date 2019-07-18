@@ -301,50 +301,54 @@ bool mempool_assign(uint16_t _memNumber, CONSISTENCY_TYPE _type, cx_err_t* _err)
     pthread_mutex_lock(&memNode->listNodeMtx);
     if (memNode->known)
     {
-        //TODO si el nodo esta desconectado tiro un ADD para reconectarlo?
-        //     o directamente rechazo el pedido?
-
-        if (NULL == memNode->listNode[_type])
+        if (memNode->available)
         {
-            pthread_mutex_lock(&criteria->mtx);
-            if (CONSISTENCY_STRONG == _type)
+            if (NULL == memNode->listNode[_type])
             {
-                success = (0 == cx_list_size(criteria->assignedNodes));
-                if (!success)
+                pthread_mutex_lock(&criteria->mtx);
+                if (CONSISTENCY_STRONG == _type)
                 {
-                    mem_node_t* curMemNode = (mem_node_t*)cx_list_peek_front(criteria->assignedNodes)->data;
-                    CX_ERR_SET(_err, ERR_GENERIC, "%s consistency already has MEM node #%d assigned.",
-                        CONSISTENCY_NAME[_type], curMemNode->number);
+                    success = (0 == cx_list_size(criteria->assignedNodes));
+                    if (!success)
+                    {
+                        mem_node_t* curMemNode = (mem_node_t*)cx_list_peek_front(criteria->assignedNodes)->data;
+                        CX_ERR_SET(_err, ERR_GENERIC, "%s consistency already has MEM node #%d assigned.",
+                            CONSISTENCY_NAME[_type], curMemNode->number);
+                    }
                 }
-            }
-            else if (CONSISTENCY_STRONG_HASHED == _type)
-            {
-                success = true;
-                cx_list_foreach(criteria->assignedNodes, (cx_list_func_cb)_request_mem_journal, NULL);
-            }
-            else if (CONSISTENCY_EVENTUAL == _type)
-            {
-                success = true;
-            }
-            else if (CONSISTENCY_NONE == _type)
-            {
-                success = true;
-            }
+                else if (CONSISTENCY_STRONG_HASHED == _type)
+                {
+                    success = true;
+                    cx_list_foreach(criteria->assignedNodes, (cx_list_func_cb)_request_mem_journal, NULL);
+                }
+                else if (CONSISTENCY_EVENTUAL == _type)
+                {
+                    success = true;
+                }
+                else if (CONSISTENCY_NONE == _type)
+                {
+                    success = true;
+                }
 
-            if (success)
-            {
-                memNode->listNode[_type] = cx_list_node_alloc(memNode);
-                cx_list_push_front(criteria->assignedNodes, memNode->listNode[_type]);
+                if (success)
+                {
+                    memNode->listNode[_type] = cx_list_node_alloc(memNode);
+                    cx_list_push_front(criteria->assignedNodes, memNode->listNode[_type]);
 
-                CX_INFO("MEM node #%d assigned to %s consistency.",
-                    memNode->number, CONSISTENCY_NAME[_type]);
+                    CX_INFO("MEM node #%d assigned to %s consistency.",
+                        memNode->number, CONSISTENCY_NAME[_type]);
+                }
+                pthread_mutex_unlock(&criteria->mtx);
             }
-            pthread_mutex_unlock(&criteria->mtx);
+            else
+            {
+                CX_ERR_SET(_err, ERR_GENERIC, "MEM node #%d is already assigned to %s consistency.",
+                    _memNumber, CONSISTENCY_NAME[_type]);
+            }
         }
         else
         {
-            CX_ERR_SET(_err, ERR_GENERIC, "MEM node #%d is already assigned to %s consistency.",
-                _memNumber, CONSISTENCY_NAME[_type]);
+            CX_ERR_SET(_err, ERR_GENERIC, "MEM node #%d is down.", _memNumber);
         }
     }
     else

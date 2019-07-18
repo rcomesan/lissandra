@@ -278,7 +278,7 @@ static void _on_disconnected_from_mem(cx_net_ctx_cl_t* _ctx)
 
     if (GOSSIP_STAGE_DONE == node->stage)
     {
-        // gossip exchange succeeded, we're now disconnected from the node //TODO
+        // gossip exchange succeeded, we're now disconnected from the node
         node->stage = GOSSIP_STAGE_NONE;
         node->available = true;
         node->lastGossipTime = cx_time_counter();
