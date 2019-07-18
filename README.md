@@ -3,7 +3,7 @@
 ## Entorno
 ##### Alternativas:
 1. [Visual Studio (Windows)](https://github.com/sisoputnfrba/tp-2019-1c-foo-bar/wiki/Entorno:-Visual-Studio) (recomendado)
-2. [Eclipse Onyx (Lubuntu)](https://github.com/sisoputnfrba/tp-2019-1c-foo-bar/wiki/Entorno:-Eclipse-Onyx)
+2. ~~[Eclipse Onyx (Lubuntu)](https://github.com/sisoputnfrba/tp-2019-1c-foo-bar/wiki/Entorno:-Eclipse-Onyx)~~
 
 #### Comparación
 | Ide | Productividad | Setup | Beginner-friendly | Open Source | Puntaje |
@@ -35,6 +35,7 @@ Sistema de compilación basado en la herramienta make ([introducción](https://w
 * **make debug** - compila una build debug
 * **make release** / make / make all - compila una build release 
 * **make valgrind** - corre valgrind sobre la build debug para diagnosticar memory leaks
+* **make runtests** - corre CUnit tests (solo lib CX)
 
 #### Salida:
 ##### cx (shared library):
@@ -46,18 +47,25 @@ cx/build/release/libcxd.so (release)
 ```
 [PROJECT_NAME]/build/[TARGET_NAME]/[PROJECT_NAME].out
 ```
-* [PROJECT_NAME]: ker, mem, lfs o cx
+* [PROJECT_NAME]: ker, mem, lfs
 * [TARGET_NAME]: debug o release
 #### Ejecución:
-Ejemplo para correr nodo Kernel (debug build):
+Ejemplo para correr nodo KER (debug build):
 ```
 $ cd /home/utnso/lissandra/ker
 $ ./build/debug/ker.out
 ```
 
+Ejemplo para correr nodo LFS (debug build) pasando un archivo de configuración:
+```
+$ cd /home/utnso/lissandra/lfs
+$ ./build/debug/lfs.out ../res/cfg/test-1/lfs.cfg
+```
+
 -------------------------------------------------------------
 ## [Programación Defensiva](https://github.com/sisoputnfrba/tp-2019-1c-foo-bar/wiki/Programaci%C3%B3n-Defensiva)
 -------------------------------------------------------------
-## [Estilo de Código y Convenciones de Nombres](https://github.com/sisoputnfrba/tp-2019-1c-foo-bar/wiki/Estilo-de-C%C3%B3digo-y-Convenciones-de-Nombres)
+## [Estilo de Código y Convención de Nombres](https://github.com/sisoputnfrba/tp-2019-1c-foo-bar/wiki/Estilo-de-C%C3%B3digo-y-Convenciones-de-Nombres)
 -------------------------------------------------------------
+## [Comuinicación entre Procesos](https://github.com/sisoputnfrba/tp-2019-1c-foo-bar/wiki/Comunicaci%C3%B3n-entre-Procesos)
 
