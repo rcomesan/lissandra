@@ -36,10 +36,7 @@ typedef enum TASK_TYPE
     TASK_MT = UINT8_C(0x0),     // main thread task bitflag.
     TASK_WT = UINT8_C(0x80),    // worker thread task bitflag.
     // Main-thread tasks ----------------------------------------------------------------
-    TASK_MT_COMPACT =   TASK_MT | UINT8_C(1),   // main thread task to compact a table when it's no longer in use.
-    TASK_MT_DUMP =      TASK_MT | UINT8_C(2),   // main thread task to dump all the existing tables.
-    TASK_MT_JOURNAL =   TASK_MT | UINT8_C(3),   // main thread task to enqueue a memory journal.
-    TASK_MT_FREE =      TASK_MT | UINT8_C(4),   // main thread task to free a resource when it's no longer in use.
+    TASK_MT_FREE =      TASK_MT | UINT8_C(1),   // main thread task to free a resource when it's no longer in use.
     // Worker-thread tasks --------------------------------------------------------------
     TASK_WT_CREATE =    TASK_WT | UINT8_C(1),   // worker thread task to create a table.
     TASK_WT_DROP =      TASK_WT | UINT8_C(2),   // worker thread task to drop a table.
@@ -110,6 +107,8 @@ void        taskman_stop();
 void        taskman_destroy();
 
 task_t*     taskman_create(TASK_ORIGIN _origin, TASK_TYPE _type, void* _data, uint32_t _clientId);
+
+void        taskman_activate(task_t* _task);
 
 void        taskman_update();
 

@@ -858,7 +858,7 @@ static void _cx_net_poll_events_server(cx_net_ctx_sv_t* _ctx, int32_t _timeout)
         client = &_ctx->clients[handle];
 
         if (client->outPos > 0)
-            cx_net_flush(_ctx, handle);
+            cx_net_flush(_ctx, client->cid.id);
 
         if (!client->validated && time - client->connectedTime > _ctx->c.validationTimeout)
             _ctx->tmpIds[validationCount++] = client->cid.id;

@@ -64,7 +64,7 @@ void worker_handle_drop(task_t* _req)
         task_t* task = taskman_create(TASK_ORIGIN_INTERNAL, TASK_MT_FREE, data, INVALID_CID);
         if (NULL != task)
         {
-            task->state = TASK_STATE_NEW;
+            taskman_activate(task);
         }
         else
         {

@@ -464,14 +464,7 @@ void mm_reschedule_task(task_t* _task)
 {
     if (ERR_MEMORY_FULL == _task->err.code)
     {
-        if (!cx_reslock_is_blocked(&m_mmCtx->reslock))
-        {
-            cx_reslock_block(&m_mmCtx->reslock);
-
-            // enqueue a journal request. 
-            task_t* task = taskman_create(TASK_ORIGIN_INTERNAL, TASK_MT_JOURNAL, NULL, INVALID_CID);
-            if (NULL != task) task->state = TASK_STATE_NEW;
-        }
+        mm_journal_tryenqueue();
     }
 
     if (ERR_MEMORY_FULL == _task->err.code
@@ -490,40 +483,31 @@ void mm_reschedule_task(task_t* _task)
 
 bool mm_journal_tryenqueue()
 {
-    if (m_mmCtx->journaling)
+    if (!m_mmCtx->journaling)
+    {
+        m_mmCtx->journaling = true;
+
+        task_t* task = taskman_create(TASK_ORIGIN_INTERNAL_PRIORITY, TASK_WT_JOURNAL, NULL, INVALID_CID);
+        if (NULL != task)
+        {
+            data_journal_t* data = CX_MEM_STRUCT_ALLOC(data);
+
+            task->data = data;
+            taskman_activate(task);
+        }
+        else
+        {
+            // task creation failed.
+            m_mmCtx->journaling = false;
+        }
+    }
+    else
     {
         // we can safely ignore this one
         // we don't really want multiple journals to be performed at the same time
         CX_INFO("Ignoring journal request (we're already performing journal in another thread).");
-        return true;
     }
-
-    if (!cx_reslock_is_blocked(&m_mmCtx->reslock))
-    {
-        // if the memory is not blocked, block it now to start denying tasks
-        cx_reslock_block(&m_mmCtx->reslock);
-    }
-
-    if (0 == cx_reslock_counter(&m_mmCtx->reslock))
-    {
-        // at this point, our memory is blocked (so new operations on it are being blocked and delayed)
-        // and also there're zero pending operations on it, so we can safely start journaling it now.
-        m_mmCtx->journaling = true;
-
-        task_t* task = taskman_create(TASK_ORIGIN_INTERNAL, TASK_WT_JOURNAL, NULL, INVALID_CID);
-        if (NULL != task)
-        {
-            task->state = TASK_STATE_NEW;
-            return true;
-        }
-        else
-        {
-            // task creation failed. unblock this table and skip this task.
-            mm_unblock(NULL);
-        }
-    }
-
-    return false;
+    return true;
 }
 
 void mm_journal_run(task_t* _task)
@@ -540,60 +524,78 @@ void mm_journal_run(task_t* _task)
     int32_t     result = 0;
     table_record_t r;
 
-    cx_cdict_iter_begin(m_mmCtx->tablesMap);
-    while (ERR_NONE == _task->err.code && cx_cdict_iter_next(m_mmCtx->tablesMap, &tableName, (void**)&table))
+    if (mm_block())
     {
-        cx_cdict_iter_begin(table->pages);
-        while (ERR_NONE == _task->err.code && cx_cdict_iter_next(table->pages, NULL, (void**)&page))
+        cx_cdict_iter_begin(m_mmCtx->tablesMap);
+        while (ERR_NONE == _task->err.code && cx_cdict_iter_next(m_mmCtx->tablesMap, &tableName, (void**)&table))
         {
-            if (page->parent == table && page->modified)
+            cx_cdict_iter_begin(table->pages);
+            while (ERR_NONE == _task->err.code && cx_cdict_iter_next(table->pages, NULL, (void**)&page))
             {
-                _mm_frame_read(page->frameHandle, &r);
-
-                payloadSize = lfs_pack_req_insert(payload, sizeof(payload),
-                    _task->handle, tableName, r.key, r.value, r.timestamp);
-
-                do
+                if (page->parent == table && page->modified)
                 {
-                    result = cx_net_send(g_ctx.lfs, LFSP_REQ_INSERT, payload, payloadSize, INVALID_CID);
+                    _mm_frame_read(page->frameHandle, &r);
 
-                    if (CX_NET_SEND_DISCONNECTED == result)
-                    {
-                        CX_ERR_SET(&_task->err, ERR_NET_LFS_UNAVAILABLE, "LFS node is unavailable.");
-                    }
-                    else if (CX_NET_SEND_BUFFER_FULL == result)
-                    {
-                        cx_net_wait_outboundbuff(g_ctx.lfs, INVALID_CID, -1);
-                    }
-                } while (ERR_NONE == _task->err.code && result != CX_NET_SEND_OK);
+                    payloadSize = lfs_pack_req_insert(payload, sizeof(payload),
+                        _task->handle, tableName, r.key, r.value, r.timestamp);
 
-                free(r.value);
+                    do
+                    {
+                        result = cx_net_send(g_ctx.lfs, LFSP_REQ_INSERT, payload, payloadSize, INVALID_CID);
+
+                        if (CX_NET_SEND_DISCONNECTED == result)
+                        {
+                            CX_ERR_SET(&_task->err, ERR_NET_LFS_UNAVAILABLE, "LFS node is unavailable.");
+                        }
+                        else if (CX_NET_SEND_BUFFER_FULL == result)
+                        {
+                            cx_net_wait_outboundbuff(g_ctx.lfs, INVALID_CID, -1);
+                        }
+                    } while (ERR_NONE == _task->err.code && result != CX_NET_SEND_OK);
+
+                    free(r.value);
+                }
             }
+            cx_cdict_iter_end(table->pages);
         }
-        cx_cdict_iter_end(table->pages);
+        cx_cdict_iter_end(m_mmCtx->tablesMap);
+
+        // destroy segments & pages
+        cx_cdict_clear(m_mmCtx->tablesMap, (cx_destroyer_cb)mm_segment_destroy);
+        CX_CHECK(cx_handle_count(m_mmCtx->framesHalloc) == 0, "we're leaking frame handles!");
+
+        // reset lru
+        _mm_lru_reset();
+        
+        // unblock the resource
+        mm_unblock(&((data_journal_t*)_task->data)->blockedTime);
+
+        // unset the journaling flag
+        m_mmCtx->journaling = false;
     }
-    cx_cdict_iter_end(m_mmCtx->tablesMap);
+    else
+    {
+        CX_CHECK(CX_ALW, "mm_block() should never return false!");
+    }
+}
 
-    // destroy segments & pages
-    cx_cdict_clear(m_mmCtx->tablesMap, (cx_destroyer_cb)mm_segment_destroy);
-    CX_CHECK(cx_handle_count(m_mmCtx->framesHalloc) == 0, "we're leaking frame handles!");
-
-    // reset lru
-    _mm_lru_reset();
+bool mm_block()
+{
+    cx_reslock_block(&m_mmCtx->reslock);
+    cx_reslock_wait_unused(&m_mmCtx->reslock);
+    return true;
 }
 
 void mm_unblock(double* _blockedTime)
 {
-    m_mmCtx->journaling = false;
-
-    // make the resource (our memory) available again
+    // unblock the memory and make it available again
     cx_reslock_unblock(&m_mmCtx->reslock);
 
     task_t* task = NULL;
     while (!queue_is_empty(m_mmCtx->blockedQueue))
     {
         task = queue_pop(m_mmCtx->blockedQueue);
-        task->state = TASK_STATE_NEW;
+        taskman_activate(task);
     }
 
     if (NULL != _blockedTime)

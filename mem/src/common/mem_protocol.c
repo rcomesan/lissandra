@@ -15,6 +15,7 @@
 #ifdef MEM
 
 #include "../mem.h"
+#include "../mm.h"
 #include <ker/gossip.h>
 
 void mem_handle_auth(cx_net_common_t* _common, void* _userData, const char* _buffer, uint16_t _bufferSize)
@@ -101,15 +102,7 @@ void mem_handle_journal(const cx_net_common_t* _common, void* _userData, const c
 {
     cx_net_client_t* client = (cx_net_client_t*)_userData;
 
-    TASK_ORIGIN origin = NULL == _userData 
-        ? TASK_ORIGIN_CLI 
-        : TASK_ORIGIN_API;
-
-    task_t* task = taskman_create(origin, TASK_MT_JOURNAL, NULL, client->cid.id);
-    if (NULL != task)
-    {
-        task->state = TASK_STATE_NEW;
-    }
+    mm_journal_tryenqueue();
 }
 
 void mem_handle_req_create(const cx_net_common_t* _common, void* _userData, const char* _buffer, uint16_t _bufferSize)

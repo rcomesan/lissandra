@@ -396,31 +396,18 @@ static void handle_cli_command(const cx_cli_cmd_t* _cmd)
 static bool handle_timer_tick(uint64_t _expirations, uint32_t _type, void* _userData)
 {
     bool stopTimer = false;
-    task_t* task = NULL;
 
     switch (_type)
     {
     case LFS_TIMER_DUMP:
     {
-        task = taskman_create(TASK_ORIGIN_INTERNAL, TASK_MT_DUMP, NULL, INVALID_CID);
-        if (NULL != task)
-        {
-            task->state = TASK_STATE_NEW;
-        }
+        fs_table_dump_tryenqueue();
         break;
     }
 
     case LFS_TIMER_COMPACT:
     {
-        task = taskman_create(TASK_ORIGIN_INTERNAL, TASK_MT_COMPACT, NULL, INVALID_CID);
-        if (NULL != task)
-        {
-            data_compact_t* data = CX_MEM_STRUCT_ALLOC(data);
-            cx_str_copy(data->tableName, sizeof(data->tableName), ((table_t*)_userData)->meta.name);
-
-            task->data = data;
-            task->state = TASK_STATE_NEW;
-        }
+        fs_table_compact_tryenqueue(((table_t*)_userData)->meta.name);
         break;
     }
 
@@ -511,19 +498,6 @@ static bool task_run_mt(task_t* _task)
 
     switch (_task->type)
     {
-    case TASK_MT_COMPACT:
-    {
-        data_compact_t* data = _task->data;
-        success = fs_table_compact_tryenqueue(data->tableName);
-        break;
-    }
-
-    case TASK_MT_DUMP:
-    {
-        success = fs_table_dump_tryenqueue();
-        break;
-    }
-
     case TASK_MT_FREE:
     {
         data_free_t* data = _task->data;
@@ -542,7 +516,7 @@ static bool task_run_mt(task_t* _task)
                 while (!queue_is_empty(table->blockedQueue))
                 {
                     task = queue_pop(table->blockedQueue);
-                    task->state = TASK_STATE_NEW;
+                    taskman_activate(task);
                 }
 
                 // destroy & deallocate table
@@ -593,7 +567,7 @@ static bool task_completed(task_t* _task)
             CX_CHECK(INVALID_HANDLE != table->timerHandle, "we ran out of timer handles for table '%s'!", table->meta.name);
 
             // unblock the table making it fully available!
-            fs_table_unblock(table);
+            fs_table_unblock(table, NULL);
         }
         else
         {
@@ -687,18 +661,6 @@ static bool task_completed(task_t* _task)
             }
         }
         
-        break;
-    }
-
-    case TASK_MT_DUMP:
-    {
-        //noop
-        break;
-    }
-
-    case TASK_MT_COMPACT:
-    {
-        //noop
         break;
     }
 

@@ -417,7 +417,7 @@ static bool handle_timer_tick(uint64_t _expirations, uint32_t _type, void* _user
         {
             data_describe_t* data = CX_MEM_STRUCT_ALLOC(data);
             task->data = data;
-            task->state = TASK_STATE_NEW;
+            taskman_activate(task);
         }
         CX_WARN(NULL != task, "metadata refresh timer failed (taskman_create returned null)");
         break;
@@ -554,7 +554,7 @@ static bool task_reschedule(task_t* _task)
         data_run_t* data = (data_run_t*)_task->data;
 
         CX_INFO("[%s] quantum of %d exceeded.", data->scriptFileName, g_ctx.cfg.quantum);
-        _task->state = TASK_STATE_NEW;
+        taskman_activate(_task);
     }
     else
     {

@@ -122,7 +122,16 @@ void report_drop(const task_t* _task, FILE* _stream)
 
 void report_journal(const task_t* _task, FILE* _stream)
 {
-    report_info("Memory journal requested.", _stream);
+    REPORT_BEGIN;
+    if (ERR_NONE == _task->err.code)
+    {
+        fprintf(_stream, "Memory journal completed successfully.\n");
+    }
+    else
+    {
+        fprintf(_stream, "JOURNAL failed. %s\n", _task->err.desc);
+    }
+    REPORT_END;
 }
 
 void report_addmem(const task_t* _task, FILE* _stream)

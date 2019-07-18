@@ -61,7 +61,7 @@ bool                fs_table_compact_tryenqueue(const char* _tableName);
 
 bool                fs_table_block(table_t* _table);
 
-void                fs_table_unblock(table_t* _table);
+void                fs_table_unblock(table_t* _table, double* _blockedTime);
 
 void                fs_table_free(table_t* _table);
 

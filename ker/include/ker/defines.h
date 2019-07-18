@@ -179,6 +179,11 @@ typedef struct data_compact_t
     double          endStageTime;
 } data_compact_t;
 
+typedef struct data_journal_t
+{
+    double          blockedTime;
+} data_journal_t;
+
 typedef struct data_free_t
 {
     uint8_t         resourceType;

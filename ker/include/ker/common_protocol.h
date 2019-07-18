@@ -23,7 +23,7 @@
 
 #define REQ_END                                                                         \
         task->remoteId = remoteId;                                                      \
-        task->state = TASK_STATE_NEW;                                                   \
+        taskman_activate(task);                                                         \
         CX_CHECK(bufferPos == _bufferSize, "%d bytes were not consumed from the buffer!", _bufferSize - bufferPos); \
     }
 

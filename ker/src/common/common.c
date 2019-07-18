@@ -80,6 +80,7 @@ bool common_task_data_free(TASK_TYPE _type, void* _data)
 
     case TASK_WT_JOURNAL:
     {
+        data_journal_t* data = (data_journal_t*)_data;
         //noop
         break;
     }
@@ -106,24 +107,6 @@ bool common_task_data_free(TASK_TYPE _type, void* _data)
             data->output = NULL;
         }
 
-        break;
-    }
-
-    case TASK_MT_COMPACT:
-    {
-        //noop
-        break;
-    }
-
-    case TASK_MT_DUMP:
-    {
-        //noop
-        break;
-    }
-
-    case TASK_MT_JOURNAL:
-    {
-        //noop
         break;
     }
 

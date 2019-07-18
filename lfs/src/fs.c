@@ -526,7 +526,7 @@ bool fs_table_dump_tryenqueue()
             cx_str_copy(data->tableName, sizeof(data->tableName), tableName);
 
             task->data = data;
-            task->state = TASK_STATE_NEW;
+            taskman_activate(task);
         }
     }
     cx_cdict_iter_end(m_fsCtx->tablesMap);
@@ -555,7 +555,7 @@ bool fs_table_compact_tryenqueue(const char* _tableName)
                 
                 task->data = data;
                 task->table = table;
-                task->state = TASK_STATE_NEW;
+                taskman_activate(task);
                 success = true;
             }
             else
@@ -589,7 +589,7 @@ bool fs_table_block(table_t* _table)
     return true;
 }
 
-void fs_table_unblock(table_t* _table)
+void fs_table_unblock(table_t* _table, double* _blockedTime)
 {
     // unblock the table and make it available again
     cx_reslock_unblock(&_table->reslock);
@@ -599,8 +599,11 @@ void fs_table_unblock(table_t* _table)
     while (!queue_is_empty(_table->blockedQueue))
     {
         task = queue_pop(_table->blockedQueue);
-        task->state = TASK_STATE_NEW;
+        taskman_activate(task);
     }
+
+    if (NULL != _blockedTime)
+        (*_blockedTime) = cx_reslock_blocked_time(&_table->reslock);
 }
 
 void fs_table_free(table_t* _table)
@@ -611,9 +614,7 @@ void fs_table_free(table_t* _table)
 
     task_t* task = taskman_create(TASK_ORIGIN_INTERNAL, TASK_MT_FREE, data, INVALID_CID);
     if (NULL != task)
-    {
-        task->state = TASK_STATE_NEW;
-    }
+        taskman_activate(task);
 }
 
 cx_file_explorer_t* fs_table_explorer(const char* _tableName, cx_err_t* _err)

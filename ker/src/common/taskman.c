@@ -204,6 +204,11 @@ task_t* taskman_create(TASK_ORIGIN _origin, TASK_TYPE _type, void* _data, uint32
         : NULL;
 }
 
+void taskman_activate(task_t* _task)
+{
+    _task->state = TASK_STATE_NEW;
+}
+
 void taskman_update()
 {
     CX_CHECK_NOT_NULL(m_taskmanCtx);
@@ -340,7 +345,7 @@ static void _taskman_mtqueue_process()
         else
         {
             // we can't process it at this time, push it again to our queue
-            task->state = TASK_STATE_NEW;
+            taskman_activate(task);
         }
 
         count++;

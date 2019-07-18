@@ -464,8 +464,9 @@ static void handle_cli_command(const cx_cli_cmd_t* _cmd)
     }
     else if (QUERY_JOURNAL == query)
     {
-        packetSize = mem_pack_journal(g_ctx.buff1, sizeof(g_ctx.buff1));
-        mem_handle_journal((cx_net_common_t*)g_ctx.sv, NULL, g_ctx.buff1, packetSize);
+        mm_journal_tryenqueue();
+        report_info("Memory journal scheduled.", stdout);
+        cx_cli_command_end();
     }
     else if (QUERY_CREATE == query)
     {
@@ -528,16 +529,7 @@ static bool handle_timer_tick(uint64_t _expirations, uint32_t _type, void* _user
     {
     case MEM_TIMER_JOURNAL:
     {
-        // enqueue a journal request. 
-        task_t* task = taskman_create(TASK_ORIGIN_INTERNAL_PRIORITY, TASK_MT_JOURNAL, NULL, INVALID_CID);
-        if (NULL != task)
-        {
-            task->state = TASK_STATE_NEW;
-        }
-        else
-        {
-            CX_WARN(CX_ALW, "MEM_TIMER_JOURNAL tick ignored. we ran out of tasks handles!");
-        }
+        mm_journal_tryenqueue();
         break;
     }
 
@@ -623,13 +615,6 @@ static bool task_run_mt(task_t* _task)
 
     switch (_task->type)
     {
-
-    case TASK_MT_JOURNAL:
-    {
-        success = mm_journal_tryenqueue();
-        break;
-    }
-
     case TASK_MT_FREE:
     {
         data_free_t* data = _task->data;
@@ -744,24 +729,16 @@ static bool task_completed(task_t* _task)
 
     case TASK_WT_JOURNAL:
     {
-        double blockedTime = 0;
-        mm_unblock(&blockedTime);
-
+        data_journal_t* data = (data_journal_t*)_task->data;
+        
         if (ERR_NONE == _task->err.code)
         {
-            CX_INFO("memory journal completed successfully. (%.3f sec blocked)\n", blockedTime);
+            CX_INFO("memory journal completed successfully. (%.3f sec blocked)\n", data->blockedTime);
         }
         else
         {
-            CX_INFO("memory journal failed. %s\n", _task->err.desc);
+            CX_WARN(CX_ALW, "memory journal failed. %s\n", _task->err.desc);
         }
-        break;
-    }
-
-    case TASK_MT_JOURNAL:
-    {
-        if (TASK_ORIGIN_CLI == _task->origin)
-            report_info("Memory journal scheduled.", stdout);
         break;
     }
 

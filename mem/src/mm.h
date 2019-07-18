@@ -48,6 +48,8 @@ bool                mm_journal_tryenqueue();
 
 void                mm_journal_run(task_t* _task);
 
+bool                mm_block();
+
 void                mm_unblock(double* _blockedTime);
 
 #endif // MEM_MM_H_
