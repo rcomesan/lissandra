@@ -77,6 +77,8 @@ void        mempool_poll_events();
 
 void        mempool_feed_tables(table_meta_t* _tables, uint32_t _tablesCount);
 
+void        mempool_remove_tables(table_meta_t* _tables, uint32_t _tablesCount);
+
 void        mempool_add(uint16_t _memNumber, ipv4_t _ip, uint16_t _port);
 
 bool        mempool_assign(uint16_t _memNumber, CONSISTENCY_TYPE _type, cx_err_t* _err);

@@ -221,7 +221,6 @@ void mempool_feed_tables(table_meta_t* _tables, uint32_t _tablesCount)
     table_meta_t* curTable = NULL;
 
     pthread_mutex_lock(&m_mempoolCtx->tablesMap->mtx);
-
     if (_tablesCount > 1)
     {
         // global describe, we can safely remove them all and start over with fresh metadata
@@ -236,6 +235,16 @@ void mempool_feed_tables(table_meta_t* _tables, uint32_t _tablesCount)
             memcpy(table, &_tables[i], sizeof(*table));
             cx_cdict_set(m_mempoolCtx->tablesMap, table->name, table);
         }
+    }
+    pthread_mutex_unlock(&m_mempoolCtx->tablesMap->mtx);
+}
+
+void mempool_remove_tables(table_meta_t* _tables, uint32_t _tablesCount)
+{
+    pthread_mutex_lock(&m_mempoolCtx->tablesMap->mtx);
+    for (uint32_t i = 0; i < _tablesCount; i++)
+    {
+        cx_cdict_erase(m_mempoolCtx->tablesMap, _tables[i].name, (cx_destroyer_cb)free);
     }
     pthread_mutex_unlock(&m_mempoolCtx->tablesMap->mtx);
 }

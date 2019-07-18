@@ -46,6 +46,17 @@ void worker_handle_create(task_t* _req, bool _scripted)
 
     _worker_request_mem(&hints, MEMP_REQ_CREATE, payload, payloadSize, _req);
 
+    if (ERR_NONE == _req->err.code) // successful CREATE
+    {
+        table_meta_t meta;
+        meta.compactionInterval = data->compactionInterval;
+        meta.consistency = data->consistency;
+        meta.partitionsCount = data->numPartitions;
+        cx_str_copy(meta.name, sizeof(meta.name), data->tableName);
+
+        mempool_feed_tables(&meta, 1);
+    }
+
     if (!_scripted) _worker_parse_result(_req);
 }
 
@@ -63,6 +74,14 @@ void worker_handle_drop(task_t* _req, bool _scripted)
         _req->handle, data->tableName);
 
     _worker_request_mem(&hints, MEMP_REQ_DROP, payload, payloadSize, _req);
+
+    if (ERR_NONE == _req->err.code) // successful DROP
+    {
+        table_meta_t meta;
+        cx_str_copy(meta.name, sizeof(meta.name), data->tableName);
+
+        mempool_remove_tables(&meta, 1);
+    }
 
     if (!_scripted) _worker_parse_result(_req);
 }
@@ -85,6 +104,11 @@ void worker_handle_describe(task_t* _req, bool _scripted)
         _req->handle, tableName);
 
     _worker_request_mem(&hints, MEMP_REQ_DESCRIBE, payload, payloadSize, _req);
+
+    if (ERR_NONE == _req->err.code) // successful DESCRIBE
+    {
+        mempool_feed_tables(data->tables, data->tablesCount);
+    }
 
     if (!_scripted) _worker_parse_result(_req);
 }
