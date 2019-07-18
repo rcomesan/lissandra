@@ -11,6 +11,8 @@
 #define CX_NET_BUFLEN (2 * MAX_PACKET_LEN)
 #define CX_NET_INACTIVITY_TIMEOUT 10
 
+#define INVALID_CID INVALID_HANDLE
+
 typedef struct cx_net_client_t cx_net_client_t;
 typedef struct cx_net_common_t cx_net_common_t;
 typedef struct cx_net_ctx_sv_t cx_net_ctx_sv_t;
@@ -59,10 +61,20 @@ typedef enum
     CX_NET_STATE_CLOSING        = 0x40,             // the context is being closed (running cx_net_destroy method).
 } CX_NET_STATE;
 
+typedef union cx_net_cid_t
+{
+    uint32_t                    id;
+    struct cx_net_cid_comps_t
+    {
+        uint16_t                handle;
+        uint16_t                version;
+    } comps;
+} cx_net_cid_t;
+
 struct cx_net_client_t
 {
-    uint16_t                    handle;             // handle/identifier for this client in our clients array.
-    void*                       userData;           // user data.
+    cx_net_cid_t                cid;                // unique identifier for this client (16-MSB: handle version. 16-LSB: handle/index to our clients array.).
+    void*                       userData;           // generic field for custom user data.
     bool                        validated;          // true if this client was validated. if a client is not validated before the timeout is exceeded the connection is terminated.
     double                      connectedTime;      // time counter value of when the connection was established.
     double                      lastPacketTime;     // time counter value of when the last packet arrived.
@@ -98,7 +110,7 @@ struct cx_net_ctx_sv_t
     cx_net_client_t*            clients;            // pre-allocated buffer for storing client's data.
     cx_handle_alloc_t*          clientsHalloc;      // handle allocator for clients array.
     uint16_t                    clientsMax;         // maximum amount of clients supported for this server context.
-    uint16_t*                   tmpHandles;         // temporary pre-allocated buffer for storing client handles.
+    uint32_t*                   tmpIds;             // temporary pre-allocated buffer for storing client ids.
     cx_net_on_connection_cb     onConnection;       // event fired upon a client connection.
     cx_net_on_disconnection_cb  onDisconnection;    // event Fired upon a client disconnection.
 };
@@ -160,15 +172,15 @@ void                    cx_net_destroy(void* _ctx);
 
 void                    cx_net_poll_events(void* _ctx, int32_t _timeout);
 
-int32_t                 cx_net_send(void* _ctx, uint8_t _header, const char* _payload, uint32_t _payloadSize, uint16_t _clientHandle);
+int32_t                 cx_net_send(void* _ctx, uint8_t _header, const char* _payload, uint32_t _payloadSize, uint32_t _clientId);
 
-void                    cx_net_validate(void* _ctx, uint16_t _clientHandle);
+void                    cx_net_validate(void* _ctx, uint32_t _clientId);
 
-bool                    cx_net_flush(void* _ctx, uint16_t _clientHandle);
+bool                    cx_net_flush(void* _ctx, uint32_t _clientId);
 
-void                    cx_net_disconnect(void* _ctx, uint16_t _clientHandle, const char* _reason);
+void                    cx_net_disconnect(void* _ctx, uint32_t _clientId, const char* _reason);
 
-void                    cx_net_wait_outboundbuff(void* _ctx, uint16_t _clientHandle, int32_t _timeout);
+void                    cx_net_wait_outboundbuff(void* _ctx, uint32_t _clientId, int32_t _timeout);
 
 #endif // CX_NET_H_
 

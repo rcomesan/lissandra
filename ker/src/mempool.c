@@ -123,7 +123,7 @@ void mempool_disconnect()
         mem_node_t* memNode = &m_mempoolCtx->nodes[i];
         if (NULL != memNode->conn)
         {
-            cx_net_disconnect(memNode->conn, INVALID_HANDLE, "mempool is shutting down");
+            cx_net_disconnect(memNode->conn, INVALID_CID, "mempool is shutting down");
             cx_net_destroy(memNode->conn);
             memNode->conn = NULL;
         }
@@ -488,7 +488,7 @@ int32_t mempool_node_req(uint16_t _memNumber, uint8_t _header, const char* _payl
         pthread_rwlock_rdlock(&memNode->rwl);
         if (NULL != memNode->conn)
         {
-            result = cx_net_send(memNode->conn, _header, _payload, _payloadSize, INVALID_HANDLE);
+            result = cx_net_send(memNode->conn, _header, _payload, _payloadSize, INVALID_CID);
         }
         pthread_rwlock_unlock(&memNode->rwl);
     }
@@ -505,7 +505,7 @@ void mempool_node_wait(uint16_t _memNumber)
         pthread_rwlock_rdlock(&node->rwl);
         if (NULL != node->conn)
         {
-            cx_net_wait_outboundbuff(node->conn, INVALID_HANDLE, -1);
+            cx_net_wait_outboundbuff(node->conn, INVALID_CID, -1);
         }
         pthread_rwlock_unlock(&node->rwl);
     }
@@ -654,7 +654,7 @@ static void _on_connected_to_mem(cx_net_ctx_cl_t* _ctx)
     uint32_t payloadSize = mem_pack_auth(payload, sizeof(payload), 
         g_ctx.cfg.memPassword, false, UINT16_MAX, UINT16_MAX);
 
-    cx_net_send(_ctx, MEMP_AUTH, payload, payloadSize, INVALID_HANDLE);
+    cx_net_send(_ctx, MEMP_AUTH, payload, payloadSize, INVALID_CID);
 }
 
 static void _on_disconnected_from_mem(cx_net_ctx_cl_t* _ctx)
@@ -724,7 +724,7 @@ static void _request_mem_journal(cx_list_t* _list, cx_list_node_t* _node, uint32
     payload_t payload;
     uint32_t payloadSize = mem_pack_journal(payload, sizeof(payload));
 
-    int32_t result = cx_net_send(memNode->conn, MEMP_JOURNAL, payload, payloadSize, INVALID_HANDLE);
+    int32_t result = cx_net_send(memNode->conn, MEMP_JOURNAL, payload, payloadSize, INVALID_CID);
     CX_UNUSED(result);
 
     CX_WARN(result != CX_NET_SEND_BUFFER_FULL, 

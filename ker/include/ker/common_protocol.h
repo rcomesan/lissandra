@@ -8,15 +8,15 @@
     cx_net_ctx_sv_t* svCtx = (cx_net_ctx_sv_t*)_common;                                 \
     cx_net_client_t* client = (cx_net_client_t*)_userData;                              \
     uint32_t bufferPos = 0;                                                             \
+                                                                                        \
     uint16_t remoteId = INVALID_HANDLE;                                                 \
     cx_binr_uint16(_buffer, _bufferSize, &bufferPos, &remoteId);                        \
-    task_t* task = taskman_create(                                                      \
-        NULL == _userData                                                               \
-            ? TASK_ORIGIN_CLI                                                           \
-            : TASK_ORIGIN_API,                                                          \
-        (_taskType),                                                                    \
-        NULL,                                                                           \
-        _userData);                                                                     \
+                                                                                        \
+    task_t* task = NULL;                                                                \
+    if (NULL == client)                                                                 \
+        task = taskman_create(TASK_ORIGIN_CLI, (_taskType), NULL, INVALID_CID);         \
+    else                                                                                \
+        task = taskman_create(TASK_ORIGIN_API, (_taskType), NULL, client->cid.id);      \
                                                                                         \
     if (NULL != task)                                                                   \
     {

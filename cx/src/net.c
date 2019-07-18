@@ -16,10 +16,15 @@
 #include <pthread.h>
 
 #define CX_NET_LOG(_ctxPtr, _macro)                                                     \
-        if ((_ctxPtr)->c.logging)                                                       \
-        {                                                                               \
-            _macro;                                                                     \
-        }
+    if ((_ctxPtr)->c.logging)                                                           \
+    {                                                                                   \
+        _macro;                                                                         \
+    }
+
+// checks whether a clientId (version+handle combination) is still valid or was invalidated
+#define CX_NET_VALID_CID(_svCtxPtr, _cid) (true                                         \
+    && INVALID_HANDLE != (_cid).comps.handle                                            \
+    && (_svCtxPtr)->clients[(_cid).comps.handle].cid.comps.version == (_cid).comps.version)
 
 /****************************************************************************************
  ***  PRIVATE DECLARATIONS
@@ -56,10 +61,7 @@ cx_net_ctx_sv_t* cx_net_listen(cx_net_args_t* _args)
     
 
     if (_args->multiThreadedSend)
-    {
-        //CX_INFO("[-->%s] initializing mutexes...", ctx->c.name);
         ctx->c.mtxInitialized = (0 == pthread_mutex_init(&ctx->c.mtx, NULL));
-    }
 
     if (!_args->multiThreadedSend || ctx->c.mtxInitialized)
     {
@@ -87,7 +89,7 @@ cx_net_ctx_sv_t* cx_net_listen(cx_net_args_t* _args)
                                 ctx->c.epollEvents = CX_MEM_ARR_ALLOC(ctx->c.epollEvents, ctx->clientsMax);
                                 ctx->clients = CX_MEM_ARR_ALLOC(ctx->clients, ctx->clientsMax);
                                 ctx->clientsHalloc = cx_halloc_init(ctx->clientsMax);
-                                ctx->tmpHandles = CX_MEM_ARR_ALLOC(ctx->tmpHandles, ctx->clientsMax);
+                                ctx->tmpIds = CX_MEM_ARR_ALLOC(ctx->tmpIds, ctx->clientsMax);
 
                                 // add an entry to the "interest list" of epoll containing our
                                 // listening socket file descriptor. the kernel will let us 
@@ -246,20 +248,23 @@ void cx_net_destroy(void* _ctx)
         if (NULL != ctx.sv->clientsHalloc)
         {
             uint16_t clientsCount = cx_handle_count(ctx.sv->clientsHalloc);
-            uint16_t handle = INVALID_HANDLE;
+            uint16_t clientHandle = INVALID_HANDLE;
+            cx_net_client_t* client;
             uint16_t j = 0;
             for (uint16_t i = 0; i < clientsCount; i++)
             {
-                handle = cx_handle_at(ctx.sv->clientsHalloc, i);
-                ctx.sv->tmpHandles[j++] = handle;
-                cx_net_flush(ctx.sv, handle);
+                clientHandle = cx_handle_at(ctx.sv->clientsHalloc, i);
+                client = &ctx.sv->clients[clientHandle];
+
+                ctx.sv->tmpIds[j++] = client->cid.id;
+                cx_net_flush(ctx.sv, client->cid.id);
             }
 
             _cx_net_poll_events_server(ctx.sv, 0);
 
             for (uint16_t i = 0; i < j; i++)
             {
-                cx_net_disconnect(ctx.sv, ctx.sv->tmpHandles[i], "context closed");
+                cx_net_disconnect(ctx.sv, ctx.sv->tmpIds[i], "context closed");
             }
 
             cx_halloc_destroy(ctx.sv->clientsHalloc);
@@ -269,10 +274,10 @@ void cx_net_destroy(void* _ctx)
             ctx.sv->clients = NULL;
         }
         
-        if (NULL != ctx.sv->tmpHandles)
+        if (NULL != ctx.sv->tmpIds)
         {
-            free(ctx.sv->tmpHandles);
-            ctx.sv->tmpHandles = NULL;
+            free(ctx.sv->tmpIds);
+            ctx.sv->tmpIds = NULL;
         }
         
         CX_NET_LOG(ctx.sv, CX_INFO("[%s<--] finished serving on %s:%d", ctx.c->name, ctx.c->ip, ctx.c->port));
@@ -281,11 +286,11 @@ void cx_net_destroy(void* _ctx)
     {
         if (CX_NET_STATE_CONNECTED & ctx.c->state)
         {
-            cx_net_flush(ctx.cl, INVALID_HANDLE);
+            cx_net_flush(ctx.cl, INVALID_CID);
 
             _cx_net_poll_events_client(ctx.cl, 0);
 
-            cx_net_disconnect(ctx.cl, INVALID_HANDLE, "context closed");
+            cx_net_disconnect(ctx.cl, INVALID_CID, "context closed");
         }
     }
 
@@ -335,9 +340,11 @@ void cx_net_poll_events(void* _ctx, int32_t _timeout)
     }
 }
 
-int32_t cx_net_send(void* _ctx, uint8_t _header, const char* _payload, uint32_t _payloadSize, uint16_t _clientHandle)
+int32_t cx_net_send(void* _ctx, uint8_t _header, const char* _payload, uint32_t _payloadSize, uint32_t _clientId)
 {
     int32_t result = CX_NET_SEND_OK;
+
+    cx_net_cid_t cid = { _clientId };
 
     CX_CHECK_NOT_NULL(_ctx);
     cx_net_ctx_t ctx = { _ctx };
@@ -354,13 +361,15 @@ int32_t cx_net_send(void* _ctx, uint8_t _header, const char* _payload, uint32_t 
 
     if (CX_NET_STATE_SERVER & ctx.c->state)
     {
-        //TODO check the client is still valid (versioning?) and also connceted to us
-        CX_CHECK(cx_handle_is_valid(ctx.sv->clientsHalloc, _clientHandle),
-            "[%s<--] sending a packet to an invalid client! (handle: %d)", ctx.c->name, _clientHandle);
+        if (!CX_NET_VALID_CID(ctx.sv, cid))
+        {
+            result = CX_NET_SEND_DISCONNECTED;
+            goto send_finished;
+        }
 
-        buffer = ctx.sv->clients[_clientHandle].out;
-        bufferSize = sizeof(ctx.sv->clients[_clientHandle].out);
-        position = &(ctx.sv->clients[_clientHandle].outPos);
+        buffer = ctx.sv->clients[cid.comps.handle].out;
+        bufferSize = sizeof(ctx.sv->clients[cid.comps.handle].out);
+        position = &(ctx.sv->clients[cid.comps.handle].outPos);
     }
     else if (CX_NET_STATE_CLIENT & ctx.c->state)
     {
@@ -381,7 +390,7 @@ int32_t cx_net_send(void* _ctx, uint8_t _header, const char* _payload, uint32_t 
     {
         // not enough space to add this packet to the outbound buffer
         // try to write it out to the socket and start from byte 0
-        if (!cx_net_flush(_ctx, _clientHandle))
+        if (!cx_net_flush(_ctx, cid.id))
         {
             // we do have a serious problem at this point since our outbound
             // buffer can't be written to the socket (due to probably blocking i/o)
@@ -390,7 +399,7 @@ int32_t cx_net_send(void* _ctx, uint8_t _header, const char* _payload, uint32_t 
             if (CX_NET_STATE_SERVER & ctx.c->state)
             {
                 CX_NET_LOG(ctx.sv, CX_WARN(CX_ALW, "[%s<--] [handle: %d] we ran out of outbound buffer space to write packet #%d of length %d bytes",
-                    ctx.c->name, _clientHandle, _header, bytesRequired));
+                    ctx.c->name, cid.comps.handle, _header, bytesRequired));
             }
             else if (CX_NET_STATE_CLIENT & ctx.c->state)
             {
@@ -421,15 +430,20 @@ send_finished:
     return result;
 }
 
-void cx_net_validate(void* _ctx, uint16_t _clientHandle)
+void cx_net_validate(void* _ctx, uint32_t _clientId)
 {
+    cx_net_cid_t cid = { _clientId };
+
     CX_CHECK_NOT_NULL(_ctx);
     cx_net_ctx_t ctx = { _ctx };
 
     if (CX_NET_STATE_SERVER & ctx.c->state)
     {
-        CX_CHECK(INVALID_HANDLE != _clientHandle, "_clientHandle is invalid!");
-        cx_net_client_t* client = &ctx.sv->clients[_clientHandle];
+        if (!CX_NET_VALID_CID(ctx.sv, cid))
+            return;
+
+        cx_net_client_t* client = &ctx.sv->clients[cid.comps.handle];
+
         CX_CHECK(!client->validated, "client connection is already validated!");
         client->validated = true;
     }
@@ -440,8 +454,10 @@ void cx_net_validate(void* _ctx, uint16_t _clientHandle)
     }
 }
 
-bool cx_net_flush(void* _ctx, uint16_t _clientHandle)
+bool cx_net_flush(void* _ctx, uint32_t _clientId)
 {
+    cx_net_cid_t cid = { _clientId };
+
     CX_CHECK_NOT_NULL(_ctx);
     cx_net_ctx_t ctx = { _ctx };
 
@@ -452,12 +468,12 @@ bool cx_net_flush(void* _ctx, uint16_t _clientHandle)
 
     if (CX_NET_STATE_SERVER & ctx.c->state)
     {
-        CX_CHECK(cx_handle_is_valid(ctx.sv->clientsHalloc, _clientHandle),
-            "[%s<--] flushing an invalid client! (handle: %d)", ctx.c->name, _clientHandle);
+        if (!CX_NET_VALID_CID(ctx.sv, cid))
+            return false;
 
-        sock = ctx.sv->clients[_clientHandle].sock;
-        buffer = ctx.sv->clients[_clientHandle].out;
-        position = &(ctx.sv->clients[_clientHandle].outPos);
+        sock = ctx.sv->clients[cid.comps.handle].sock;
+        buffer = ctx.sv->clients[cid.comps.handle].out;
+        position = &(ctx.sv->clients[cid.comps.handle].outPos);
     }
     else if (CX_NET_STATE_CLIENT & ctx.c->state)
     {
@@ -470,12 +486,12 @@ bool cx_net_flush(void* _ctx, uint16_t _clientHandle)
     {
         int32_t bytesWritten = write(sock, buffer, *position);
 
-        if ((*position) == bytesWritten)
+        if ((int32_t)(*position) == bytesWritten)
         {   
             // all the bytes were written to the socket successfully
             (*position) = 0;
         }
-        else if ((*position) > bytesWritten)
+        else if ((int32_t)(*position) > bytesWritten)
         {
             // there're still some bytes left in our buffer that weren't written
             // make some space by shifting our pending bytes to the left in the buffer
@@ -499,7 +515,7 @@ bool cx_net_flush(void* _ctx, uint16_t _clientHandle)
                 if (CX_NET_STATE_SERVER & ctx.c->state)
                 {
                     CX_NET_LOG(ctx.sv, CX_WARN(CX_ALW, "[%s<--] [handle: %d] write failed with error: %s (errno %d)",
-                        ctx.c->name, _clientHandle, strerror(errno), errno));
+                        ctx.c->name, cid.comps.handle, strerror(errno), errno));
                 }
                 else if (CX_NET_STATE_CLIENT & ctx.c->state)
                 {
@@ -520,18 +536,22 @@ bool cx_net_flush(void* _ctx, uint16_t _clientHandle)
     return (CX_NET_BUFLEN - (*position)) >= MAX_PACKET_LEN;
 }
 
-void cx_net_disconnect(void* _ctx, uint16_t _clientHandle, const char* _reason)
+void cx_net_disconnect(void* _ctx, uint32_t _clientId, const char* _reason)
 {
+    cx_net_cid_t cid = { _clientId };
+
     CX_CHECK_NOT_NULL(_ctx);
     cx_net_ctx_t ctx = { _ctx };
 
     if (CX_NET_STATE_SERVER & ctx.c->state)
     {
-        CX_CHECK(INVALID_HANDLE != _clientHandle, "_clientHandle is invalid!");
-        cx_net_client_t* client = &ctx.sv->clients[_clientHandle];
+        if (!CX_NET_VALID_CID(ctx.sv, cid))
+            return;
+
+        cx_net_client_t* client = &ctx.sv->clients[cid.comps.handle];
 
         CX_NET_LOG(ctx.sv, CX_INFO("[%s<--] [handle: %d] client disconnected (ip: %s, socket: %d, reason: %s)",
-            ctx.c->name, _clientHandle, client->ip, client->sock, _reason != NULL ? _reason : "unknown"));
+            ctx.c->name, cid.comps.handle, client->ip, client->sock, _reason != NULL ? _reason : "unknown"));
 
         if (INVALID_DESCRIPTOR != client->sock)
         {
@@ -541,9 +561,9 @@ void cx_net_disconnect(void* _ctx, uint16_t _clientHandle, const char* _reason)
         }
 
         if (NULL != ctx.sv->onDisconnection) 
-            ctx.sv->onDisconnection(ctx.sv, &ctx.sv->clients[_clientHandle]);
+            ctx.sv->onDisconnection(ctx.sv, &ctx.sv->clients[cid.comps.handle]);
 
-        cx_handle_free(ctx.sv->clientsHalloc, _clientHandle);
+        cx_handle_free(ctx.sv->clientsHalloc, cid.comps.handle);
     }
     else if (CX_NET_STATE_CLIENT & ctx.c->state)
     {
@@ -566,8 +586,11 @@ void cx_net_disconnect(void* _ctx, uint16_t _clientHandle, const char* _reason)
     }
 }
 
-void cx_net_wait_outboundbuff(void* _ctx, uint16_t _clientHandle, int32_t _timeout)
+void cx_net_wait_outboundbuff(void* _ctx, uint32_t _clientId, int32_t _timeout)
 {
+    cx_net_cid_t cid = { _clientId };
+    CX_UNUSED(cid);
+
     //TODO
     CX_WARN(CX_ALW, "cx_net_wait_outboundbuff is not implemented yet!");
 }
@@ -609,7 +632,7 @@ static void _cx_net_poll_events_client(cx_net_ctx_cl_t* _ctx, int32_t _timeout)
             
             if (0 == bytesRead)
             {
-                cx_net_disconnect(_ctx, INVALID_HANDLE, "server closed the connection");
+                cx_net_disconnect(_ctx, INVALID_CID, "server closed the connection");
             }
             else if (bytesRead > 0)
             {
@@ -618,7 +641,7 @@ static void _cx_net_poll_events_client(cx_net_ctx_cl_t* _ctx, int32_t _timeout)
             }
             else if (-1 == bytesRead && errno == ECONNREFUSED)
             {
-                cx_net_disconnect(_ctx, INVALID_HANDLE, "server refused the connection");
+                cx_net_disconnect(_ctx, INVALID_CID, "server refused the connection");
             }
             else
             {
@@ -634,7 +657,7 @@ static void _cx_net_poll_events_client(cx_net_ctx_cl_t* _ctx, int32_t _timeout)
             if (CX_NET_STATE_CONNECTED & _ctx->c.state)
             {
                 // pending write operation, epoll says we can do it now without blocking (let's try)
-                if (cx_net_flush(_ctx, INVALID_HANDLE))
+                if (cx_net_flush(_ctx, INVALID_CID))
                 {
                     // done. unset the EPOLLOUT flag
                     _cx_net_epoll_mod(_ctx->c.epollDescriptor, _ctx->c.sock, true, false);
@@ -682,13 +705,13 @@ static void _cx_net_poll_events_client(cx_net_ctx_cl_t* _ctx, int32_t _timeout)
         if (time - _ctx->lastPacketTime > (CX_NET_INACTIVITY_TIMEOUT * 0.5))
         {
             _ctx->lastPacketTime = time;
-            cx_net_send(_ctx, CX_NETP_PING, NULL, 0, INVALID_HANDLE);
+            cx_net_send(_ctx, CX_NETP_PING, NULL, 0, INVALID_CID);
         }
 
         //TODO fixme, do this only every 16ms or so
         if (_ctx->outPos > 0)
         {
-            cx_net_flush(_ctx, INVALID_HANDLE);
+            cx_net_flush(_ctx, INVALID_CID);
         }
     }
 }
@@ -735,7 +758,12 @@ static void _cx_net_poll_events_server(cx_net_ctx_sv_t* _ctx, int32_t _timeout)
                         event.data.fd = clientSock;
                         epoll_ctl(_ctx->c.epollDescriptor, EPOLL_CTL_ADD, clientSock, &event);
 
-                        _ctx->clients[clientHandle].handle = clientHandle;
+                        _ctx->clients[clientHandle].cid.comps.version = 
+                            UINT16_MAX > _ctx->clients[clientHandle].cid.comps.version
+                            ? _ctx->clients[clientHandle].cid.comps.version + 1
+                            : 0;
+
+                        _ctx->clients[clientHandle].cid.comps.handle = clientHandle;
                         _ctx->clients[clientHandle].validated = false;
                         _ctx->clients[clientHandle].connectedTime = time;
                         _ctx->clients[clientHandle].lastPacketTime = time;
@@ -783,14 +811,14 @@ static void _cx_net_poll_events_server(cx_net_ctx_sv_t* _ctx, int32_t _timeout)
 
                     if (0 == bytesRead)
                     {
-                        cx_net_disconnect(_ctx, clientHandle, "client closed the connection");
+                        cx_net_disconnect(_ctx, client->cid.id, "client closed the connection");
                     }
                     else if (bytesRead > 0)
                     {
                         client->lastPacketTime = time;
                         if (!_cx_net_process_stream(&_ctx->c, client, client->in, client->inPos + bytesRead, &client->inPos))
                         {
-                            cx_net_disconnect(_ctx, clientHandle, "invalid packet");
+                            cx_net_disconnect(_ctx, client->cid.id, "invalid packet");
                         }
                     }
                     else
@@ -805,7 +833,7 @@ static void _cx_net_poll_events_server(cx_net_ctx_sv_t* _ctx, int32_t _timeout)
                 if (EPOLLOUT & _ctx->c.epollEvents[i].events)
                 {
                     // pending write operation, epoll says we can do it now without blocking (let's see)
-                    if (cx_net_flush(_ctx, clientHandle))
+                    if (cx_net_flush(_ctx, client->cid.id))
                     {
                         // done. get rid of the EPOLLOUT flag
                         CX_MEM_ZERO(event);
@@ -833,20 +861,20 @@ static void _cx_net_poll_events_server(cx_net_ctx_sv_t* _ctx, int32_t _timeout)
             cx_net_flush(_ctx, handle);
 
         if (!client->validated && time - client->connectedTime > _ctx->c.validationTimeout)
-            _ctx->tmpHandles[validationCount++] = handle;
+            _ctx->tmpIds[validationCount++] = client->cid.id;
 
         if (time - client->lastPacketTime > CX_NET_INACTIVITY_TIMEOUT)
-            _ctx->tmpHandles[_ctx->clientsMax - 1 - (inactiveCount++)] = handle;
+            _ctx->tmpIds[_ctx->clientsMax - 1 - (inactiveCount++)] = client->cid.id;
     }
 
     for (uint16_t i = 0; i < validationCount; i++)
     {
-        cx_net_disconnect(_ctx, _ctx->tmpHandles[i], "validation handshake timed-out");
+        cx_net_disconnect(_ctx, _ctx->tmpIds[i], "validation handshake timed-out");
     }
 
     for (uint16_t i = 0; i < inactiveCount; i++)
     {
-        cx_net_disconnect(_ctx, _ctx->tmpHandles[_ctx->clientsMax - 1 - i], "inactive");
+        cx_net_disconnect(_ctx, _ctx->tmpIds[_ctx->clientsMax - 1 - i], "inactive");
     }
 }
 
@@ -889,8 +917,8 @@ static bool _cx_net_process_stream(cx_net_common_t* _common, void* _userData,
             else if (CX_NETP_PING == packetHeader)
             {
                 cx_net_send((void*)ctx.c, CX_NETP_PONG, NULL, 0, CX_NET_STATE_SERVER & ctx.c->state 
-                    ? ((cx_net_client_t*)_userData)->handle
-                    : INVALID_HANDLE);
+                    ? ((cx_net_client_t*)_userData)->cid.id
+                    : INVALID_CID);
             }
             else if (CX_NETP_PONG == packetHeader)
             {

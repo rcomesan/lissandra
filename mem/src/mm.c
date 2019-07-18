@@ -469,7 +469,7 @@ void mm_reschedule_task(task_t* _task)
             cx_reslock_block(&m_mmCtx->reslock);
 
             // enqueue a journal request. 
-            task_t* task = taskman_create(TASK_ORIGIN_INTERNAL, TASK_MT_JOURNAL, NULL, NULL);
+            task_t* task = taskman_create(TASK_ORIGIN_INTERNAL, TASK_MT_JOURNAL, NULL, INVALID_CID);
             if (NULL != task) task->state = TASK_STATE_NEW;
         }
     }
@@ -510,7 +510,7 @@ bool mm_journal_tryenqueue()
         // and also there're zero pending operations on it, so we can safely start journaling it now.
         m_mmCtx->journaling = true;
 
-        task_t* task = taskman_create(TASK_ORIGIN_INTERNAL, TASK_WT_JOURNAL, NULL, NULL);
+        task_t* task = taskman_create(TASK_ORIGIN_INTERNAL, TASK_WT_JOURNAL, NULL, INVALID_CID);
         if (NULL != task)
         {
             task->state = TASK_STATE_NEW;
@@ -555,7 +555,7 @@ void mm_journal_run(task_t* _task)
 
                 do
                 {
-                    result = cx_net_send(g_ctx.lfs, LFSP_REQ_INSERT, payload, payloadSize, INVALID_HANDLE);
+                    result = cx_net_send(g_ctx.lfs, LFSP_REQ_INSERT, payload, payloadSize, INVALID_CID);
 
                     if (CX_NET_SEND_DISCONNECTED == result)
                     {
@@ -563,7 +563,7 @@ void mm_journal_run(task_t* _task)
                     }
                     else if (CX_NET_SEND_BUFFER_FULL == result)
                     {
-                        cx_net_wait_outboundbuff(g_ctx.lfs, INVALID_HANDLE, -1);
+                        cx_net_wait_outboundbuff(g_ctx.lfs, INVALID_CID, -1);
                     }
                 } while (ERR_NONE == _task->err.code && result != CX_NET_SEND_OK);
 

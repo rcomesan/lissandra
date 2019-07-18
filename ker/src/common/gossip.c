@@ -174,7 +174,7 @@ void gossip_poll_events()
         if (GOSSIP_STAGE_ACKNOWLEDGED == node->stage)
         {
             node->stage = GOSSIP_STAGE_REQUESTING;
-            cx_net_send(node->conn, MEMP_REQ_GOSSIP, NULL, 0, INVALID_HANDLE);
+            cx_net_send(node->conn, MEMP_REQ_GOSSIP, NULL, 0, INVALID_CID);
         }
     }
     cx_cdict_iter_end(m_gossipCtx->nodes);
@@ -269,7 +269,7 @@ static void _on_connected_to_mem(cx_net_ctx_cl_t* _ctx)
     GOSSIP_USAGE_RESTRICTION;
 #endif
     
-    cx_net_send(_ctx, MEMP_AUTH, payload, payloadSize, INVALID_HANDLE);
+    cx_net_send(_ctx, MEMP_AUTH, payload, payloadSize, INVALID_CID);
 }
 
 static void _on_disconnected_from_mem(cx_net_ctx_cl_t* _ctx)

@@ -55,7 +55,8 @@ bool taskman_init(uint16_t _numWorkers, taskman_cb _runMt, taskman_cb _runWk, ta
     for (uint32_t i = 0; i < MAX_TASKS; i++)
     {
         m_taskmanCtx->tasks[i].handle = i;
-        m_taskmanCtx->tasks[i].clientHandle = INVALID_HANDLE;
+        m_taskmanCtx->tasks[i].clientId = INVALID_CID;
+        m_taskmanCtx->tasks[i].remoteId = INVALID_HANDLE;
 #if defined(MEM) || defined(KER)
         pthread_mutex_init(&m_taskmanCtx->tasks[i].responseMtx, NULL);
         pthread_cond_init(&m_taskmanCtx->tasks[i].responseCond, NULL);
@@ -161,8 +162,7 @@ void taskman_destroy()
     free(m_taskmanCtx);
 }
 
-//TODO refactor this. taskman shouldn't know about cx_net_client_t. passing a client handle is just fine.
-task_t* taskman_create(TASK_ORIGIN _origin, TASK_TYPE _type, void* _data, cx_net_client_t* _client)
+task_t* taskman_create(TASK_ORIGIN _origin, TASK_TYPE _type, void* _data, uint32_t _clientId)
 {
     CX_CHECK_NOT_NULL(m_taskmanCtx);
 
@@ -189,11 +189,11 @@ task_t* taskman_create(TASK_ORIGIN _origin, TASK_TYPE _type, void* _data, cx_net
 
             if (TASK_ORIGIN_API == task->origin)
             {
-                task->clientHandle = _client->handle;
+                task->clientId = _clientId;
             }
             else
             {
-                task->clientHandle = INVALID_HANDLE;
+                task->clientId = INVALID_CID;
             }
         }
         CX_CHECK(INVALID_HANDLE != handle, "we ran out of task handles! (ignored task type %d)", _type);
@@ -370,8 +370,8 @@ static void _taskman_free_task(task_t* _task)
     _task->state = TASK_STATE_NONE;
     _task->origin = TASK_ORIGIN_NONE;
     _task->type = TASK_TYPE_NONE;
-    _task->clientHandle = INVALID_HANDLE;
-    _task->remoteId = 0;
+    _task->clientId = INVALID_CID;
+    _task->remoteId = INVALID_HANDLE;
 #if defined(KER)
     _task->responseMemNumber = 0;
 #endif 

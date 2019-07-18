@@ -529,7 +529,7 @@ static bool handle_timer_tick(uint64_t _expirations, uint32_t _type, void* _user
     case MEM_TIMER_JOURNAL:
     {
         // enqueue a journal request. 
-        task_t* task = taskman_create(TASK_ORIGIN_INTERNAL_PRIORITY, TASK_MT_JOURNAL, NULL, NULL);
+        task_t* task = taskman_create(TASK_ORIGIN_INTERNAL_PRIORITY, TASK_MT_JOURNAL, NULL, INVALID_CID);
         if (NULL != task)
         {
             task->state = TASK_STATE_NEW;
@@ -795,7 +795,7 @@ static void on_connected_to_lfs(cx_net_ctx_cl_t* _ctx)
     payload_t payload;
     uint32_t payloadSize = lfs_pack_auth(payload, sizeof(payload), g_ctx.cfg.lfsPassword);
     
-    cx_net_send(_ctx, LFSP_AUTH, payload, payloadSize, INVALID_HANDLE);
+    cx_net_send(_ctx, LFSP_AUTH, payload, payloadSize, INVALID_CID);
 }
 
 static void on_disconnected_from_lfs(cx_net_ctx_cl_t* _ctx)
@@ -831,7 +831,7 @@ static void api_response_create(const task_t* _task)
     uint32_t payloadSize = ker_pack_res_create(g_ctx.buff1, sizeof(g_ctx.buff1),
         _task->remoteId, &_task->err);
 
-    cx_net_send(g_ctx.sv, KERP_RES_CREATE, g_ctx.buff1, payloadSize, _task->clientHandle);
+    cx_net_send(g_ctx.sv, KERP_RES_CREATE, g_ctx.buff1, payloadSize, _task->clientId);
 }
 
 static void api_response_drop(const task_t* _task)
@@ -839,7 +839,7 @@ static void api_response_drop(const task_t* _task)
     uint32_t payloadSize = ker_pack_res_drop(g_ctx.buff1, sizeof(g_ctx.buff1),
         _task->remoteId, &_task->err);
 
-    cx_net_send(g_ctx.sv, KERP_RES_DROP, g_ctx.buff1, payloadSize, _task->clientHandle);
+    cx_net_send(g_ctx.sv, KERP_RES_DROP, g_ctx.buff1, payloadSize, _task->clientId);
 }
 
 static void api_response_describe(const task_t* _task)
@@ -851,12 +851,12 @@ static void api_response_describe(const task_t* _task)
     while (!common_pack_res_describe(g_ctx.buff1, sizeof(g_ctx.buff1), &pos,
         _task->remoteId, data->tables, data->tablesCount, &tablesPacked, &_task->err))
     {
-        cx_net_send(g_ctx.sv, KERP_RES_DESCRIBE, g_ctx.buff1, pos, _task->clientHandle);
+        cx_net_send(g_ctx.sv, KERP_RES_DESCRIBE, g_ctx.buff1, pos, _task->clientId);
     }
 
     if (pos > sizeof(uint16_t))
     {
-        cx_net_send(g_ctx.sv, KERP_RES_DESCRIBE, g_ctx.buff1, pos, _task->clientHandle);
+        cx_net_send(g_ctx.sv, KERP_RES_DESCRIBE, g_ctx.buff1, pos, _task->clientId);
     }
 }
 
@@ -866,7 +866,7 @@ static void api_response_select(const task_t* _task)
     uint32_t payloadSize = ker_pack_res_select(g_ctx.buff1, sizeof(g_ctx.buff1),
         _task->remoteId, &_task->err, &data->record);
 
-    cx_net_send(g_ctx.sv, KERP_RES_SELECT, g_ctx.buff1, payloadSize, _task->clientHandle);
+    cx_net_send(g_ctx.sv, KERP_RES_SELECT, g_ctx.buff1, payloadSize, _task->clientId);
 }
 
 static void api_response_insert(const task_t* _task)
@@ -874,5 +874,5 @@ static void api_response_insert(const task_t* _task)
     uint32_t payloadSize = ker_pack_res_insert(g_ctx.buff1, sizeof(g_ctx.buff1),
         _task->remoteId, &_task->err);
 
-    cx_net_send(g_ctx.sv, KERP_RES_INSERT, g_ctx.buff1, payloadSize, _task->clientHandle);
+    cx_net_send(g_ctx.sv, KERP_RES_INSERT, g_ctx.buff1, payloadSize, _task->clientId);
 }

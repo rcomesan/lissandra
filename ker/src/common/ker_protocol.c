@@ -32,14 +32,14 @@ void ker_handle_ack(cx_net_common_t* _common, void* _userData, const char* _buff
 
         cx_binr_uint16(_buffer, _bufferSize, &pos, &node->number);
 
-        cx_net_validate(cl, INVALID_HANDLE);
+        cx_net_validate(cl, INVALID_CID);
         node->stage = GOSSIP_STAGE_ACKNOWLEDGED;
     }
     else // normal KER <-> MEM connection succeeded
     {
         mem_node_t* node = (mem_node_t*)cl->userData;
 
-        cx_net_validate(cl, INVALID_HANDLE);
+        cx_net_validate(cl, INVALID_CID);
         node->handshaking = false;
         node->available = true;
 
@@ -196,7 +196,7 @@ void ker_handle_res_gossip(const cx_net_common_t* _common, void* _userData, cons
     gossip_import((payload_t*)_buffer, _bufferSize);
 
     node->stage = GOSSIP_STAGE_DONE;
-    cx_net_disconnect(cl, INVALID_HANDLE, "gossip process completed");
+    cx_net_disconnect(cl, INVALID_CID, "gossip process completed");
 }
 
 #endif // KER

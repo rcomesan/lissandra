@@ -514,7 +514,7 @@ bool fs_table_dump_tryenqueue()
     cx_cdict_iter_begin(m_fsCtx->tablesMap);
     while (cx_cdict_iter_next(m_fsCtx->tablesMap, &tableName, (void**)&table))
     {
-        task_t* task = taskman_create(TASK_ORIGIN_INTERNAL_PRIORITY, TASK_WT_DUMP, NULL, NULL);
+        task_t* task = taskman_create(TASK_ORIGIN_INTERNAL_PRIORITY, TASK_WT_DUMP, NULL, INVALID_CID);
         if (NULL != task)
         {
             data_dump_t* data = CX_MEM_STRUCT_ALLOC(data);
@@ -543,7 +543,7 @@ bool fs_table_compact_tryenqueue(const char* _tableName)
         {
             table->compacting = true;
 
-            task = taskman_create(TASK_ORIGIN_INTERNAL_PRIORITY, TASK_WT_COMPACT, NULL, NULL);
+            task = taskman_create(TASK_ORIGIN_INTERNAL_PRIORITY, TASK_WT_COMPACT, NULL, INVALID_CID);
             if (NULL != task)
             {
                 data_compact_t* data = CX_MEM_STRUCT_ALLOC(data);
@@ -604,7 +604,7 @@ void fs_table_free(table_t* _table)
     data->resourceType = RESOURCE_TYPE_TABLE;
     data->resourcePtr = _table;
 
-    task_t* task = taskman_create(TASK_ORIGIN_INTERNAL, TASK_MT_FREE, data, NULL);
+    task_t* task = taskman_create(TASK_ORIGIN_INTERNAL, TASK_MT_FREE, data, INVALID_CID);
     if (NULL != task)
     {
         task->state = TASK_STATE_NEW;

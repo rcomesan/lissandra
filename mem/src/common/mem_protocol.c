@@ -30,7 +30,7 @@ void mem_handle_auth(cx_net_common_t* _common, void* _userData, const char* _buf
 
     if (0 == strncmp(g_ctx.cfg.password, passwd, MAX_PASSWD_LEN))
     {
-        cx_net_validate(_common, client->handle);
+        cx_net_validate(_common, client->cid.id);
 
         bool isGossip = false;
         cx_binr_bool(_buffer, _bufferSize, &pos, &isGossip);
@@ -45,7 +45,7 @@ void mem_handle_auth(cx_net_common_t* _common, void* _userData, const char* _buf
             {
                 client->userData = NODE_KER;
                 payloadSize = ker_pack_ack(payload, sizeof(payload), true, g_ctx.cfg.memNumber);
-                cx_net_send(sv, KERP_ACK, payload, payloadSize, client->handle);
+                cx_net_send(sv, KERP_ACK, payload, payloadSize, client->cid.id);
             }
             else // authentication request coming from another MEM node
             {
@@ -53,19 +53,19 @@ void mem_handle_auth(cx_net_common_t* _common, void* _userData, const char* _buf
 
                 client->userData = NODE_MEM;
                 payloadSize = mem_pack_ack(payload, sizeof(payload), true, g_ctx.cfg.memNumber, 0);
-                cx_net_send(sv, MEMP_ACK, payload, payloadSize, client->handle);
+                cx_net_send(sv, MEMP_ACK, payload, payloadSize, client->cid.id);
             }
         }
         else // normal KER authentication request
         {
             client->userData = NODE_KER;
             payloadSize = ker_pack_ack(payload, sizeof(payload), false, g_ctx.cfg.memNumber);
-            cx_net_send(sv, KERP_ACK, payload, payloadSize, client->handle);
+            cx_net_send(sv, KERP_ACK, payload, payloadSize, client->cid.id);
         }
     }
     else
     {
-        cx_net_disconnect(_common, client->handle, "authentication failed");
+        cx_net_disconnect(_common, client->cid.id, "authentication failed");
     }
 }
 
@@ -84,14 +84,14 @@ void mem_handle_ack(cx_net_common_t* _common, void* _userData, const char* _buff
 
         cx_binr_uint16(_buffer, _bufferSize, &pos, &node->number);
        
-        cx_net_validate(cl, INVALID_HANDLE);
+        cx_net_validate(cl, INVALID_CID);
         node->stage = GOSSIP_STAGE_ACKNOWLEDGED;
     }
     else // MEM <-> LFS connection (ACK coming from LFS node to MEM)
     {
         cx_binr_uint16(_buffer, _bufferSize, &pos, &g_ctx.cfg.valueSize);
 
-        cx_net_validate(cl, INVALID_HANDLE);
+        cx_net_validate(cl, INVALID_CID);
         g_ctx.lfsAvail = true;
         g_ctx.lfsHandshaking = false;
     }
@@ -99,11 +99,13 @@ void mem_handle_ack(cx_net_common_t* _common, void* _userData, const char* _buff
 
 void mem_handle_journal(const cx_net_common_t* _common, void* _userData, const char* _buffer, uint16_t _bufferSize)
 {
+    cx_net_client_t* client = (cx_net_client_t*)_userData;
+
     TASK_ORIGIN origin = NULL == _userData 
         ? TASK_ORIGIN_CLI 
         : TASK_ORIGIN_API;
 
-    task_t* task = taskman_create(origin, TASK_MT_JOURNAL, NULL, (cx_net_client_t*)_common);
+    task_t* task = taskman_create(origin, TASK_MT_JOURNAL, NULL, client->cid.id);
     if (NULL != task)
     {
         task->state = TASK_STATE_NEW;
@@ -165,12 +167,12 @@ void mem_handle_req_gossip(const cx_net_common_t* _common, void* _userData, cons
     payload_t payload;
     uint32_t  payloadSize = 0;
 
-    uint8_t   header = client->userData == NODE_KER
+    uint8_t   header = (client->userData == NODE_KER)
         ? KERP_RES_GOSSIP
         : MEMP_RES_GOSSIP;
 
     gossip_export(&payload, &payloadSize);
-    cx_net_send(svCtx, header, payload, payloadSize, client->handle);
+    cx_net_send(svCtx, header, payload, payloadSize, client->cid.id);
 }
 
 void mem_handle_res_create(const cx_net_common_t* _common, void* _userData, const char* _buffer, uint16_t _bufferSize)
@@ -235,7 +237,7 @@ void mem_handle_res_gossip(const cx_net_common_t* _common, void* _userData, cons
     gossip_import((payload_t*)_buffer, _bufferSize);
 
     node->stage = GOSSIP_STAGE_DONE;   
-    cx_net_disconnect(cl, INVALID_HANDLE, "gossip process completed");
+    cx_net_disconnect(cl, INVALID_CID, "gossip process completed");
 }
 
 #endif // MEM

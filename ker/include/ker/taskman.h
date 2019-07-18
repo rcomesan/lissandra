@@ -62,8 +62,8 @@ typedef struct task_t
     TASK_ORIGIN         origin;                 // origin of this task. it can be either command line interface or sockets api.
     TASK_TYPE           type;                   // the requested operation.
     cx_err_t            err;                    // if the task failed, err contains the error number and the error description for logging purposes.
-    uint16_t            clientHandle;           // the handle to the client which requested this task in our server context. INVALID_HANDLE means a CLI-issued task.
-    uint16_t            remoteId;               // the remote identifier for this remote task/request. (only if origin is TASK_ORIGIN_API)
+    uint32_t            clientId;               // the handle to the client which requested this task in our server context. INVALID_CID means a CLI-issued task.
+    uint16_t            remoteId;               // the remote identifier (handle of the remote task_t which requested this local task_t). only if origin is TASK_ORIGIN_API
     void*               data;                   // the data (arguments and results) of the requested operation. see data_*_t structures in ker/defines.h.
     void*               table;                  // temp variable for specific tasks which operate on a specific table.
     // ker/mem data -----------------------------------------------------------------------------------------------------------------------------------------------
@@ -109,7 +109,7 @@ void        taskman_stop();
 
 void        taskman_destroy();
 
-task_t*     taskman_create(TASK_ORIGIN _origin, TASK_TYPE _type, void* _data, cx_net_client_t* _client);
+task_t*     taskman_create(TASK_ORIGIN _origin, TASK_TYPE _type, void* _data, uint32_t _clientId);
 
 void        taskman_update();
 

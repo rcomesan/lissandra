@@ -178,7 +178,7 @@ void report_metrics(const mempool_metrics_t* _mtr, FILE* _stream)
     for (uint32_t i = 1; i < MAX_MEM_NODES; i++)
     {
         if (-1 != _mtr->memLoad[i])
-            printf("| %-3" PRIu32 " | %-11.3f |\n", i, _mtr->memLoad[i] * 100.0f);
+            printf("| %-3" PRIu32 " | %-11.2f |\n", i, _mtr->memLoad[i] * 100.0f);
     }
     fprintf(_stream, "+-----+-------------+\n");
 

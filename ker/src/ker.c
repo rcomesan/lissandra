@@ -412,7 +412,7 @@ static bool handle_timer_tick(uint64_t _expirations, uint32_t _type, void* _user
     {
         cx_err_t err;
 
-        task_t* task = taskman_create(TASK_ORIGIN_INTERNAL_PRIORITY, TASK_WT_DESCRIBE, NULL, NULL);
+        task_t* task = taskman_create(TASK_ORIGIN_INTERNAL_PRIORITY, TASK_WT_DESCRIBE, NULL, INVALID_CID);
         if (NULL != task)
         {
             data_describe_t* data = CX_MEM_STRUCT_ALLOC(data);

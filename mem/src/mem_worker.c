@@ -61,7 +61,7 @@ void worker_handle_drop(task_t* _req)
         data->resourceType = RESOURCE_TYPE_TABLE;
         data->resourcePtr = table;
 
-        task_t* task = taskman_create(TASK_ORIGIN_INTERNAL, TASK_MT_FREE, data, NULL);
+        task_t* task = taskman_create(TASK_ORIGIN_INTERNAL, TASK_MT_FREE, data, INVALID_CID);
         if (NULL != task)
         {
             task->state = TASK_STATE_NEW;
@@ -184,7 +184,7 @@ static bool _worker_request_lfs(uint8_t _header, const char* _payload, uint32_t 
 
     do
     {
-        result = cx_net_send(g_ctx.lfs, _header, _payload, _payloadSize, INVALID_HANDLE);
+        result = cx_net_send(g_ctx.lfs, _header, _payload, _payloadSize, INVALID_CID);
 
         if (CX_NET_SEND_DISCONNECTED == result)
         {
@@ -192,7 +192,7 @@ static bool _worker_request_lfs(uint8_t _header, const char* _payload, uint32_t 
         }
         else if (CX_NET_SEND_BUFFER_FULL == result)
         {
-            cx_net_wait_outboundbuff(g_ctx.lfs, INVALID_HANDLE, -1);
+            cx_net_wait_outboundbuff(g_ctx.lfs, INVALID_CID, -1);
         }
 
     } while (result != CX_NET_SEND_OK);
