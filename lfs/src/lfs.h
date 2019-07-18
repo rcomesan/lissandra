@@ -95,6 +95,7 @@ typedef struct fs_ctx_t
 {
     fs_meta_t           meta;                   // filesystem metadata.
     char                rootDir[PATH_MAX];      // initial root directory of our filesystem.
+    FILE*               blocksFile;             // pointer to the opened bitmap file for writing blocks allocations/deallocations.
     char*               blocksMap;              // buffer for storing our bit array containing blocks status (unset bit mean the block is free to use).
                                                 // must be large enough to hold at least meta.blocksCount amount of bits.
     cx_cdict_t*         tablesMap;              // container for indexing table_t entries by table name.

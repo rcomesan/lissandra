@@ -114,6 +114,11 @@ void fs_destroy()
     free(m_fsCtx->blocksMap);
     m_fsCtx->blocksMap = NULL;
     
+    // close bitmap file
+    fflush(m_fsCtx->blocksFile);
+    fclose(m_fsCtx->blocksFile);
+    m_fsCtx->blocksFile = NULL;
+
     // destroy tablesMap
     cx_cdict_destroy(m_fsCtx->tablesMap, (cx_destroyer_cb)fs_table_destroy);
 
@@ -627,69 +632,60 @@ uint32_t fs_block_alloc(uint32_t _blocksCount, uint32_t* _outBlocksArr)
     pthread_mutex_lock(&m_fsCtx->mtxBlocks);
     uint32_t allocatedBlocks = 0;
 
-    cx_path_t bitmapFilePath;
-    cx_file_path(&bitmapFilePath, "%s/%s/%s", m_fsCtx->rootDir, LFS_DIR_METADATA, LFS_FILE_BITMAP);
+    // we'll cast the underlying char array as an uint32 array (4 bytes per element)
+    // so that we can iterate it and figure out which blocks are available faster 
+    // than checking one bit at a time. 
+    // we'll be basically checking 4 bytes (32 bits) at once and comparing the 
+    // value against UINT32_MAX (integer in which all the bits are set). 
+    // a matching value means that 4-bytes segment of our bit array
+    // is full (meaning there're no fs blocks available in there for us to use, 
+    // in that case, we'll just continue iterating and checking the next segment
+    // until we're able to find a free one). 
+    // if the value does not match, that means there's at least 1 bit that is not set
+    // (meaning there's a fs block available for us to allocate).
 
-    FILE* bitmap = fopen(bitmapFilePath, "r+");
-    if (NULL != bitmap)
+    uint32_t* segments = (uint32_t*)m_fsCtx->blocksMap;
+    uint32_t maxSegments = (uint32_t)ceilf((float)m_fsCtx->meta.blocksCount / SEGMENT_BITS);
+    uint32_t lastSegmentMaxBit = m_fsCtx->meta.blocksCount % SEGMENT_BITS;
+    if (0 == lastSegmentMaxBit) lastSegmentMaxBit = SEGMENT_BITS;
+
+    uint32_t i = 0, j = 0, maxBit = 0;
+
+    while (allocatedBlocks < _blocksCount && i < maxSegments)
     {
-        // we'll cast the underlying char array as an uint32 array (4 bytes per element)
-        // so that we can iterate it and figure out which blocks are available faster 
-        // than checking one bit at a time. 
-        // we'll be basically checking 4 bytes (32 bits) at once and comparing the 
-        // value against UINT32_MAX (integer in which all the bits are set). 
-        // a matching value means that 4-bytes segment of our bit array
-        // is full (meaning there're no fs blocks available in there for us to use, 
-        // in that case, we'll just continue iterating and checking the next segment
-        // until we're able to find a free one). 
-        // if the value does not match, that means there's at least 1 bit that is not set
-        // (meaning there's a fs block available for us to allocate).
-
-        uint32_t* segments = (uint32_t*)m_fsCtx->blocksMap;
-        uint32_t maxSegments = (uint32_t)ceilf((float)m_fsCtx->meta.blocksCount / SEGMENT_BITS);
-        uint32_t lastSegmentMaxBit = m_fsCtx->meta.blocksCount % SEGMENT_BITS;
-        if (0 == lastSegmentMaxBit) lastSegmentMaxBit = SEGMENT_BITS;
-
-        uint32_t i = 0, j = 0, maxBit = 0;
-
-        while (allocatedBlocks < _blocksCount && i < maxSegments)
+        for (; i < maxSegments; i++)
         {
-            for (; i < maxSegments; i++)
+            if (UINT32_MAX != segments[i])
             {
-                if (UINT32_MAX != segments[i])
+                maxBit = (i == maxSegments - 1)
+                    ? lastSegmentMaxBit
+                    : SEGMENT_BITS;
+
+                // there's *at least* 1 bit available, let's figure out which one
+                for (; j < maxBit; j++)
                 {
-                    maxBit = (i == maxSegments - 1)
-                        ? lastSegmentMaxBit
-                        : SEGMENT_BITS;
-
-                    // there's *at least* 1 bit available, let's figure out which one
-                    for (; j < maxBit; j++)
+                    if (!BIT_IS_SET(segments[i], j))
                     {
-                        if (!BIT_IS_SET(segments[i], j))
-                        {
-                            // we found a block available!
-                            _outBlocksArr[allocatedBlocks++] = i * SEGMENT_BITS + j;
+                        // we found a block available!
+                        _outBlocksArr[allocatedBlocks++] = i * SEGMENT_BITS + j;
 
-                            segments[i] |= ((uint32_t)1 << j);
-                            fseek(bitmap, i * sizeof(uint32_t), SEEK_SET);
-                            fwrite(&segments[i], sizeof(uint32_t), 1, bitmap);
+                        segments[i] |= ((uint32_t)1 << j);
+                        fseek(m_fsCtx->blocksFile, i * sizeof(uint32_t), SEEK_SET);
+                        fwrite(&segments[i], sizeof(uint32_t), 1, m_fsCtx->blocksFile);
 
-                            // initiate it empty
-                            fs_block_write(_outBlocksArr[allocatedBlocks - 1], NULL, 0, NULL);
+                        // initiate it empty
+                        fs_block_write(_outBlocksArr[allocatedBlocks - 1], NULL, 0, NULL);
 
-                            goto block_found;
-                        }
+                        goto block_found;
                     }
                 }
-                j = 0;
             }
-
-        block_found:;
+            j = 0;
         }
-        fflush(bitmap);
-        fclose(bitmap);
+
+    block_found:;
     }
-    CX_CHECK(NULL != bitmap, "bitmap file '%s' could not be opened for writing!", bitmapFilePath);
+    fflush(m_fsCtx->blocksFile);
 
     pthread_mutex_unlock(&m_fsCtx->mtxBlocks);
     return allocatedBlocks;
@@ -703,33 +699,24 @@ void fs_block_free(uint32_t* _blocksArr, uint32_t _blocksCount)
 
     cx_path_t blockFilePath;
 
-    cx_path_t bitmapFilePath;
-    cx_file_path(&bitmapFilePath, "%s/%s/%s", m_fsCtx->rootDir, LFS_DIR_METADATA, LFS_FILE_BITMAP);
+    uint32_t* segments = (uint32_t*)m_fsCtx->blocksMap;
+    uint32_t segmentIndex = 0;
+    uint32_t bit = 0;
 
-    FILE* bitmap = fopen(bitmapFilePath, "r+");
-    if (NULL != bitmap)
+    for (uint32_t i = 0; i < _blocksCount; i++)
     {
-        uint32_t* segments = (uint32_t*)m_fsCtx->blocksMap;
-        uint32_t segmentIndex = 0;
-        uint32_t bit = 0;
+        segmentIndex = (uint32_t)floorf((float)_blocksArr[i] / SEGMENT_BITS);
+        bit = _blocksArr[i] % SEGMENT_BITS;
 
-        for (uint32_t i = 0; i < _blocksCount; i++)
-        {
-            segmentIndex = (uint32_t)floorf((float)_blocksArr[i] / SEGMENT_BITS);
-            bit = _blocksArr[i] % SEGMENT_BITS;
+        segments[segmentIndex] &= ~((uint32_t)1 << bit);
+        fseek(m_fsCtx->blocksFile, segmentIndex * sizeof(uint32_t), SEEK_SET);
+        fwrite(&segments[segmentIndex], sizeof(uint32_t), 1, m_fsCtx->blocksFile);
 
-            segments[segmentIndex] &= ~((uint32_t)1 << bit);
-            fseek(bitmap, segmentIndex * sizeof(uint32_t), SEEK_SET);
-            fwrite(&segments[segmentIndex], sizeof(uint32_t), 1, bitmap);
-
-            // delete the file in the ufs
-            _fs_get_block_path(&blockFilePath, _blocksArr[i]);
-            cx_file_remove(&blockFilePath, NULL);
-        }
-        fflush(bitmap);
-        fclose(bitmap);
+        // delete the file in the ufs
+        _fs_get_block_path(&blockFilePath, _blocksArr[i]);
+        cx_file_remove(&blockFilePath, NULL);
     }
-    CX_CHECK(NULL != bitmap, "bitmap file '%s' could not be opened for writing!", bitmapFilePath);
+    fflush(m_fsCtx->blocksFile);
 
     pthread_mutex_unlock(&m_fsCtx->mtxBlocks);
 }
@@ -1053,7 +1040,16 @@ static bool _fs_load_blocks(cx_err_t* _err)
     int32_t bytesRead = cx_file_read(&bitmapPath, m_fsCtx->blocksMap, size, _err);
     if (size == bytesRead)
     {
-        return true;
+        // the bitmap file is OK
+        m_fsCtx->blocksFile = fopen(bitmapPath, "r+");
+        if (NULL == m_fsCtx->blocksFile)
+        {
+            CX_ERR_SET(_err, ERR_INIT_FS_BITMAP, "bitmap file '%s' could not be opened for writing!", bitmapPath);
+        }
+        else
+        {
+            return true;
+        }
     }
     else if (-1 == bytesRead)
     {
@@ -1066,8 +1062,18 @@ static bool _fs_load_blocks(cx_err_t* _err)
             "the file might be corrupt at this point.", bitmapPath);
     }
 
-    free(m_fsCtx->blocksMap);
-    m_fsCtx->blocksMap = NULL;
+    if (NULL != m_fsCtx->blocksMap) 
+    {
+        free(m_fsCtx->blocksMap);
+        m_fsCtx->blocksMap = NULL;
+    }
+
+    if (NULL != m_fsCtx->blocksFile)
+    {
+        fclose(m_fsCtx->blocksFile);
+        m_fsCtx->blocksFile = NULL;
+    }
+    
     return false;
 }
 
