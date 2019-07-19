@@ -615,30 +615,6 @@ static bool task_run_mt(task_t* _task)
 
     switch (_task->type)
     {
-    case TASK_MT_FREE:
-    {
-        data_free_t* data = _task->data;
-        
-        if (RESOURCE_TYPE_TABLE == data->resourceType)
-        {
-            table = (segment_t*)data->resourcePtr;
-
-            if (0 == cx_reslock_counter(&table->reslock))
-            {
-                // at this point the table no longer exist (it's not part of the tablesMap dictionary)
-                // and nobody else is using it... we can destroy & deallocate this segment now.
-                mm_segment_destroy(table);
-                success = true;
-            }
-        }
-        else
-        {
-            CX_WARN(CX_ALW, "undefined TASK_MT_FREE for resource type #%d!", data->resourceType);
-            success = true;
-        }
-        break;
-    }
-
     default:
         CX_WARN(CX_ALW, "undefined <main-thread> behaviour for task type #%d.", _task->type);
         success = true;

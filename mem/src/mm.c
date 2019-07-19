@@ -8,6 +8,7 @@
 
 #include <pthread.h>
 #include <errno.h>
+#include <inttypes.h>
 
 static mm_ctx_t*        m_mmCtx = NULL;
 
@@ -210,9 +211,34 @@ bool mm_segment_init(segment_t** _outSegment, const char* _tableName, cx_err_t* 
 bool mm_segment_delete(const char* _tableName, segment_t** _outTable, cx_err_t* _err)
 {
     segment_t* table = NULL;
-    
+    page_t* page = NULL;
+
     bool success = cx_cdict_tryremove(m_mmCtx->tablesMap, _tableName, (void**)_outTable);
-    if (!success)
+    if (success)
+    {
+        // block the resource. it shouldn't be accessible at this point since
+        // the segment is already removed from the table... but anyway
+        cx_reslock_block(&table->reslock);
+        cx_reslock_wait_unused(&table->reslock);
+
+        // insert the "modified" pages into the LRU
+        cx_cdict_iter_first(table->pages);
+        while (cx_cdict_iter_next(table->pages, NULL, (void**)&page))
+        {
+            pthread_rwlock_wrlock(&page->rwlock);
+            if (page->parent == table && page->modified)
+            {
+                // if the page contains modifications it means it's not in the LRU
+                // we need to add it now so that it gets reused in the near future
+                page->modified = false;
+                _mm_lru_push_front(page);
+            }
+            pthread_rwlock_unlock(&page->rwlock);
+        }
+        cx_cdict_iter_end(table->pages);
+        mm_segment_destroy(table);
+    }
+    else
     {
         CX_ERR_SET(_err, 1, "Table '%s' does not exist.", _tableName);
     }
@@ -222,8 +248,6 @@ bool mm_segment_delete(const char* _tableName, segment_t** _outTable, cx_err_t* 
 
 void mm_segment_destroy(segment_t* _table)
 {
-    // this function is not thread-safe. it must only be called from mm_journal_run()
-
     page_t* page = NULL;
 
     CX_CHECK_NOT_NULL(_table);
@@ -293,11 +317,15 @@ bool mm_page_alloc(segment_t* _parent, bool _isModification, page_t** _outPage, 
     
     if (m_mmCtx->pagesCount == m_mmCtx->frameMax)
     {
+        CX_INFO("there're no empty pages... running the LRU algorithm...");
+
         // get the LRU frame and re-use it
         page = _mm_lru_pop_back();
-
+        
         if (NULL != page)
         {
+            CX_INFO("page #%" PRIu16 " evicted.", page->frameNumber);
+
             pthread_rwlock_wrlock(&page->rwlock);
             page->modified = _isModification;
             page->parent = _parent;
@@ -649,6 +677,8 @@ static void _mm_frame_write(uint16_t _frameNumber, table_record_t* _record)
     const uint32_t keySz = sizeof(_record->key);
     const uint32_t timestampSz = sizeof(_record->timestamp);
     const uint32_t base = _frameNumber * m_mmCtx->frameSize;
+    
+    CX_INFO("writing key %" PRIu16 " into frame #%" PRIu16 ".", _record->key, _frameNumber);
 
     memcpy(&m_mmCtx->mainMem[base + 0], &_record->timestamp, timestampSz);
     memcpy(&m_mmCtx->mainMem[base + timestampSz], &_record->key, keySz);
