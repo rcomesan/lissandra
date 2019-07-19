@@ -55,6 +55,7 @@ void worker_handle_drop(task_t* _req)
         // block the resource. it shouldn't be accessible at this point since
         // the segment is already removed from the table... but anyway
         cx_reslock_block(&table->reslock);
+        cx_reslock_wait_unused(&table->reslock);
 
         // insert a MT_TASK to free this table in a thread-safe way.
         data_free_t* data = CX_MEM_STRUCT_ALLOC(data);

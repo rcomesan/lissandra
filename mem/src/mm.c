@@ -25,9 +25,9 @@ static void             _mm_lru_remove(page_t* _page);
 
 static void             _mm_lru_reset();
 
-static void             _mm_frame_read(uint16_t _frameHandle, table_record_t* _outRecord);
+static void             _mm_frame_read(uint16_t _frameNumber, table_record_t* _outRecord);
 
-static void             _mm_frame_write(uint16_t _frameHandle, table_record_t* _record);
+static void             _mm_frame_write(uint16_t _frameNumber, table_record_t* _record);
 
 /****************************************************************************************
  ***  PUBLIC FUNCTIONS
@@ -42,20 +42,40 @@ bool mm_init(uint32_t _memSz, uint16_t _valueSz, cx_err_t* _err)
 
     table_record_t r;
     m_mmCtx->valueSize = _valueSz;
-    m_mmCtx->pageSize = sizeof(r.timestamp) + sizeof(r.key) + _valueSz;
-    m_mmCtx->pageMax = _memSz / m_mmCtx->pageSize;
+    m_mmCtx->frameSize = sizeof(r.timestamp) + sizeof(r.key) + _valueSz;
+    m_mmCtx->frameMax = _memSz / m_mmCtx->frameSize;
 
-    if (0 >= m_mmCtx->pageMax)
+    if (0 >= m_mmCtx->frameMax)
     {
-        CX_ERR_SET(_err, ERR_INIT_MM_PAGES, "not enough space to allocate a single page! (mainMemSize=%d pageSize=%d)", _memSz, m_mmCtx->pageSize);
+        CX_ERR_SET(_err, ERR_INIT_MM_FRAMES, "not enough space to allocate a single frame! (mainMemSize=%d frameSize=%d)", _memSz, m_mmCtx->frameSize);
         return false;
     }
 
-    m_mmCtx->mainMem = malloc(m_mmCtx->pageMax * m_mmCtx->pageSize);
+    m_mmCtx->mainMem = malloc(m_mmCtx->frameMax * m_mmCtx->frameSize);
     if (NULL == m_mmCtx->mainMem)
     {
-        CX_ERR_SET(_err, ERR_INIT_MM_MAIN, "failed to allocate main memory block of %d bytes!", m_mmCtx->pageMax * m_mmCtx->pageSize);
+        CX_ERR_SET(_err, ERR_INIT_MM_MAIN, "failed to allocate main memory block of %d bytes!", m_mmCtx->frameMax * m_mmCtx->frameSize);
         return false;
+    }
+
+    m_mmCtx->pagesCount = 0;
+    m_mmCtx->pages = CX_MEM_ARR_ALLOC(m_mmCtx->pages, m_mmCtx->frameMax);
+    if (NULL == m_mmCtx->pages)
+    {
+        CX_ERR_SET(_err, ERR_GENERIC, "page references array allocation failed!");
+        return false;
+    }
+    
+    for (uint32_t i = 0; i < m_mmCtx->frameMax; i++)
+    {
+        page_t* page = &m_mmCtx->pages[i];
+        page->node = cx_list_node_alloc(page);
+
+        if (NULL == page->node || (0 != pthread_rwlock_init(&page->rwlock, NULL)))
+        {
+            CX_ERR_SET(_err, ERR_GENERIC, "page references initialization failed!");
+            return false;
+        }
     }
 
     m_mmCtx->tablesMap = cx_cdict_init();
@@ -78,26 +98,19 @@ bool mm_init(uint32_t _memSz, uint16_t _valueSz, cx_err_t* _err)
         return false;
     }
 
-    m_mmCtx->framesHalloc = cx_halloc_init(m_mmCtx->pageMax);
-    if (NULL == m_mmCtx->framesHalloc)
-    {
-        CX_ERR_SET(_err, ERR_INIT_HALLOC, "pagesHalloc initialization failed!");
-        return false;
-    }
-
     pthread_mutexattr_t attr;
     if (!(true
         && (0 == pthread_mutexattr_init(&attr))
         && (0 == pthread_mutexattr_settype(&attr, PTHREAD_MUTEX_RECURSIVE))
-        && (0 == pthread_mutex_init(&m_mmCtx->framesMtx, &attr))
+        && (0 == pthread_mutex_init(&m_mmCtx->pagesMtx, &attr))
         && (0 == pthread_mutexattr_destroy(&attr))))
     {
         CX_ERR_SET(_err, ERR_INIT_MTX, "pagesMtx initialization failed!");
         return false;
     }
 
-    m_mmCtx->framesLru = cx_list_init();
-    if (NULL == m_mmCtx->framesLru)
+    m_mmCtx->pagesLru = cx_list_init();
+    if (NULL == m_mmCtx->pagesLru)
     {
         CX_ERR_SET(_err, ERR_INIT_LIST, "pagesLru list initialization failed!");
         return false;
@@ -122,26 +135,38 @@ void mm_destroy()
         m_mmCtx->tablesMap = NULL;
     }
 
+    if (NULL != m_mmCtx->pages)
+    {
+        for (uint32_t i = 0; i < m_mmCtx->frameMax; i++)
+        {
+            page_t* page = &m_mmCtx->pages[i];
+            pthread_rwlock_destroy(&page->rwlock);
+
+            if (NULL != page->node)
+            {
+                free(page->node);
+                page->node = NULL;
+            }
+        }
+
+        free(m_mmCtx->pages);
+        m_mmCtx->pages = NULL;
+    }
+
     if (NULL != m_mmCtx->blockedQueue)
     {
         queue_destroy(m_mmCtx->blockedQueue);
         m_mmCtx->blockedQueue = NULL;
     }
-
-    if (NULL != m_mmCtx->framesHalloc)
-    {
-        cx_halloc_destroy(m_mmCtx->framesHalloc);
-        m_mmCtx->framesHalloc = NULL;
-    }
     
-    if (NULL != m_mmCtx->framesLru)
+    if (NULL != m_mmCtx->pagesLru)
     {
-        cx_list_destroy(m_mmCtx->framesLru, NULL);
-        m_mmCtx->framesLru = NULL;
+        cx_list_destroy(m_mmCtx->pagesLru, NULL);
+        m_mmCtx->pagesLru = NULL;
     }
 
     cx_reslock_destroy(&m_mmCtx->reslock);
-    pthread_mutex_destroy(&m_mmCtx->framesMtx);
+    pthread_mutex_destroy(&m_mmCtx->pagesMtx);
 
     free(m_mmCtx);
 }
@@ -197,47 +222,20 @@ bool mm_segment_delete(const char* _tableName, segment_t** _outTable, cx_err_t* 
 
 void mm_segment_destroy(segment_t* _table)
 {
-    // this function is not thread-safe. it must only be called from the main thread!
+    // this function is not thread-safe. it must only be called from mm_journal_run()
+
     page_t* page = NULL;
-    
-    if (NULL != _table)
+
+    CX_CHECK_NOT_NULL(_table);
+    if (NULL == _table) return;
+
+    if (NULL != _table->pages)
     {
-        cx_reslock_destroy(&_table->reslock);
-
-        if (NULL != _table->pages)
-        {
-            pthread_mutex_lock(&m_mmCtx->framesMtx);
-
-            cx_cdict_iter_begin(_table->pages);
-            while (cx_cdict_iter_next(_table->pages, NULL, (void**)&page))
-            {
-                pthread_rwlock_wrlock(&page->rwlock);
-                if (page->parent == _table)
-                {
-                    if (!page->modified)
-                    {
-                        // if the page doesn't contain modifications, it means 
-                        // it's replaceable: we need to remove it from the lru cache
-                        // since we're gonna free it now and nobody else should take it.
-                        _mm_lru_remove(page);
-                    }
-
-                    free(page->node);
-                }
-                pthread_rwlock_unlock(&page->rwlock);
-
-                cx_handle_free(m_mmCtx->framesHalloc, page->frameHandle);
-                pthread_rwlock_destroy(&page->rwlock);
-                free(page);
-            }
-            cx_cdict_iter_end(_table->pages);
-            cx_cdict_destroy(_table->pages, NULL);
-            
-            pthread_mutex_unlock(&m_mmCtx->framesMtx);
-        }
-
-        free(_table);
+        cx_cdict_destroy(_table->pages, NULL);
     }
+    
+    cx_reslock_destroy(&_table->reslock);
+    free(_table);
 }
 
 bool mm_segment_exists(const char* _tableName, segment_t** _outTable)
@@ -289,65 +287,51 @@ void mm_segment_avail_guard_end(segment_t* _table)
 bool mm_page_alloc(segment_t* _parent, bool _isModification, page_t** _outPage, cx_err_t* _err)
 {
     bool success = false;
+    page_t* page = NULL;
 
-    pthread_mutex_lock(&m_mmCtx->framesMtx);
+    pthread_mutex_lock(&m_mmCtx->pagesMtx);
     
-    if (cx_handle_count(m_mmCtx->framesHalloc) == cx_handle_capacity(m_mmCtx->framesHalloc))
+    if (m_mmCtx->pagesCount == m_mmCtx->frameMax)
     {
         // get the LRU frame and re-use it
-        (*_outPage) = _mm_lru_pop_back();
-        
-        if (NULL != (*_outPage))
+        page = _mm_lru_pop_back();
+
+        if (NULL != page)
         {
-            pthread_rwlock_wrlock(&(*_outPage)->rwlock);
-            (*_outPage)->modified = _isModification;
-            (*_outPage)->parent = _parent;
-            pthread_rwlock_unlock(&(*_outPage)->rwlock);
+            pthread_rwlock_wrlock(&page->rwlock);
+            page->modified = _isModification;
+            page->parent = _parent;
+            pthread_rwlock_unlock(&page->rwlock);
 
             success = true;
         }
         else
         {
+            CX_INFO("the memory is FULL.");
             CX_ERR_SET(_err, ERR_MEMORY_FULL, "the memory is full.");
         }
     }
     else
     {
-        // grab a handle and allocate a new page for it
-        uint16_t handle = cx_handle_alloc(m_mmCtx->framesHalloc);
-        if (INVALID_HANDLE != handle)
-        {
-            (*_outPage) = CX_MEM_STRUCT_ALLOC(*_outPage);
-            (*_outPage)->frameHandle = handle;
-            (*_outPage)->modified = _isModification;
-            (*_outPage)->parent = _parent;
-            (*_outPage)->node = cx_list_node_alloc((*_outPage));
-            success = (NULL != (*_outPage)->node) && (0 == pthread_rwlock_init(&(*_outPage)->rwlock, NULL));
-            
-            if (!success)
-            {
-                // abort allocation
-                cx_handle_free(m_mmCtx->framesHalloc, handle);
-                free((*_outPage)->node);
-                free(*_outPage);
-                (*_outPage) = NULL;
-                CX_ERR_SET(_err, ERR_GENERIC, "pthread_rwlock_init failed.");
-            }
-        }
-        else
-        {
-            CX_ERR_SET(_err, ERR_GENERIC, "page handle allocation failed!");
-        }
+        // grab a new frame
+        page = &m_mmCtx->pages[m_mmCtx->pagesCount];
+        page->frameNumber = m_mmCtx->pagesCount;
+        page->modified = _isModification;
+        page->parent = _parent;
+        
+        m_mmCtx->pagesCount++;
+        success = true;
     }
 
     if (success && !_isModification)
     {
         // if this is a replaceable page push it to the front of the cache
-        _mm_lru_push_front((*_outPage));
+        _mm_lru_push_front(page);
     }
 
-    pthread_mutex_unlock(&m_mmCtx->framesMtx);
+    pthread_mutex_unlock(&m_mmCtx->pagesMtx);
 
+    (*_outPage) = page;
     return success;
 }
 
@@ -358,6 +342,7 @@ bool mm_page_read(segment_t* _table, uint16_t _key, table_record_t* _outRecord, 
     char key[6];
     cx_str_from_uint16(_key, key, sizeof(key));
 
+    pthread_mutex_lock(&_table->pages->mtx);
     if (cx_cdict_get(_table->pages, key, (void**)&page))
     {
         // this lock guarantees this page's content won't be modified while
@@ -371,11 +356,12 @@ bool mm_page_read(segment_t* _table, uint16_t _key, table_record_t* _outRecord, 
                 _mm_lru_touch(page); // cache hit
             }
 
-            _mm_frame_read(page->frameHandle, _outRecord);
+            _mm_frame_read(page->frameNumber, _outRecord);
             success = true;
         }
         pthread_rwlock_unlock(&page->rwlock);
     }
+    pthread_mutex_unlock(&_table->pages->mtx);
 
     if (!success)
         CX_ERR_SET(_err, ERR_GENERIC, "Key %d does not exist in table '%s'.", _key, _table->tableName);
@@ -406,12 +392,12 @@ bool mm_page_write(segment_t* _table, table_record_t* _record, bool _isModificat
         if (_table == page->parent)
         {
             table_record_t curRecord;
-            _mm_frame_read(page->frameHandle, &curRecord);
+            _mm_frame_read(page->frameNumber, &curRecord);
 
             if (_record->timestamp >= curRecord.timestamp)
             {
                 // update the page with the given (most recent) value
-                _mm_frame_write(page->frameHandle, _record);
+                _mm_frame_write(page->frameNumber, _record);
                 free(curRecord.value);
 
                 if (!page->modified && _isModification)
@@ -443,7 +429,7 @@ bool mm_page_write(segment_t* _table, table_record_t* _record, bool _isModificat
         if (mm_page_alloc(_table, _isModification, &page, _err))
         {
             pthread_rwlock_wrlock(&page->rwlock);
-            _mm_frame_write(page->frameHandle, _record);
+            _mm_frame_write(page->frameNumber, _record);
             pthread_rwlock_unlock(&page->rwlock);
 
             cx_cdict_set(_table->pages, key, page);
@@ -534,7 +520,7 @@ void mm_journal_run(task_t* _task)
             {
                 if (page->parent == table && page->modified)
                 {
-                    _mm_frame_read(page->frameHandle, &r);
+                    _mm_frame_read(page->frameNumber, &r);
 
                     payloadSize = lfs_pack_req_insert(payload, sizeof(payload),
                         _task->handle, tableName, r.key, r.value, r.timestamp);
@@ -560,9 +546,11 @@ void mm_journal_run(task_t* _task)
         }
         cx_cdict_iter_end(m_mmCtx->tablesMap);
 
-        // destroy segments & pages
+        // destroy segments
         cx_cdict_clear(m_mmCtx->tablesMap, (cx_destroyer_cb)mm_segment_destroy);
-        CX_CHECK(cx_handle_count(m_mmCtx->framesHalloc) == 0, "we're leaking frame handles!");
+
+        // destroy pages
+        m_mmCtx->pagesCount = 0;
 
         // reset lru
         _mm_lru_reset();
@@ -608,57 +596,59 @@ void mm_unblock(double* _blockedTime)
 
 static void _mm_lru_push_front(page_t* _page)
 {
-    pthread_mutex_lock(&m_mmCtx->framesMtx);
-    cx_list_push_front(m_mmCtx->framesLru, _page->node);
-    pthread_mutex_unlock(&m_mmCtx->framesMtx);
+    CX_CHECK_NOT_NULL(_page);
+    pthread_mutex_lock(&m_mmCtx->pagesMtx);
+    cx_list_push_front(m_mmCtx->pagesLru, _page->node);
+    pthread_mutex_unlock(&m_mmCtx->pagesMtx);
 }
 
 static page_t* _mm_lru_pop_back()
 {
-    pthread_mutex_lock(&m_mmCtx->framesMtx);
-    page_t* lruPage = cx_list_pop_back(m_mmCtx->framesLru)->data;
-    pthread_mutex_unlock(&m_mmCtx->framesMtx);
+    pthread_mutex_lock(&m_mmCtx->pagesMtx);
+    cx_list_node_t* node = cx_list_pop_back(m_mmCtx->pagesLru);
+    page_t* lruPage = node != NULL ? node->data : NULL;
+    pthread_mutex_unlock(&m_mmCtx->pagesMtx);
     return lruPage;
 }
 
 static void _mm_lru_touch(page_t* _page)
 {
-    pthread_mutex_lock(&m_mmCtx->framesMtx);
-    cx_list_remove(m_mmCtx->framesLru, _page->node);
-    cx_list_push_front(m_mmCtx->framesLru, _page->node);
-    pthread_mutex_unlock(&m_mmCtx->framesMtx);
+    pthread_mutex_lock(&m_mmCtx->pagesMtx);
+    cx_list_remove(m_mmCtx->pagesLru, _page->node);
+    cx_list_push_front(m_mmCtx->pagesLru, _page->node);
+    pthread_mutex_unlock(&m_mmCtx->pagesMtx);
 }
 
 static void _mm_lru_remove(page_t* _page)
 {
-    pthread_mutex_lock(&m_mmCtx->framesMtx);
-    cx_list_remove(m_mmCtx->framesLru, _page->node);
-    pthread_mutex_unlock(&m_mmCtx->framesMtx);
+    pthread_mutex_lock(&m_mmCtx->pagesMtx);
+    cx_list_remove(m_mmCtx->pagesLru, _page->node);
+    pthread_mutex_unlock(&m_mmCtx->pagesMtx);
 }
 
 static void _mm_lru_reset()
 {
-    pthread_mutex_lock(&m_mmCtx->framesMtx);
-    cx_list_clear(m_mmCtx->framesLru, NULL);
-    pthread_mutex_unlock(&m_mmCtx->framesMtx);
+    pthread_mutex_lock(&m_mmCtx->pagesMtx);
+    cx_list_clear(m_mmCtx->pagesLru, NULL);
+    pthread_mutex_unlock(&m_mmCtx->pagesMtx);
 }
 
-static void _mm_frame_read(uint16_t _frameHandle, table_record_t* _outRecord)
+static void _mm_frame_read(uint16_t _frameNumber, table_record_t* _outRecord)
 {
     const uint32_t keySz = sizeof(_outRecord->key);
     const uint32_t timestampSz = sizeof(_outRecord->timestamp);
-    const uint32_t base = _frameHandle * m_mmCtx->pageSize;
+    const uint32_t base = _frameNumber * m_mmCtx->frameSize;
 
     memcpy(&_outRecord->timestamp, &m_mmCtx->mainMem[base + 0], timestampSz);
     memcpy(&_outRecord->key, &m_mmCtx->mainMem[base + timestampSz], keySz);
     _outRecord->value = cx_str_copy_d(&m_mmCtx->mainMem[base + timestampSz + keySz]);
 }
 
-static void _mm_frame_write(uint16_t _frameHandle, table_record_t* _record)
+static void _mm_frame_write(uint16_t _frameNumber, table_record_t* _record)
 {
     const uint32_t keySz = sizeof(_record->key);
     const uint32_t timestampSz = sizeof(_record->timestamp);
-    const uint32_t base = _frameHandle * m_mmCtx->pageSize;
+    const uint32_t base = _frameNumber * m_mmCtx->frameSize;
 
     memcpy(&m_mmCtx->mainMem[base + 0], &_record->timestamp, timestampSz);
     memcpy(&m_mmCtx->mainMem[base + timestampSz], &_record->key, keySz);

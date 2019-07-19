@@ -65,10 +65,10 @@ typedef struct segment_t                            // table
 
 typedef struct page_t                               // record
 {
-    uint16_t            frameHandle;                // frame number in which this page is stored.
+    uint16_t            frameNumber;                // frame number in which the data is stored.
     bool                modified;                   // whether it contains changes that need to be reflected in the LFS or not.
-    pthread_rwlock_t    rwlock;                     // read-write lock object for protecting page data.
-    segment_t*          parent;                     // parent segment that currently owns this page.
+    pthread_rwlock_t    rwlock;                     // read-write lock object for protecting data.
+    segment_t*          parent;                     // parent segment that currently owns the frame pointed to by frameNumber.
     cx_list_node_t*     node;                       // pointer to the node that contains this page in the LRU cache.
 } page_t;
 
@@ -76,15 +76,16 @@ typedef struct mm_ctx_t
 {
     char*               mainMem;                    // pre-allocated main memory buffer (main memory frames in which we'll load pages).
     uint16_t            valueSize;                  // size in bytes of each record's value field.
-    uint32_t            pageSize;                   // size in bytes of each page contained in our main memory.
-    uint32_t            pageMax;                    // maximum amount of pages that fit in our main memory.
+    uint32_t            frameSize;                  // size in bytes of each page contained in our main memory.
+    uint32_t            frameMax;                   // maximum amount of pages that fit in our main memory.
+    page_t*             pages;                      // frame references.
+    uint32_t            pagesCount;                 // current amount of allocated frames.
+    pthread_mutex_t     pagesMtx;                   // mutex for syncing allocation/deallocation of pages.
+    cx_list_t*          pagesLru;                   // linked list for storing LRU pages.
     cx_cdict_t*         tablesMap;                  // table of segment_t implemented as a dictionary for faster lookups.
     bool                journaling;                 // true if this memory is performing a journaling.
     t_queue*            blockedQueue;               // queue with tasks which are awaiting for this memory to become unblocked.
     cx_reslock_t        reslock;                    // resource lock to protect this memory.
-    cx_handle_alloc_t*  framesHalloc;               // pointer to frames handle allocator.
-    pthread_mutex_t     framesMtx;                  // mutex for syncing allocation/deallocation of frames.
-    cx_list_t*          framesLru;                  // linked list for storing LRU pages stored in frames.
 } mm_ctx_t;
 
 typedef struct mem_ctx_t
