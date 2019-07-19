@@ -949,10 +949,9 @@ static bool _fs_load_meta(cx_err_t* _err)
             goto key_missing;
         }
 
-        config_destroy(meta);
-
         if ((0 == strcmp(m_fsCtx->meta.magicNumber, LFS_MAGIC_NUMBER)))
         {
+            config_destroy(meta);
             return true;
         }
         else

@@ -215,6 +215,8 @@ void worker_handle_compact(task_t* _req)
                     }
                 }
             }
+            cx_file_explorer_destroy(exp);
+            exp = NULL;
         }
 
         fs_table_unblock(table, &data->beginStageTime);
@@ -315,7 +317,6 @@ void worker_handle_compact(task_t* _req)
         fs_table_unblock(table, &data->endStageTime);
     }
 
-    if (NULL != exp) cx_file_explorer_destroy(exp);
     if (NULL != dumpNumbers) free(dumpNumbers);
     if (dumpsMemtInitialized)
     {

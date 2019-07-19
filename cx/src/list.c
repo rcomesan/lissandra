@@ -104,7 +104,8 @@ cx_list_node_t* cx_list_pop_front(cx_list_t* _list)
 {
     CX_CHECK_NOT_NULL(_list);
     cx_list_node_t* node = _list->first;
-    cx_list_remove(_list, node);
+    if (NULL != node)
+        cx_list_remove(_list, node);
     return node;
 }
 
@@ -112,7 +113,8 @@ cx_list_node_t* cx_list_pop_back(cx_list_t* _list)
 {
     CX_CHECK_NOT_NULL(_list);
     cx_list_node_t* node = _list->last;
-    cx_list_remove(_list, node);
+    if (NULL != node)
+        cx_list_remove(_list, node);
     return node;
 }
 
