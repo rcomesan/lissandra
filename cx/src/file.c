@@ -157,9 +157,14 @@ bool cx_file_touch(const cx_path_t* _filePath, cx_err_t* _err)
             // we'll stick to default privileges (664)
             int32_t fd = open(*_filePath, O_RDWR | O_CREAT, S_IRUSR | S_IWUSR | S_IRGRP | S_IWGRP | S_IROTH);
 
-            if (INVALID_DESCRIPTOR == fd)
+            if (INVALID_DESCRIPTOR != fd)
+            {
+                close(fd);
+            }
+            else
             {
                 CX_ERR_SET(_err, 1, "file '%s' creation failed.", *_filePath);
+                return false;
             }
         }
         else
