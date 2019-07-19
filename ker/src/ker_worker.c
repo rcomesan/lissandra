@@ -15,6 +15,8 @@
 #include <cx/timer.h>
 #include <cx/cli.h>
 
+#include <inttypes.h>
+
 /****************************************************************************************
 ***  PRIVATE DECLARATIONS
 ***************************************************************************************/
@@ -203,6 +205,8 @@ void worker_handle_run(task_t* _req)
         cx_cli_cmd_t cmd;
         CX_MEM_ZERO(cmd);
 
+        CX_INFO("[%s] running lines %" PRIu32 "-%" PRIu32 "...", data->scriptFileName, data->lineNumber, data->lineNumber + g_ctx.cfg.quantum - 1);
+        
         while (quantumCount < g_ctx.cfg.quantum)
         {
             eof = (0 == cx_linesf_line_read(data->script, data->lineNumber++, buff, sizeof(buff)));

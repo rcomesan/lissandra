@@ -522,20 +522,6 @@ static bool task_run_mt(task_t* _task)
 
     switch (_task->type)
     {
-    case TASK_MT_FREE:
-    {
-        data_free_t* data = _task->data;
-
-        if (RESOURCE_TYPE_TABLE == data->resourceType)
-        {
-        }
-        else
-        {
-            CX_WARN(CX_ALW, "undefined TASK_MT_FREE for resource type #%d!", data->resourceType);
-            success = true;
-        }
-        break;
-    }
 
     default:
         CX_WARN(CX_ALW, "undefined <main-thread> behaviour for task type #%d.", _task->type);
@@ -552,8 +538,6 @@ static bool task_reschedule(task_t* _task)
     {
         // re-enqueue this task so that it gets executed in a round-robin fashion according to our quantum.
         data_run_t* data = (data_run_t*)_task->data;
-
-        CX_INFO("[%s] quantum of %d exceeded.", data->scriptFileName, g_ctx.cfg.quantum);
         taskman_activate(_task);
     }
     else
