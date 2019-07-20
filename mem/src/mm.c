@@ -324,7 +324,7 @@ bool mm_page_alloc(segment_t* _parent, bool _isModification, page_t** _outPage, 
         
         if (NULL != page)
         {
-            CX_INFO("page #%" PRIu16 " evicted.", page->frameNumber);
+            CX_INFO("frame #%" PRIu16 " evicted.", page->frameNumber);
 
             pthread_rwlock_wrlock(&page->rwlock);
             page->modified = _isModification;
@@ -384,6 +384,7 @@ bool mm_page_read(segment_t* _table, uint16_t _key, table_record_t* _outRecord, 
                 _mm_lru_touch(page); // cache hit
             }
 
+            CX_INFO("reading key %" PRIu16 " from table '%s' stored in frame #%" PRIu16 ".", _key, _table->tableName, page->frameNumber);
             _mm_frame_read(page->frameNumber, _outRecord);
             success = true;
         }
@@ -425,6 +426,7 @@ bool mm_page_write(segment_t* _table, table_record_t* _record, bool _isModificat
             if (_record->timestamp >= curRecord.timestamp)
             {
                 // update the page with the given (most recent) value
+                CX_INFO("writing key %" PRIu16 " from table '%s' into frame #%" PRIu16 ".", _record->key, _table->tableName, page->frameNumber);
                 _mm_frame_write(page->frameNumber, _record);
                 free(curRecord.value);
 
@@ -457,6 +459,7 @@ bool mm_page_write(segment_t* _table, table_record_t* _record, bool _isModificat
         if (mm_page_alloc(_table, _isModification, &page, _err))
         {
             pthread_rwlock_wrlock(&page->rwlock);
+            CX_INFO("writing key %" PRIu16 " from table '%s' into frame #%" PRIu16 ".", _record->key, _table->tableName, page->frameNumber);
             _mm_frame_write(page->frameNumber, _record);
             pthread_rwlock_unlock(&page->rwlock);
 
@@ -678,8 +681,6 @@ static void _mm_frame_write(uint16_t _frameNumber, table_record_t* _record)
     const uint32_t timestampSz = sizeof(_record->timestamp);
     const uint32_t base = _frameNumber * m_mmCtx->frameSize;
     
-    CX_INFO("writing key %" PRIu16 " into frame #%" PRIu16 ".", _record->key, _frameNumber);
-
     memcpy(&m_mmCtx->mainMem[base + 0], &_record->timestamp, timestampSz);
     memcpy(&m_mmCtx->mainMem[base + timestampSz], &_record->key, keySz);
     cx_str_copy(&m_mmCtx->mainMem[base + timestampSz + keySz], m_mmCtx->valueSize, _record->value);

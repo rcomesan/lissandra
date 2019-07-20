@@ -168,7 +168,7 @@ void report_metrics(const mempool_metrics_t* _mtr, FILE* _stream)
     fprintf(_stream, "+---------------+--------+--------+-----------+-----------+\n");
     fprintf(_stream, "| Consistency   | Reads  | Writes | R/Latency | W/Latency |\n");
     fprintf(_stream, "+---------------+--------+--------+-----------+-----------+\n");
-    for (uint32_t i = 0; i < CONSISTENCY_COUNT; i++)
+    for (uint32_t i = 1; i < CONSISTENCY_COUNT; i++)
     {
         printf("| %-13s | %-6" PRIu32 " | %-6" PRIu32 " | %-9.3f | %-9.3f |\n",
             CONSISTENCY_NAME[i],
