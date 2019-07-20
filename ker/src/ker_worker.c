@@ -200,6 +200,7 @@ void worker_handle_run(task_t* _req)
     if (initialized)
     {
         bool eof = false;
+        bool failed = false;
         uint16_t quantumCount = 0;
         char buff[4096 + 1];
         cx_cli_cmd_t cmd;
@@ -218,15 +219,15 @@ void worker_handle_run(task_t* _req)
             {
                 report_query(buff, data->output);
 
-                if (!_worker_run_query_scripted(&cmd, _req))
-                    break;
+                failed = !_worker_run_query_scripted(&cmd, _req);
+                if (failed) break;
 
                 quantumCount++;
             }
         }
         cx_cli_cmd_destroy(&cmd);
 
-        if (quantumCount == g_ctx.cfg.quantum)
+        if (!failed && !eof)
             CX_ERR_SET(&_req->err, ERR_QUANTUM_EXHAUSTED, "Quantum exhausted.");
     }
 
