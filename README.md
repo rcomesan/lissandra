@@ -2,14 +2,14 @@
 ============================================================================
 ## Entorno
 ##### Alternativas:
-1. [Visual Studio (Windows)](https://github.com/sisoputnfrba/tp-2019-1c-foo-bar/wiki/Entorno:-Visual-Studio) (recomendado)
-2. ~~[Eclipse Onyx (Lubuntu)](https://github.com/sisoputnfrba/tp-2019-1c-foo-bar/wiki/Entorno:-Eclipse-Onyx)~~
+1. [Visual Studio (Windows)](https://github.com/rcomesan/lissandra/wiki/Entorno:-Visual-Studio) (recomendado)
+2. ~~[Eclipse Onyx (Lubuntu)](#)~~
 
 #### Comparación
 | Ide | Productividad | Setup | Beginner-friendly | Open Source | Puntaje |
 |:--------------|:----------------:|:--------:|:-----------------:|:----------:|:-----------:|
-| Visual Studio |Alta |[Difícil?](https://github.com/sisoputnfrba/tp-2019-1c-foo-bar/wiki/Entorno:-Visual-Studio) | ✓ | ✖ | 9 |
-| Eclipse |Baja |[Fácil](https://github.com/sisoputnfrba/tp-2019-1c-foo-bar/wiki/Entorno:-Eclipse-Onyx) | Lo dudo | ✓ | 1 :( |
+| Visual Studio |Alta |[Difícil?](https://github.com/rcomesan/lissandra/wiki/Entorno:-Visual-Studio) | ✓ | ✖ | 9 |
+| ~~Eclipse~~ |~~Baja~~ |[~~Fácil~~](#) | ~~Lo dudo~~ | ✓ | 1 :( |
 
 -------------------------------------------------------------
 ## Estructura
@@ -63,9 +63,9 @@ $ ./build/debug/lfs.out ../res/cfg/test-1/lfs.cfg
 ```
 
 -------------------------------------------------------------
-## [Programación Defensiva](https://github.com/sisoputnfrba/tp-2019-1c-foo-bar/wiki/Programaci%C3%B3n-Defensiva)
+## [Programación Defensiva](https://github.com/rcomesan/lissandra/wiki/Programaci%C3%B3n-Defensiva)
 -------------------------------------------------------------
-## [Estilo de Código y Convención de Nombres](https://github.com/sisoputnfrba/tp-2019-1c-foo-bar/wiki/Estilo-de-C%C3%B3digo-y-Convenciones-de-Nombres)
+## [Estilo de Código y Convención de Nombres](https://github.com/rcomesan/lissandra/wiki/Estilo-de-C%C3%B3digo-y-Convenciones-de-Nombres)
 -------------------------------------------------------------
-## [Comuinicación entre Procesos](https://github.com/sisoputnfrba/tp-2019-1c-foo-bar/wiki/Comunicaci%C3%B3n-entre-Procesos)
+## [Comuinicación entre Procesos](https://github.com/rcomesan/lissandra/wiki/Comunicaci%C3%B3n-entre-Procesos)
 
